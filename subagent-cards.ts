@@ -104,9 +104,16 @@ function statusLines(message: any): { name: string; elapsed: string; detail: str
   if (message.content !== expected) return undefined;
   const lines = d.lines.map((line: any) => {
     if (typeof line !== "string" || /[\p{Cc}\p{Cf}]/u.test(line)) return undefined;
-    const match = /^(.+) running ((?:\d+(?:\.\d+)?[smh](?: )?)+)(?:, ((?:starting|active|waiting|stalled|recovered;)[^\n]*))?\.$/.exec(line);
-    if (!match || /\b(?:question|approval|requires action|awaiting input)\b/i.test(match[3] || "")) return undefined;
-    return { name: match[1], elapsed: match[2], detail: match[3] || "", attention: /^(?:stalled|waiting)/.test(match[3] || "") };
+    // Match the installed formatter's integer elapsed/phase grammar, not an
+    // arbitrary suffix beginning with a familiar word. Truncated lines and
+    // unknown phases stay native. Activity labels themselves are free text.
+    const duration = "(?:\\d+s|\\d+m|\\d+h \\d+m)";
+    const active = "active(?: \\([^()]+\\))?";
+    const waiting = `waiting(?: ${duration})?(?: \\(done|wrong activity id\\))?`;
+    const detail = `(?:starting(?: \\(wrong activity id\\))?|${active}|${waiting}|stalled(?: ${duration})?(?: \\(wrong activity id\\))?|recovered; (?:${active}|waiting(?: ${duration})?))`;
+    const match = new RegExp(`^(.+) running (${duration})(?:, (${detail}))?\\.$`).exec(line);
+    if (!match || match[1].length > 72 || line.length > 120 || /\b(?:question|approval|requires action|awaiting input)\b/i.test(match[3] || "")) return undefined;
+    return { name: match[1], elapsed: match[2], detail: match[3] || "", attention: /^(?:stalled|waiting|recovered; waiting)/.test(match[3] || "") };
   });
   return lines.every(Boolean) ? lines : undefined;
 }

@@ -289,21 +289,22 @@ export function quietRenderer(name: string, compact: ToolRenderers, groups: Quie
       return {
         render(width) {
           const node = groups.info(context.toolCallId);
-          if (node && !eligible(node) && context.expanded) { const detail = individual(); groups.activePane = detail; return detail.render(width, true); }
+          if (node && !eligible(node) && context.expanded) return individual().render(width, true);
           if (node && !eligible(node)) return quietNotice(node, width, theme, caption(args));
           const summary = groups.summary(context.toolCallId);
-          if (summary && context.expanded) groups.activePane = pane;
           return summary ? pane.render(width, context.expanded) : [];
         },
         handleMouse(event: any) {
           if (groups.summary(context.toolCallId)) {
+            if (event.type === "click" && event.button === "left") { groups.activePane = pane; groups.onInteract(); }
             const result = pane.handleMouse(event, context.expanded);
             if (result?.handled) { groups.activePane = pane; groups.onInteract(); }
             return result;
           }
+          if (!eligible(observed) && observed.result && event.type === "click" && event.button === "left") { groups.activePane = individual(); groups.onInteract(); }
           if (context.expanded && !eligible(observed)) {
             const result = individual().handleMouse(event, true);
-            if (result?.handled) groups.onInteract();
+            if (result?.handled) { groups.activePane = individual(); groups.onInteract(); }
             return result;
           }
           return undefined;

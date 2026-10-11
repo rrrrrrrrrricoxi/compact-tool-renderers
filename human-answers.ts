@@ -66,8 +66,10 @@ export function humanAnswerRenderer(_stock: ToolRenderers | undefined, controls?
     saved.expanded = context.expanded; saved.invalidate = context.invalidate;
     const node = controls?.groups.info(context.toolCallId);
     const owner = controls ? node : state;
-    if ((!controls || node?.invoked && node.name === "ask_user_question") && saved.node !== owner) {
-      saved.node = owner;
+    if (saved.node !== owner) {
+      saved.raw = false; saved.target = undefined; saved.node = owner;
+    }
+    if ((!controls || node?.invoked && node.name === "ask_user_question") && !saved.target) {
       const target: ReportTarget = {
         valid: () => (!controls || controls.groups.info(context.toolCallId) === node) && saved.node === owner,
         state: () => ({ kind: "report", label: "Question · Human answer", available: target.valid(), open: !!saved.expanded, raw: !!saved.raw, scrollable: false, actions: [] }),
@@ -88,12 +90,13 @@ export function humanAnswerRenderer(_stock: ToolRenderers | undefined, controls?
       const saved = record(context);
       const options = Array.isArray(args?.options) ? args.options.filter((o: any) => o && typeof o.label === "string" && o.label.trim()) : [];
       const readable = typeof args?.question === "string" ? args.question + (context.expanded && typeof args.details === "string" && args.details ? `\n\nContext:\n${args.details}` : "") + (context.expanded && options.length ? `\n\nOptions${args.multiSelect ? " (multiple selections)" : ""}:\n` + options.map((o: any, i: number) => `${i + 1}. ${o.label.trim()}${typeof o.description === "string" && o.description.trim() ? `\n   ${o.description.trim()}` : ""}`).join("\n") : "") : "Question arguments are incomplete or unsupported.";
-      const body = literal(saved.raw && context.expanded ? JSON.stringify(args ?? {}, null, 2) : readable,
+      const body = () => literal(saved.raw && context.expanded ? JSON.stringify(args ?? {}, null, 2) : readable,
         saved.raw && context.expanded ? "Original arguments (JSON)" : "Question", context.expanded, context.outputPad, theme, 2, "accent", "… Ctrl+O for full question");
       let footer = -1, buttonStart = 0, buttonEnd = 0;
       return {
         render(width) {
-          const rows = body.render(width);
+          record(context);
+          const rows = body().render(width);
           footer = -1;
           if (context.expanded && saved.target?.valid()) {
             const label = saved.raw ? "[Readable]" : "[Raw]";
@@ -111,10 +114,11 @@ export function humanAnswerRenderer(_stock: ToolRenderers | undefined, controls?
           }
           return undefined;
         },
-        invalidate() { body.invalidate(); },
+        invalidate() {},
       };
     },
     renderResult(result, options, theme, context) {
+      const build = () => {
       const saved = record({ ...context, expanded: options.expanded });
       const error = context.isError || (result as any).isError;
       if (options.expanded && saved.raw) {
@@ -138,6 +142,8 @@ export function humanAnswerRenderer(_stock: ToolRenderers | undefined, controls?
       const text = details.answers.map(a => a.type === "option" ? `${a.index}. ${a.label}` : a.type === "other" && details.mode === "multi-select" ? `Other: ${a.label}` : a.label === "" ? "(empty submitted text — not approval)" : a.label).join("\n");
       const answer = literal(text, heading, options.expanded, context.outputPad, theme);
       return { render: width => ["", ...answer.render(width)], invalidate() { answer.invalidate(); } };
+      };
+      return { render: width => build().render(width), invalidate() {} };
     },
   };
 }

@@ -1,10 +1,10 @@
 {
   "name": "local-compact-tool-renderers",
-  "version": "1.18.2",
+  "version": "1.19.0",
   "private": true,
   "type": "module",
   "description": "Adaptive bounded action panes, quiet grouped tools, prompt templates, skills, and thinking previews",
-  "scripts": { "test": "node test.mjs && node prompt-blocks.test.mjs && node quiet-tools.test.mjs && node group-pane.test.mjs && node visual-controls.test.mjs && node thinking-preview.test.mjs && node thinking-groups.test.mjs && node footer-sdk.test.mjs && node subagent-cards.test.mjs && node report-panes.test.mjs && node reload-lifecycle.test.mjs && node reload-reports.test.mjs && node control-lifecycle.test.mjs && node human-answers.test.mjs && node quiet-notice-alignment.test.mjs" },
+  "scripts": { "test": "node test.mjs && node prompt-blocks.test.mjs && node quiet-tools.test.mjs && node group-pane.test.mjs && node visual-controls.test.mjs && node thinking-preview.test.mjs && node thinking-groups.test.mjs && node footer-sdk.test.mjs && node subagent-cards.test.mjs && node report-panes.test.mjs && node reload-lifecycle.test.mjs && node reload-reports.test.mjs && node control-lifecycle.test.mjs && node human-answers.test.mjs && node quiet-notice-alignment.test.mjs && node quiet-surfaces.test.mjs" },
   "pi": { "extensions": ["./index.ts"] },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

@@ -90,9 +90,24 @@ for(const mode of ['quiet','compact','expanded']){
   if(mode==='quiet'){
    statusCard.render(100);assert.equal(statusCard.handleMouse({type:'click',button:'left',x:0,y:1,width:100,height:50})?.handled,true);assert.match(text(statusCard),/stalled 1m/);statusCard.setExpanded(false);
    for(const unsupported of [{...status,details:{...status.details,requiresAction:true}},{...status,details:{lines:['unknown line'],overflow:0}},{...status,content:'Untrusted unmatched body'}])assert.match(text(custom(unsupported)),/Subagent status/,'unknown/action payload keeps native renderer');
+   const statusFixture=line=>custom({...status,content:amosStatus.formatStatusAggregate([line],4),details:{lines:[line],overflow:0}});
+   const snapshot={elapsedText:'1h 2m',statusLabel:null,activeDurationText:'12s',waitingDurationText:'2m',snapshotProblemText:'1m',activityLabel:'tool execution',activeScope:null};
+   for(const kind of ['starting','active','waiting','stalled','running'])assert.match(text(statusFixture(amosStatus.formatStatusLine('child',{...snapshot,kind}))),/▸ Status/);
+   for(const kind of ['active','waiting'])assert.match(text(statusFixture(amosStatus.formatTransitionLine('child',{...snapshot,kind},'recovered'))),/▸ Status/);
+   assert.match(text(statusFixture(amosStatus.formatTransitionLine('child',{...snapshot,kind:'waiting'},'recovered'))),/⚠ Recovered; waiting 2m · Running/);
+   for(const tail of ['waiting for input','waiting for confirmation','active requires you to act','starting unknown','stalled mysteriously','recovered; unknown','active (approval required)'])assert.match(text(statusFixture(`child running 1m, ${tail}.`)),/Subagent status/);
+   for(const duration of ['1.5m','1m 2s','2h'])assert.match(text(statusFixture(`child running ${duration}.`)),/Subagent status/);
    const failed=make('failed','subagent_message',{name:'child'},{content:[{type:'text',text:'Recorded failure'}],isError:true},pad);
    assert.match(text(failed),/▸ Failed ✗ · Message · child · Recorded failure/);
   }
+ }
+ if(mode==='quiet'){
+  const selectedTool=make('routine','read',{path:'/tmp/text'},{content:[{type:'text',text:'Original ordinary output'}],details:{toolRawMarker:'retained target'}});
+  const backgroundTool=make('image','read',{path:'/tmp/Screenshot.png'},images);
+  selectedTool.render(100);selectedTool.handleMouse({type:'click',button:'left',x:0,y:1,width:100,height:50});text(selectedTool);
+  backgroundTool.setExpanded(true);text(backgroundTool);backgroundTool.invalidate();text(backgroundTool);
+  await command.handler('raw',ctx);assert.match(text(selectedTool),/"path": "\/tmp\/text"/,'native expansion/repaint of another tool cannot steal an interacted tool target');assert.ok(!text(backgroundTool).includes('Recorded details'));
+  backgroundTool.setExpanded(false);backgroundTool.render(100);backgroundTool.handleMouse({type:'click',button:'left',x:0,y:1,width:100,height:50});text(backgroundTool);await command.handler('raw',ctx);assert.match(text(backgroundTool),/Recorded details/,'actual native standalone header interaction selects its own tool');assert.match(text(selectedTool),/"path": "\/tmp\/text"/);
  }
  // Raw is explicit and branch/invocation ordered, not selected by render order.
  const q1=make('q1','ask_user_question',qArgs,qResult),q2=make('q2','ask_user_question',qArgs,qResult);
@@ -110,13 +125,19 @@ for(const mode of ['quiet','compact','expanded']){
  const rawY=q1.render(100).map(strip).findIndex(row=>row.includes('[Raw]'));
  assert.ok(rawY>0);assert.equal(q1.handleMouse({type:'click',button:'left',x:1,y:rawY,width:100,height:50})?.handled,true);assert.match(text(q1),/machine_value/);assert.ok(!text(q2).includes('machine_value'));
  q2.invalidate();await command.handler('raw',ctx);assert.ok(!text(q1).includes('machine_value'),'background q2 render did not steal q1');
- // Stale controls and abandoned branch question targets cannot be selected.
+ // Native MouseRegion supplies the separator offset. Both footer boundaries
+ // must miss; only the exact painted button selects/toggles its own card.
+ const footer=q1.render(100).map(strip).findIndex(row=>row.includes('[Raw]')),pad=1;
+ for(const x of [pad-1,pad+5]){q1.setExpanded(true);q1.render(100);q1.handleMouse({type:'click',button:'left',x,y:footer,width:100,height:50});assert.ok(!text(q1).includes('machine_value'));}
+ q1.setExpanded(true);q1.render(100);q1.handleMouse({type:'click',button:'left',x:pad+4,y:footer,width:100,height:50});assert.match(text(q1),/machine_value/);
+ // Stale controls and abandoned branch question targets cannot be selected,
+ // including a retained card that was actually Raw before branch replacement.
  const savedBranch=branch;branch=branch.filter(e=>!['q1','q2'].includes(e.message.toolCallId)&&!e.message.content?.some?.(b=>b.id==='q1'||b.id==='q2'));
  await emit('session_tree',{});await command.handler('raw latest-question',ctx);assert.match(notices.at(-1),/Expand a question first/);
- assert.ok(!text(q1).includes('machine_value'));branch=savedBranch;await emit('session_tree',{});q1.invalidate();q2.invalidate();
+ assert.ok(!text(q1).includes('machine_value'),'retained stale Raw paint resets without native invalidation');q1.invalidate();assert.ok(!text(q1).includes('machine_value'));branch=savedBranch;await emit('session_tree',{});q1.invalidate();q2.invalidate();assert.ok(!text(q1).includes('machine_value'));await command.handler('raw latest-question',ctx);assert.match(text(q2),/machine_value/);await emit('session_tree',{});q1.invalidate();q2.invalidate();assert.ok(!text(q2).includes('machine_value'),'same-branch rebuild resets Raw ownership');await command.handler('raw latest-question',ctx);assert.match(text(q2),/machine_value/);
  assert.equal(JSON.stringify(branch),original);assert.equal(JSON.stringify(images),originalImages);
  assert.ok(redraws<1000);
- await emit('session_shutdown',{});assert.equal(ToolExecutionComponent.prototype.render,originalRender);
+ await emit('session_shutdown',{});q2.invalidate();assert.ok(!text(q2).includes('machine_value'),'shutdown retained human card resets Raw');assert.equal(ToolExecutionComponent.prototype.render,originalRender);
 }
 // Narrow paint ownership: native behavior after teardown, successor owns only its
 // wrapper, no global policy mutation, original content/native components retained.
@@ -124,6 +145,22 @@ tui.setCapabilities({images:'kitty',trueColor:true,hyperlinks:false});
 const standalone=new ToolExecutionComponent('read','native',{path:'/tmp/image.png'},{showImages:true,imageWidthCells:9},readRenderers,{requestRender(){}},dir);standalone.updateResult(images,false);
 assert.equal(installQuietImages(()=> 'quiet','future'),undefined);
 let gate=installQuietImages(()=> 'quiet');assert.equal(imageLines(standalone).length,0);const successor=installQuietImages(()=> 'quiet');gate.dispose();assert.equal(imageLines(standalone).length,0);successor.dispose();assert.ok(imageLines(standalone).length>=2);assert.equal(standalone.showImages,true);assert.equal(standalone.imageWidthCells,9);
+// Exercise native default/no-definition shells, shape fail-native and finally
+// restoration on a real native render exception (not an adapter stub).
+for(const definition of [undefined,readRenderers,{renderShell:'self',renderCall:()=>({render:()=>['Read image'],invalidate(){}})}]){
+ const card=new ToolExecutionComponent('read','shell-fixture',{path:'/tmp/image.png'},{showImages:true,imageWidthCells:9},definition,{requestRender(){}},dir);card.updateResult(images,false);
+ const nativeImage=card.imageComponents[0];
+ const owner=installQuietImages(()=> 'quiet');assert.equal(imageLines(card).length,0);
+ card.setExpanded(true);assert.ok(imageLines(card).length>=2);card.setExpanded(false);
+ const oldSources=card.imageSources;card.imageSources=undefined;assert.ok(imageLines(card).length>=2,'unexpected adapter shape falls back to still-valid native render');card.imageSources=oldSources;
+ const shell=definition?.renderShell==='self'?card.selfRenderContainer:card.children.find(c=>!(c instanceof tui.Image)&&!(c instanceof tui.Spacer));
+ const nativeArrays=[card.imageComponents,card.imageSpacers,card.children];
+ const paint=shell.render;shell.render=()=>{throw Error('NATIVE_PAINT_FIXTURE');};assert.throws(()=>card.render(100),/NATIVE_PAINT_FIXTURE/);shell.render=paint;
+ // Expansion rebuild may replace children; capture just before failure separately
+ // by checking originals of the current native state after a successful paint.
+ assert.equal(card.imageComponents[0],nativeImage);assert.equal(card.imageComponents,nativeArrays[0]);assert.equal(card.imageSpacers,nativeArrays[1]);assert.equal(card.children,nativeArrays[2]);
+ const restoredChildren=card.children;card.render(100);assert.equal(card.children,restoredChildren);owner.dispose();assert.ok(imageLines(card).length>=2);
+}
 // Actual no-model SDK reload ownership, including a paint while the old context
 // is revoked and resources are being replaced. No live master session touched.
 let sdkMode='quiet',loaded,contexts=[],savedCard,modelCalls=0,inputCalls=0;
