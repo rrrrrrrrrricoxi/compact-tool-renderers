@@ -2,7 +2,17 @@
 
 Local, presentation-only Pi extension, installed globally on this MacBook. No prompt injection or command annotation is required.
 
-## Unified Quiet surfaces and readable questions (v1.19.0)
+## Combined human Q&A card (v1.19.1)
+
+A human `ask_user_question` interaction is now **one continuous neutral card** with a shared accent rail, distinct **Question** and **Your answer** sections, and a short internal divider instead of a blank gap or separately tinted answer strip. Collapsed question/answer previews remain readable and bounded; native click/Ctrl+O expands the whole interaction, including question context/options and the full answer. Pending, failed, cancelled, unavailable and malformed results remain explicit recorded-result sections, never accepted answers.
+
+The native call/result renderer slots and per-call expansion owner are unchanged. Once a result exists, the **single [Raw]/[Readable] control sits after both sections**, not between them. While waiting for a result it sits below the question. Raw still exposes exact arguments, complete original content and recorded details; `/blocks raw latest-question`, last-actual-interaction routing, stale-target resets, mouse hit bounds and native-renders-never-select remain intact. No synthetic message, duplicate user prompt, tool execution, model input or history rewrite is introduced. Compact/Expanded presets retain native padding; the user-approved combined human card is used in all presets.
+
+The 16-suite test set now checks native combined-card continuity, an identical actual ANSI background across question/divider/answer, the one bottom footer, full shared Raw roundtrips in all presets, widths/themes, error/partial/malformed states and reload/source preservation. It also tests the exact screenshot's **Shared child budget full** `subagent` refusal without an execution-start event: v1.19.0 already displays it as one Quiet failure row at disclosure column 0 / label column 2, with full details on native expansion. The user did not confirm a successful reload before that screenshot; no extra runtime alignment patch was needed for the reproduced failure path.
+
+**Image transport remains separate:** the installed Pi 1.1.0 detector deliberately reports `images: null` under tmux unless overridden. Expanding a card cannot create terminal image support; the recorded bytes are preserved and the disabled/unsupported message remains honest. This release neither forces a protocol nor changes tmux/terminal/Pi settings. Native preview is revealed on expansion only where the connection supports it. Live terminal fidelity and visual acceptance require an idle reload/new launch and user check.
+
+## Unified Quiet surfaces and readable questions (v1.19.0, historical)
 
 Quiet utility rows share a two-column disclosure/text gutter: **Tools**, **Thinking**, **Message**, **Read image**, **Completed ✓**, **Child question**, and **Status**. An expansion arrow appears only for an actual expansion target; unfinished notices reserve the gutter without inventing an arrow. Genuine failed tools prioritize **Failed ✗** and their recorded failure/exit/nested-error reason. Known stalled/waiting status is warning-colored, including recovered-to-waiting; elapsed time never implies completion.
 

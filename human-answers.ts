@@ -29,7 +29,7 @@ export function answeredDetails(details: any, args: any): details is { question:
 
 // Literal terminal-safe rendering preserves whitespace and escapes control bytes.
 // Collapsed work is bounded in both source characters and rendered rows.
-function literal(text: string, heading: string, expanded: boolean, pad: number, theme: any, limit = 4, color = "accent", notice = "… Ctrl+O for full original answer"): Component {
+function literal(text: string, heading: string, expanded: boolean, pad: number, theme: any, limit = 4, color = "accent", notice = "… Ctrl+O for full original answer", divider = false): Component {
   return {
     render(width) {
       const padding = Math.min(Math.max(0, pad || 0), Math.floor(Math.max(0, width - 1) / 2));
@@ -45,11 +45,17 @@ function literal(text: string, heading: string, expanded: boolean, pad: number, 
           rows.push(row);
         }
       }
-      const output = [theme.fg(color, theme.bold(truncateToWidth(heading, inner, "…"))), ...rows.map(row => theme.fg("text", row))];
+      const output = [
+        ...(divider ? [theme.fg("muted", "─".repeat(Math.min(inner, 32)))] : []),
+        theme.fg(color, theme.bold(truncateToWidth(heading, inner, "…"))),
+        ...rows.map(row => theme.fg("text", row)),
+      ];
       if (clipped) output.push(theme.fg("muted", truncateToWidth(notice, inner, "…")));
       const base = theme.colors ? colorToRgb(theme.colors.toolSuccessBg) : undefined;
       const gray = base ? Math.round(base.r * 0.2126 + base.g * 0.7152 + base.b * 0.0722) : 0;
-      const background = base && typeof theme.style === "function" ? mixColors(rgbColor(gray, gray, gray), theme.colors[color] || theme.colors.accent, heading.startsWith("Your answer") ? 0.07 : 0.035) : undefined;
+      // Both native call/result slots belong to one visual card. Status remains
+      // conspicuous in its heading, without changing the shared neutral surface.
+      const background = base && typeof theme.style === "function" ? mixColors(rgbColor(gray, gray, gray), theme.colors.accent, 0.035) : undefined;
       return output.map(row => {
         const line = theme.fg(color, rail) + row + " ".repeat(Math.max(0, available - rail.length - visibleWidth(row)));
         return " ".repeat(padding) + (background ? theme.style(line, { bg: background }) : line);
@@ -84,66 +90,78 @@ export function humanAnswerRenderer(_stock: ToolRenderers | undefined, controls?
     }
     return saved;
   };
+  // Pi concatenates the native call/result slots without a separator. Keep those
+  // contracts, but draw a continuous card and put its one Raw control at the end.
+  const controlled = (body: () => Component, context: any, theme: any, showFooter: () => boolean): Component => {
+    const saved = record(context);
+    let footer = -1, buttonStart = 0, buttonEnd = 0;
+    return {
+      render(width) {
+        record(context);
+        const rows = body().render(width);
+        footer = -1;
+        if (context.expanded && saved.target?.valid() && showFooter()) {
+          const label = saved.raw ? "[Readable]" : "[Raw]";
+          const pad = Math.min(Math.max(0, context.outputPad || 0), Math.floor(Math.max(0, width - 1) / 2));
+          footer = rows.length; buttonStart = pad; buttonEnd = Math.min(width, pad + label.length);
+          rows.push(" ".repeat(pad) + theme.fg("muted", truncateToWidth(label + " · /blocks raw latest-question", Math.max(1, width - pad), "…")));
+        }
+        return rows;
+      },
+      handleMouse(event: any) {
+        if (!saved.target?.valid()) return undefined;
+        if (event.type === "click" && event.button === "left") {
+          controls?.onInteract(saved.target);
+          if (event.y === footer && event.x >= buttonStart && event.x < buttonEnd) { saved.target.action("raw"); return { handled: true, render: true }; }
+        }
+        return undefined;
+      },
+      invalidate() {},
+    };
+  };
   return {
     renderShell: "self",
     renderCall(args, theme, context) {
       const saved = record(context);
+      // updateDisplay constructs call before result; paint happens after both.
+      saved.hasCall = true; saved.hasResult = false;
       const options = Array.isArray(args?.options) ? args.options.filter((o: any) => o && typeof o.label === "string" && o.label.trim()) : [];
       const readable = typeof args?.question === "string" ? args.question + (context.expanded && typeof args.details === "string" && args.details ? `\n\nContext:\n${args.details}` : "") + (context.expanded && options.length ? `\n\nOptions${args.multiSelect ? " (multiple selections)" : ""}:\n` + options.map((o: any, i: number) => `${i + 1}. ${o.label.trim()}${typeof o.description === "string" && o.description.trim() ? `\n   ${o.description.trim()}` : ""}`).join("\n") : "") : "Question arguments are incomplete or unsupported.";
       const body = () => literal(saved.raw && context.expanded ? JSON.stringify(args ?? {}, null, 2) : readable,
         saved.raw && context.expanded ? "Original arguments (JSON)" : "Question", context.expanded, context.outputPad, theme, 2, "accent", "… Ctrl+O for full question");
-      let footer = -1, buttonStart = 0, buttonEnd = 0;
-      return {
-        render(width) {
-          record(context);
-          const rows = body().render(width);
-          footer = -1;
-          if (context.expanded && saved.target?.valid()) {
-            const label = saved.raw ? "[Readable]" : "[Raw]";
-            const pad = Math.min(Math.max(0, context.outputPad || 0), Math.floor(Math.max(0, width - 1) / 2));
-            footer = rows.length; buttonStart = pad; buttonEnd = Math.min(width, pad + label.length);
-            rows.push(" ".repeat(pad) + theme.fg("muted", truncateToWidth(label + " · /blocks raw latest-question", Math.max(1, width - pad), "…")));
-          }
-          return rows;
-        },
-        handleMouse(event: any) {
-          if (!saved.target?.valid()) return undefined;
-          if (event.type === "click" && event.button === "left") {
-            controls?.onInteract(saved.target);
-            if (event.y === footer && event.x >= buttonStart && event.x < buttonEnd) { saved.target.action("raw"); return { handled: true, render: true }; }
-          }
-          return undefined;
-        },
-        invalidate() {},
-      };
+      return controlled(body, context, theme, () => !saved.hasResult);
     },
     renderResult(result, options, theme, context) {
+      const resultContext = { ...context, expanded: options.expanded };
+      const saved = record(resultContext);
+      saved.hasResult = true;
       const build = () => {
-      const saved = record({ ...context, expanded: options.expanded });
-      const error = context.isError || (result as any).isError;
-      if (options.expanded && saved.raw) {
-        const status = result.details?.status;
-        const heading = error ? "✗ Question failed · Raw recorded result" : status === "cancelled" ? "⊘ Question cancelled · Raw recorded result" : status === "unavailable" ? "Question unavailable · Raw recorded result" : options.isPartial ? "… Question pending · Raw recorded result" : "Raw recorded result";
-        const color = error ? "error" : options.isPartial || status === "cancelled" || status === "unavailable" ? "warning" : "muted";
-        return literal("Original tool content (JSON):\n" + JSON.stringify(result.content ?? null, null, 2) + "\n\nRecorded details (JSON):\n" + JSON.stringify(result.details ?? null, null, 2), heading, true, context.outputPad, theme, 4, color);
-      }
-      if (options.isPartial || error || !answeredDetails(result.details, context.args)) {
-        // The registered formatter assumes answers.map and ignores error/partial
-        // flags. Do not call it when its preconditions are unmet. Paint recorded
-        // text literally instead; an error/pending flag always wins over details.
-        const status = result.details?.status;
-        const heading = error ? "✗ Question failed" : status === "cancelled" ? "⊘ Question cancelled" : status === "unavailable" ? "Question unavailable" : options.isPartial ? "… Question pending" : "Question result · Recorded output";
-        const color = error ? "error" : options.isPartial || status === "cancelled" || status === "unavailable" ? "warning" : "muted";
-        const text = (Array.isArray(result.content) ? result.content : []).filter(c => c?.type === "text" && typeof c.text === "string").map(c => c.text).join("\n");
-        return literal(text, heading, options.expanded, context.outputPad, theme, 4, color, "… Ctrl+O for full recorded result");
-      }
-      const details = result.details;
-      const heading = details.mode === "multi-select" ? "Your answer · Multiple selections" : details.answers[0].type === "option" ? "Your answer · Selected option" : details.answers[0].type === "other" ? "Your answer · Custom reply" : "Your answer · Text reply";
-      const text = details.answers.map(a => a.type === "option" ? `${a.index}. ${a.label}` : a.type === "other" && details.mode === "multi-select" ? `Other: ${a.label}` : a.label === "" ? "(empty submitted text — not approval)" : a.label).join("\n");
-      const answer = literal(text, heading, options.expanded, context.outputPad, theme);
-      return { render: width => ["", ...answer.render(width)], invalidate() { answer.invalidate(); } };
+        record(resultContext);
+        const section = (text: string, heading: string, color = "accent", notice = "… Ctrl+O for full original answer") =>
+          literal(text, heading, options.expanded, context.outputPad, theme, 4, color, notice, !!saved.hasCall);
+        const error = context.isError || (result as any).isError;
+        if (options.expanded && saved.raw) {
+          const status = result.details?.status;
+          const heading = error ? "✗ Question failed · Raw recorded result" : status === "cancelled" ? "⊘ Question cancelled · Raw recorded result" : status === "unavailable" ? "Question unavailable · Raw recorded result" : options.isPartial ? "… Question pending · Raw recorded result" : "Raw recorded result";
+          const color = error ? "error" : options.isPartial || status === "cancelled" || status === "unavailable" ? "warning" : "muted";
+          return section("Original tool content (JSON):\n" + JSON.stringify(result.content ?? null, null, 2) + "\n\nRecorded details (JSON):\n" + JSON.stringify(result.details ?? null, null, 2), heading, color);
+        }
+        if (options.isPartial || error || !answeredDetails(result.details, context.args)) {
+          // The registered formatter assumes answers.map and ignores error/partial
+          // flags. Do not call it when its preconditions are unmet. Paint recorded
+          // text literally instead; an error/pending flag always wins over details.
+          const status = result.details?.status;
+          const heading = error ? "✗ Question failed" : status === "cancelled" ? "⊘ Question cancelled" : status === "unavailable" ? "Question unavailable" : options.isPartial ? "… Question pending" : "Question result · Recorded output";
+          const color = error ? "error" : options.isPartial || status === "cancelled" || status === "unavailable" ? "warning" : "muted";
+          const text = (Array.isArray(result.content) ? result.content : []).filter(c => c?.type === "text" && typeof c.text === "string").map(c => c.text).join("\n");
+          return section(text, heading, color, "… Ctrl+O for full recorded result");
+        }
+        const details = result.details;
+        const heading = details.mode === "multi-select" ? "Your answer · Multiple selections" : details.answers[0].type === "option" ? "Your answer · Selected option" : details.answers[0].type === "other" ? "Your answer · Custom reply" : "Your answer · Text reply";
+        const text = details.answers.map(a => a.type === "option" ? `${a.index}. ${a.label}` : a.type === "other" && details.mode === "multi-select" ? `Other: ${a.label}` : a.label === "" ? "(empty submitted text — not approval)" : a.label).join("\n");
+        return section(text, heading);
       };
-      return { render: width => build().render(width), invalidate() {} };
+      return controlled(build, resultContext, theme, () => true);
     },
   };
 }

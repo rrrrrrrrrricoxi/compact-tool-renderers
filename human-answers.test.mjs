@@ -79,6 +79,13 @@ for (const mode of ['quiet', 'compact', 'expanded']) {
       assert.match(card.render(120).join('\n'), new RegExp(`Your answer · ${heading}`));
       assert.ok(card.render(120).join('\n').includes(value));
       assert.ok(!card.render(120).join('\n').includes('machine_value'));
+      const collapsedRows = card.render(120).map(row => row.replace(/\x1b\[[0-9;]*m/g, ''));
+      assert.equal(collapsedRows[0], '', 'one native separator precedes the whole Q&A card');
+      assert.ok(collapsedRows.slice(1).every(row => row.startsWith('  │ ')), 'one continuous rail/surface, no naked gap between question and answer');
+      assert.equal(collapsedRows.filter(row => /^  │ ─/.test(row)).length, 1, 'one internal divider, not a second strip');
+      const surfaceBg = card.render(120)[1].match(/\x1b\[48;[0-9;]*m/g);
+      assert.ok(surfaceBg?.length, 'neutral combined surface is actually styled');
+      for (const row of card.render(120).slice(1)) assert.deepEqual(row.match(/\x1b\[48;[0-9;]*m/g), surfaceBg, 'same background across question, divider and answer');
       for (const width of [1, 2, 3, 4, 10, 28, 80]) for (const line of card.render(width)) assert.ok(visibleWidth(line) <= width);
     }
     card.setExpanded(true); // Actual native Ctrl+O target.
@@ -96,6 +103,28 @@ for (const mode of ['quiet', 'compact', 'expanded']) {
   assert.ok(!q1.render(120).join('\n').includes('original text'));
   assert.ok(q2.render(120).join('\n').includes('Your text?'));
   assert.ok(!q2.render(120).join('\n').includes('Visible choice'));
+  // Native per-call expansion owns both sections and one bottom Raw control.
+  // These real branch-owned cards test all three modes, not just Quiet.
+  for (const card of [q1, q2]) {
+    card.setExpanded(true);
+    const strip = row => row.replace(/\x1b\[[0-9;]*m/g, '');
+    const rows = card.render(120).map(strip);
+    const answerRow = rows.findIndex(row => row.includes('Your answer'));
+    const rawRow = rows.findIndex(row => row.includes('[Raw]'));
+    assert.ok(answerRow > 0 && rawRow > answerRow, 'shared footer follows the answer, never separates Q from A');
+    assert.equal(rawRow, rows.length - 1, 'one shared footer at the bottom');
+    assert.equal(rows.filter(row => row.includes('[Raw]')).length, 1);
+    assert.ok(rows.slice(1, rawRow).every(row => row.startsWith('  │ ')), 'expanded card is contiguous through context/options and answer');
+    assert.equal(card.handleMouse({ type: 'click', button: 'left', x: 2, y: rawRow, width: 120, height: 50 })?.handled, true);
+    const raw = card.render(120).map(strip);
+    assert.ok(raw.join('\n').includes('Original arguments (JSON)') && raw.join('\n').includes('Original tool content (JSON)') && raw.join('\n').includes('Recorded details (JSON)'), 'shared Raw reveals both original halves');
+    const readableRow = raw.findIndex(row => row.includes('[Readable]'));
+    assert.equal(readableRow, raw.length - 1);
+    assert.equal(card.handleMouse({ type: 'click', button: 'left', x: 2, y: readableRow, width: 120, height: 100 })?.handled, true);
+    assert.ok(!card.render(120).join('\n').includes('Original arguments (JSON)'));
+    card.setExpanded(false);
+    assert.ok(!card.render(120).join('\n').includes('[Raw]'));
+  }
   const ordinaryCards = ['before', 'between', 'after'].map(id => make(id, {}, { content: [{ type: 'text', text: 'ordinary result' }] }, 'read'));
   if (mode === 'quiet') for (const card of ordinaryCards) assert.match(card.render(120).join('\n'), /Tools · 1 call · read/);
   // Even identical question strings do not allow one call's result to leak.
@@ -253,5 +282,5 @@ try {
   }
   assert.equal(modelCalls, 0); assert.equal(inputCalls, 0);
 } finally { session?.dispose(); await modelRuntime.dispose?.(); }
-console.log('human answer presentation: installed formatter/native cards, modes, themes, widths, expansion/mouse, exact IDs, boundaries, 3 actual isolated SDK reloads, zero model/input calls and immutable history passed');
+console.log('human answer presentation: contiguous neutral Q&A card/divider/one bottom Raw control, installed formatter/native cards, modes, themes, widths, expansion/mouse, exact IDs, boundaries, 3 actual isolated SDK reloads, zero model/input calls and immutable history passed');
 } finally { if (oldDir === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = oldDir; rmSync(dir, { recursive: true, force: true }); }

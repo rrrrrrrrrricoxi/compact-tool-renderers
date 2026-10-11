@@ -71,6 +71,33 @@ for (const mode of ['quiet', 'compact', 'expanded']) {
     assert.match(content(card).join('\n'), /(?:Failed ✗|Failed).*Original failure reason/);
     assert.ok(!content(card).join('\n').includes('Your answer'));
     assert.equal(firstColumn(content(card)[0]), mode === 'quiet' ? 0 : outputPad, 'Quiet failure strip aligns; non-Quiet error padding unchanged');
+    // Screenshot regression: a refused scout call can reach the native card
+    // without a tool_execution_start event. Its Quiet error uses the same root
+    // disclosure/text gutter, not the old padded two-line generic error shell.
+    const blockedArgs = { agent: 'scout', task: 'Read-only context inspection' };
+    const budgetError = 'Shared child budget full: at most two delegated/memory children and one writer. Wait for actual exit.';
+    const blockedResult = { content: [{ type: 'text', text: budgetError }], isError: true };
+    const blockedSource = JSON.stringify({ blockedArgs, blockedResult });
+    const blocked = new ToolExecutionComponent('subagent', `blocked-${id}`, blockedArgs, { showImages: false, outputPad }, { name: 'subagent', ...resolve('subagent', () => undefined) }, { requestRender() {} }, dir);
+    blocked.updateResult(blockedResult, false);
+    for (const palette of ['dark', 'light']) {
+      initTheme(palette, false); blocked.invalidate();
+      const rows = blocked.render(200).map(strip).filter(row => row.trim());
+      assert.equal(firstColumn(rows[0]), mode === 'quiet' ? 0 : outputPad, 'refused subagent keeps the appropriate root/padded gutter');
+      if (mode === 'quiet') {
+        assert.deepEqual(rows, [`▸ Failed ✗ · Start scout · ${budgetError}`]);
+        assert.equal(rows[0].indexOf('Failed'), 2, 'refused subagent label matches Thinking/Tools text column');
+        assert.equal(blocked.render(200).length, 2, 'one native separator plus exactly one failure row');
+      }
+      for (const width of [1, 2, 3, 4, 8, 28, 50, 100]) for (const row of blocked.render(width)) assert.ok(visibleWidth(row) <= width, `blocked ${mode}/${outputPad}/${width}`);
+    }
+    blocked.setExpanded(true);
+    const blockedDetails = blocked.render(200).map(strip).join('\n');
+    assert.ok(blockedDetails.includes(budgetError), 'expansion retains the complete recorded budget refusal');
+    blocked.setExpanded(false);
+    assert.equal(blocked.handleMouse({ type: 'click', button: 'left', x: mode === 'quiet' ? 0 : outputPad, y: 1, width: 200, height: 30 })?.handled, true, 'aligned failure disclosure still expands natively');
+    assert.ok(blocked.render(200).map(strip).join('\n').includes(budgetError));
+    assert.equal(JSON.stringify({ blockedArgs, blockedResult }), blockedSource, 'presentation does not change budget enforcement/input/result');
     card.updateResult({ content: [{ type: 'text', text: 'Original settled result' }] }, false);
     assert.match(content(card).join('\n'), mode === 'quiet' ? /Tools/ : /Completed/);
     card.updateResult(started, false);
@@ -83,5 +110,5 @@ for (const mode of ['quiet', 'compact', 'expanded']) {
   assert.ok(redraws < 300, 'no recursive repaints');
   await emit('session_shutdown', {});
 }
-console.log('PASS: actual native standalone Quiet subagent_message started/cancelled notices align with tool/thinking/completion cards across pad0/1/2/4, dark/light, narrow widths; native separator/click/expansion, status transitions, failure and non-Quiet/fallback padding, immutable source and bounded redraws preserved.');
+console.log('PASS: actual native standalone Quiet notices and screenshot-equivalent blocked subagent align with tool/thinking/completion gutters across pad0/1/2/4, dark/light, narrow widths; one-row refusal, full native click/expansion, status transitions, failure and non-Quiet/fallback padding, immutable source and bounded redraws preserved.');
 } finally { oldDir === undefined ? delete process.env.PI_CODING_AGENT_DIR : process.env.PI_CODING_AGENT_DIR = oldDir; rmSync(dir, { recursive: true, force: true }); }
