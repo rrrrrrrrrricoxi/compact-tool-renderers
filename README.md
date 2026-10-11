@@ -2,7 +2,13 @@
 
 Local, presentation-only Pi extension, installed globally on this MacBook. No prompt injection or command annotation is required.
 
-## Explicit subagent completion labels (v1.19.2)
+## Disambiguated grouped failure counts (v1.19.3)
+
+Quiet **Tools** summaries keep repetition counts such as `bash ×2, codemode ×2` muted, but render the separate failure count as **`2 failed` in the theme's error foreground**, without a cross that resembles multiplication. This applies to the collapsed summary and expanded grouped header; any trailing truncation/saved-output notice returns to muted. Standalone failed cards retain their `Failed ✗` label/icon and full recorded reason. Call grouping/counts, status precedence, disclosure gutter, expansion/Raw/targets, other modes and source/results/history are unchanged.
+
+The native-component regression recreates the five-call screenshot (two Bash, two codemode, one edit, two failures), verifies effective ANSI foregrounds rather than mere color-token presence, and covers dark/light/system, collapsed/expanded headers, narrow widths, unchanged source, and two→one→zero failure transitions. All 16 suites remain in the test set. Live visual acceptance requires an idle reload/new launch; this does not activate old tmux client hyperlink features or add image transport.
+
+## Explicit subagent completion labels (v1.19.2, historical)
 
 Successful child-report cards now identify their source: **Subagent completed ✓ · child name · elapsed time** in Quiet, and **✓ Subagent completed** in Compact/Expanded headers. This is a label-only change: child identity/time/report, failure/cancellation/unknown states, disclosure gutter, bounded previews, full expansion/Raw and completion delivery are unchanged. Ordinary tool `Completed` labels are not renamed. Tests include the screenshot's two child names/timings, all presets, no completion label on child questions, and existing width/theme/source/lifecycle checks.
 

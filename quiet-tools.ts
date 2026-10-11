@@ -112,7 +112,7 @@ export class QuietGroups {
   }
   pane(node: Node, theme: Theme, getHeight: () => number, invalidate: () => void) {
     node.group.theme = theme;
-    node.group.pane ||= new GroupPane(() => this.summary(representative(node.group)?.id || ""), (width, raw) => {
+    node.group.pane ||= new GroupPane(() => this.summary(representative(node.group)?.id || "", node.group.theme), (width, raw) => {
       const rows: string[] = [], actions: { row: number; label: string }[] = [];
       node.group.members.forEach((member, i) => {
         const target = member.args?.path ?? member.args?.file_path ?? member.caption ?? "";
@@ -220,7 +220,7 @@ export class QuietGroups {
   clear() { this.rebuild([]); }
   info(id: string) { return this.nodes.get(id); }
   latestHumanTarget() { return [...this.nodes.values()].filter(node => node.invoked && node.name === "ask_user_question" && node.humanTarget?.valid() && node.humanTarget.state().open).sort((a, b) => b.invocationOrder! - a.invocationOrder!)[0]?.humanTarget; }
-  summary(id: string): string | undefined {
+  summary(id: string, theme?: Theme): string | undefined {
     const node = this.nodes.get(id);
     if (!node || !eligible(node) || representative(node.group) !== node) return undefined;
     const members = node.group.members;
@@ -233,10 +233,12 @@ export class QuietGroups {
     const count = `${members.length} call${members.length === 1 ? "" : "s"}`;
     let text = active.length ? `Tools · ${members.length - active.length}/${members.length} settled · ${active.some(m => m.status === "running") ? "running" : "preparing"} ${[...new Set(active.map(m => cleanName(m.name)))].slice(0, 2).join(", ")}` : `Tools · ${count}`;
     text += ` · ${names}${rest}`;
-    if (failed) text += ` · ✗ ${failed} failed`;
-    if (members.some(m => m.truncated)) text += " · truncated";
-    if (members.some(m => m.saved)) text += " · full output saved";
-    return text;
+    if (failed) text += ` · ${theme ? theme.fg("error", `${failed} failed`) : `${failed} failed`}`;
+    let suffix = "";
+    if (members.some(m => m.truncated)) suffix += " · truncated";
+    if (members.some(m => m.saved)) suffix += " · full output saved";
+    // Native theme.fg resets foreground; restore muted for text after the count.
+    return text + (failed && theme && suffix ? theme.fg("muted", suffix) : suffix);
   }
 }
 

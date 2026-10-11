@@ -9,10 +9,31 @@ const {createJiti}=createRequire(`${root}/package.json`)('jiti');
 const tuiPath=`${root}/node_modules/@earendil-works/pi-tui/dist/index.js`;
 const jiti=createJiti(import.meta.url,{alias:{'@earendil-works/pi-tui':tuiPath,'@earendil-works/pi-coding-agent':`${root}/dist/index.js`}});
 const {visibleWidth}=await import(pathToFileURL(tuiPath));
-const {initTheme}=await import(pathToFileURL(`${root}/dist/modes/interactive/theme/theme.js`));
+const {initTheme,theme}=await import(pathToFileURL(`${root}/dist/modes/interactive/theme/theme.js`));
 const {ToolExecutionComponent}=await import(pathToFileURL(`${root}/dist/modes/interactive/components/tool-execution.js`));
 const {createAllToolRenderers}=await import(pathToFileURL(`${root}/dist/core/tools/renderers/index.js`));
 const {codemodeRenderers}=await import(pathToFileURL(`${root}/dist/extensions/codemode/renderer.js`));
+// Check the effective native ANSI foreground, not just a color token's presence.
+function foregroundAt(row, label) {
+ let foreground='default', plain='';
+ for(const match of row.matchAll(/\x1b\[([0-9;]*)m|([^\x1b]+)/g)) {
+  if(match[1]!==undefined) {
+   const codes=match[1].split(';').map(Number);
+   for(let i=0;i<codes.length;i++) {
+    const code=codes[i];
+    if(code===0||code===39)foreground='default';
+    else if(code===38) {const mode=codes[++i],count=mode===2?3:1;foreground=[38,mode,...codes.slice(i+1,i+1+count)].join(';');i+=count;}
+    else if(code>=30&&code<=37||code>=90&&code<=97)foreground=String(code);
+    else if(code===48){const mode=codes[++i];i+=mode===2?3:1;}
+   }
+  }else{
+   const next=plain+match[2];
+   if(next.includes(label))return foreground;
+   plain=next;
+  }
+ }
+ assert.fail(`Missing color-test label: ${label}`);
+}
 initTheme('dark',false);
 const stock={...createAllToolRenderers(),codemode:codemodeRenderers};
 const module=await jiti.import(new URL('./quiet-tools.ts',import.meta.url).pathname);
@@ -99,6 +120,50 @@ try {
   if(name==='subagent')assert.match(output,/Started/);
   if(name==='web_fetch')assert.match(output,/HTTP 403/);
  }
+ // Exact screenshot: repetition counts stay muted; two failures are an error-
+ // colored status phrase, not another multiplication/cross glyph. Independent
+ // group/native cards avoid changing the live/replay fixture above.
+ const screenshotGroups=new module.QuietGroups();
+ const screenshotNames=['bash','bash','codemode','codemode','edit'];
+ const screenshotIds=screenshotNames.map((_,i)=>`screenshot-${i}`);
+ const screenshotCall=assistant(screenshotIds,screenshotNames);
+ const screenshotResults=screenshotNames.map((name,i)=>({...result(screenshotIds[i],name,i===0?{truncated:true,fullOutputPath:'/tmp/saved-output'}:{},i>=3?'Recorded failure':'Recorded success'),isError:i>=3}));
+ const screenshotSource=JSON.stringify({screenshotCall,screenshotResults});
+ screenshotGroups.assistant(screenshotCall);screenshotResults.forEach(r=>screenshotGroups.message(r));
+ const screenshotCards=screenshotNames.map((name,i)=>{
+  const renderers=module.quietRenderer(name,stock[name],screenshotGroups,()=> 'quiet',()=>name);
+  const c=new ToolExecutionComponent(name,screenshotIds[i],{}, {showImages:false,outputPad:1},{name,...renderers},{requestRender(){}},dir);
+  c.updateResult(screenshotResults[i],false);return c;
+ });
+ const screenshot=screenshotCards[2];
+ const plain=row=>row.replace(/\x1b\[[0-9;]*m/g,'');
+ assert.equal(screenshotGroups.summary(screenshotIds[2]),'Tools · 5 calls · bash ×2, codemode ×2, edit · 2 failed · truncated · full output saved');
+ for(const palette of ['dark','light','system']) {
+  initTheme(palette,false);screenshotCards.forEach(c=>c.invalidate());
+  const muted=foregroundAt(theme.fg('muted','marker'),'marker'),error=foregroundAt(theme.fg('error','marker'),'marker');
+  for(const expanded of [false,true]) {
+   screenshot.setExpanded(expanded);
+   const heading=screenshot.render(200)[1];
+   assert.ok(!plain(heading).includes('✗'),'grouped count has no cross');
+   assert.equal(foregroundAt(heading,'bash ×2'),muted);
+   assert.equal(foregroundAt(heading,'codemode ×2'),muted);
+   assert.equal(foregroundAt(heading,'2 failed'),error);
+   assert.equal(foregroundAt(heading,'truncated'),muted,'neutral suffix restored after error foreground');
+   assert.equal(foregroundAt(heading,'full output saved'),muted);
+   for(const width of [1,2,3,4,28,50,100,200])for(const c of screenshotCards)for(const row of c.render(width))assert.ok(visibleWidth(row)<=width);
+   if(!expanded)assert.equal(screenshot.render(200).length,2,'same native separator and one-row summary');
+  }
+  assert.match(plain(screenshotCards[3].render(200).join('\n')),/Failed ✗/,'standalone failure disclosure/icon retained');
+ }
+ screenshot.setExpanded(false);
+ const recovered={...result(screenshotIds[3],'codemode',{},'Recovered recorded output'),isError:false};
+ screenshotCards[3].updateResult(recovered,true);
+ assert.match(plain(screenshotCards[3].render(200).join('\n')),/1 failed/);
+ assert.equal(foregroundAt(screenshotCards[3].render(200)[1],'1 failed'),foregroundAt(theme.fg('error','marker'),'marker'));
+ screenshotCards[3].updateResult(recovered,false);
+ screenshotCards[4].updateResult({...result(screenshotIds[4],'edit'),isError:false},false);
+ assert.ok(!plain(screenshotCards[4].render(200).join('\n')).includes('failed'),'failure count tracks actual result transitions');
+ assert.equal(JSON.stringify({screenshotCall,screenshotResults}),screenshotSource,'styling preserves original calls/results');
  // Parent-id nested events must not create extra top-level rows/counts.
  const beforeNested=after.render(200).join('\n');
  await emit('tool_execution_start',{toolCallId:'bad/1',toolName:'read',parentToolCallId:'bad'});
