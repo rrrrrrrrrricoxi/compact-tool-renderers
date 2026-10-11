@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ToolRenderers } from "@earendil-works/pi-coding-agent";
 import registerPromptBlocks from "./prompt-blocks.ts";
 import { humanAnswerRenderer } from "./human-answers.ts";
+import registerQuietImages from "./quiet-images.ts";
 import registerThinkingPreview from "./thinking-preview.ts";
 import registerSubagentCards, { type ReportTarget } from "./subagent-cards.ts";
 import { registerQuietGroups, quietRenderer } from "./quiet-tools.ts";
@@ -222,6 +223,11 @@ export function activeDetails(groups: { paneAction(action: string): boolean; pan
     state() { return selected()?.state() || { ...groups.paneState(), kind: "tools", scrollable: true }; },
     action(action: string) {
       if (action === "refresh") { const acted = selected()?.action(action) || false; return groups.paneAction(action) || acted; }
+      if (action === "raw latest-question") {
+        const target = (groups as any).latestHumanTarget?.();
+        if (!target?.action("raw")) return false;
+        report = target; return true;
+      }
       if (action === "open latest") { report = undefined; return getMode() === "quiet" && groups.paneAction("open"); }
       const target = selected();
       return target ? target.action(action) : getMode() === "quiet" && groups.paneAction(action);
@@ -236,6 +242,7 @@ export default function compactToolRenderers(pi: ExtensionAPI): void {
   const details = activeDetails(groups, () => display.getMode());
   let thinking: ReturnType<typeof registerThinkingPreview> | undefined;
   const display = registerPromptBlocks(pi, details.action, details.state, { state: () => thinking?.state() || { available: false, open: false, rounds: 0 }, action: action => thinking?.action(action) || false });
+  registerQuietImages(pi, display.getMode);
   groups.getPaneStyle = display.getPaneStyle;
   groups.onControl = action => { void display.control(action); };
   thinking = registerThinkingPreview(pi, display.getMode, display.getPaneHeight, display.getPaneStyle);
@@ -244,7 +251,7 @@ export default function compactToolRenderers(pi: ExtensionAPI): void {
   pi.registerToolRenderer((name, next): ToolRenderers | undefined => {
     const stock = next();
     // Public per-tool presentation exception; never swallowed by Quiet groups.
-    if (name === "ask_user_question") return humanAnswerRenderer(stock);
+    if (name === "ask_user_question") return humanAnswerRenderer(stock, { groups, onInteract: details.select });
     const wrap = (renderer: ToolRenderers) => quietRenderer(name, renderer, groups, display.getMode, args =>
       name === "bash" ? intent(typeof args?.command === "string" ? args.command : "", "bash") :
       name === "codemode" ? "Run a tool script" : genericTitle(name, args), display.getPaneHeight);

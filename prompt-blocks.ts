@@ -150,6 +150,10 @@ export default function registerPromptBlocks(pi: ExtensionAPI, paneAction: (acti
         if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > state.actions.length) { ctx.ui.notify(`Choose a call ordinal 1..${state.actions.length}.`, "warning"); return false; }
         paneAction(`jump ${ordinal}`); return false;
       }
+      if (verb === "raw" && value === "latest-question") {
+        if (!paneAction("raw latest-question")) ctx.ui.notify("Expand a question first with Ctrl+O or its header; no eligible expanded question in this branch.", "info");
+        return false;
+      }
       if (["scroll", "open", "close", "raw", "height", "previous", "next"].includes(verb)) {
         if (verb === "height") {
           const n = value === "auto" ? "auto" : Number(value);
@@ -279,7 +283,7 @@ export default function registerPromptBlocks(pi: ExtensionAPI, paneAction: (acti
       if (page === "height") page = "appearance";
     }
   };
-  const completions = ["menu", "help", "status", "quiet", "compact", "expanded", "open", "open latest", "close", "raw", "previous", "next", "jump", "height auto", "height 1", "height 5", "height 20", "frame on", "frame off", "body-highlight on", "body-highlight off", ...["open", "close", "up", "down", "page-up", "page-down", "home", "end"].map(a => `thinking ${a}`), ...["up", "down", "page-up", "page-down", "home", "end"].map(a => `scroll ${a}`)];
+  const completions = ["menu", "help", "status", "quiet", "compact", "expanded", "open", "open latest", "close", "raw", "raw latest-question", "previous", "next", "jump", "height auto", "height 1", "height 5", "height 20", "frame on", "frame off", "body-highlight on", "body-highlight off", ...["open", "close", "up", "down", "page-up", "page-down", "home", "end"].map(a => `thinking ${a}`), ...["up", "down", "page-up", "page-down", "home", "end"].map(a => `scroll ${a}`)];
   pi.registerCommand("blocks", {
     description: commandDescription,
     getArgumentCompletions: prefix => completions.filter(value => value.startsWith(prefix)).map(value => ({ value, label: value })),

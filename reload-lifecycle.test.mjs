@@ -59,7 +59,7 @@ function checkTheme(saved){
  themes.initTheme('dark',false);const dark=child.render(100)[0];
  themes.initTheme('light',false);child.invalidate();const light=child.render(100)[0];
  assert.notEqual(dark,light,'retained preview uses current live palette, not a frozen snapshot');
- assert.ok(light.includes(themes.theme.fg('thinkingText','Thinking · Retained topic · Ctrl+T to expand')));
+ assert.ok(light.includes(themes.theme.fg('thinkingText','Thinking · Retained topic · Ctrl+T to expand')) || light.includes(themes.theme.fg('thinkingText','▸ Thinking · 1 round · Retained topic')));
  for(const p of saved.panes){
   themes.initTheme('dark',false);p.invalidate();const a=p.render(100).join('\n');
   themes.initTheme('light',false);p.invalidate();const b=p.render(100).join('\n');

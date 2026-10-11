@@ -97,7 +97,21 @@ function recordedJSON(value: any, seen = new Set<any>()): boolean {
   seen.delete(value);
   return valid;
 }
+function statusLines(message: any): { name: string; elapsed: string; detail: string; attention: boolean }[] | undefined {
+  const d = message?.details;
+  if (message?.customType !== "subagent_status" || typeof message.content !== "string" || !d || !recordedJSON(message) || Object.keys(d).some(key => !["lines", "overflow"].includes(key)) || !Array.isArray(d.lines) || !d.lines.length || !Number.isInteger(d.overflow) || d.overflow < 0) return undefined;
+  const expected = "Subagent status:\n" + [...d.lines.map((line: any) => `• ${line}`), ...(d.overflow ? [`• +${d.overflow} more running.`] : [])].join("\n");
+  if (message.content !== expected) return undefined;
+  const lines = d.lines.map((line: any) => {
+    if (typeof line !== "string" || /[\p{Cc}\p{Cf}]/u.test(line)) return undefined;
+    const match = /^(.+) running ((?:\d+(?:\.\d+)?[smh](?: )?)+)(?:, ((?:starting|active|waiting|stalled|recovered;)[^\n]*))?\.$/.exec(line);
+    if (!match || /\b(?:question|approval|requires action|awaiting input)\b/i.test(match[3] || "")) return undefined;
+    return { name: match[1], elapsed: match[2], detail: match[3] || "", attention: /^(?:stalled|waiting)/.test(match[3] || "") };
+  });
+  return lines.every(Boolean) ? lines : undefined;
+}
 function supported(message: any): boolean {
+  if (message?.customType === "subagent_status") return !!statusLines(message);
   const d = message?.details;
   if (!["subagent_result", "subagent_question"].includes(message?.customType) || typeof message.content !== "string" ||
     !d || Array.isArray(d) || typeof d.name !== "string" || !d.name.trim() || !recordedJSON(message)) return false;
@@ -111,6 +125,13 @@ function supported(message: any): boolean {
 }
 function summary(message: any) {
   const d = message.details;
+  if (message.customType === "subagent_status") {
+    const lines = statusLines(message)!;
+    const line = lines.find(line => line.attention) || lines[0];
+    const detail = line.detail ? line.detail[0].toUpperCase() + line.detail.slice(1) : "";
+    return { color: line.attention ? "warning" : "muted", icon: line.attention ? "⚠" : "…", name: clean(line.name), failed: false, pending: true,
+      title: `Status · ${clean(line.name)} · ${line.attention ? "⚠ " : ""}${detail ? detail + " · " : ""}Running ${line.elapsed}${lines.length > 1 ? ` · +${lines.length - 1} other statuses` : ""}${d.overflow ? ` · +${d.overflow} more running` : ""}` };
+  }
   if (message.customType === "subagent_question") return { color: "accent", icon: "?", name: clean(d.name), failed: false, pending: true,
     title: `? Question · ${truncateToWidth(clean(d.name), 32, "…")}` };
   const error = d.errorMessage?.trim() || d.error?.trim() || "";
@@ -145,7 +166,7 @@ export function installSubagentCards(getMode: () => string, active = () => true,
     typeof instance.customRenderer === "function";
   const rebuild = function(this: any) {
     delete this[cardKey];
-    if (!enabled() || !shape(this) || !supported(this.message)) { delete this[paneKey]; return originalRebuild.call(this); }
+    if (!enabled() || !shape(this) || !supported(this.message) || this.message.customType === "subagent_status" && getMode() !== "quiet") { delete this[paneKey]; return originalRebuild.call(this); }
     const nativeRenderer = this.customRenderer;
     const shell = this;
     const mode = getMode();
@@ -155,7 +176,7 @@ export function installSubagentCards(getMode: () => string, active = () => true,
       const info = summary(message);
       // InteractiveMode already applies the global display preset with public
       // setExpanded(). Its flag must remain authoritative after mouse/Ctrl+O.
-      const excerpt = reportExcerpt(message);
+      const excerpt = message.customType === "subagent_status" ? "" : reportExcerpt(message);
       const style = controls.style || (() => ({ frame: true, bodyHighlight: true }));
       const redraw = controls.redraw || (() => {});
       // One local owned record survives native expansion/outputPad/invalidation
@@ -167,7 +188,7 @@ export function installSubagentCards(getMode: () => string, active = () => true,
           markdown: new Markdown(report, 0, 0, shell.markdownTheme), markdownTheme: shell.markdownTheme, theme };
         const target: ReportTarget = {
           valid: () => enabled() && shape(shell) && supported(shell.message) && shell.message === message && shell[paneKey] === record,
-          state: () => ({ kind: "report", label: `${message.customType === "subagent_question" ? "Question" : "Report"} · ${clean(message.details.name)}`, available: target.valid(), open: !!shell._expanded, raw: record.pane.raw, scrollable: getMode() !== "expanded", actions: [] }),
+          state: () => ({ kind: "report", label: `${message.customType === "subagent_question" ? "Question" : message.customType === "subagent_status" ? "Status" : "Report"} · ${info.name}`, available: target.valid(), open: !!shell._expanded, raw: record.pane.raw, scrollable: getMode() !== "expanded", actions: [] }),
           action: action => {
             if (!target.valid()) return false;
             if (action === "refresh") { redraw(); return true; }
@@ -240,8 +261,9 @@ export function installSubagentCards(getMode: () => string, active = () => true,
           }
           footerY = -1;
           const disclosure = expanded ? "▾" : "▸";
-          const header = inner < 8 ? `${disclosure}${info.icon}${info.name}` :
-            `${disclosure} ${info.title}${!expanded && mode !== "compact" && !info.failed && excerpt ? ` · ${excerpt}` : ""}`;
+          const title = mode === "quiet" ? info.title.replace(/^\? Question/, "Child question").replace(/^✓ Completed/, "Completed ✓").replace(/^✗ Failed/, "Failed ✗").replace(/^⊘ Cancelled/, "Cancelled ⊘") : info.title;
+          const header = mode === "quiet" && inner <= 2 && info.failed ? `${disclosure}${info.icon}` : mode !== "quiet" && inner < 8 ? `${disclosure}${info.icon}${info.name}` :
+            `${disclosure} ${title}${!expanded && mode !== "compact" && !info.failed && excerpt ? ` · ${excerpt}` : ""}`;
           let lines = [theme.fg(info.color, truncateToWidth(header, inner, inner < 8 ? "" : "…"))];
           if (expanded) {
             if (cacheWidth !== inner || cacheRaw !== record.pane.raw || !cache) {

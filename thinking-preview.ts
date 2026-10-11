@@ -87,8 +87,10 @@ export function installThinkingPreview(getTheme: () => Theme, getMode: () => str
       const padding = Number.isFinite(this.outputPad) ? Math.max(0, this.outputPad) : 0;
       region.child = {
         render(width: number) {
-          const pad = Math.min(padding, Math.max(0, Math.floor((width - 1) / 2)));
-          const text = truncateToWidth(label, Math.max(1, width - pad * 2), "…");
+          const quiet = getMode() === "quiet";
+          const pad = quiet ? 0 : Math.min(padding, Math.max(0, Math.floor((width - 1) / 2)));
+          const title = quiet ? `▸ Thinking · 1 round${topic ? ` · ${topic}` : ""}` : label;
+          const text = truncateToWidth(title, Math.max(1, width - pad * 2), quiet && width < 8 ? "" : "…");
           const theme = getTheme();
           return [" ".repeat(pad) + theme.italic(theme.fg("thinkingText", text))];
         },

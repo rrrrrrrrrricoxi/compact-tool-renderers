@@ -69,7 +69,7 @@ try{
      if(width>=50){
       if(message.details.exitCode===1)assert.match(plain(cardRows),/Failed.*Recorded failure/);
       if(message.details.status==='cancelled')assert.match(plain(cardRows),/Cancelled/);
-      if(message.customType==='subagent_question')assert.match(plain(cardRows),/Question/);
+      if(message.customType==='subagent_question')assert.match(plain(cardRows),/Child question/);
      }
      const headerY=toolRows.length+thoughtRows.length+1;
      const click=()=>{const rows=nativeMouseRoot.render(width);return nativeMouseRoot.handleMouse({type:'click',button:'left',x:leading(toolRows[1]),y:headerY,width,height:rows.length});};
@@ -94,7 +94,7 @@ try{
  const root=new Container();root.addChild(parent);root.addChild(r);root.addChild(q);
  const mouse=(c,type,y,extra={})=>{const offset=parent.render(100).length+(c===q?r.render(100).length:0);root.render(100);return root.handleMouse({type,button:type==='click'?'left':'none',x:2,y:offset+1+y,width:100,height:root.render(100).length,...extra});};
  assert.equal(r.render(100).length,2);assert.equal(q.render(100).length,2);
- assert.match(plain(q.render(100)),/Question · Scout/);assert.ok(!plain(q.render(100)).includes('Completed'));
+ assert.match(plain(q.render(100)),/Child question · Scout/);assert.ok(!plain(q.render(100)).includes('Completed'));
  assert.equal(cards.readableReport(question),question.details.question);
  assert.equal(mouse(r,'click',-1),undefined);assert.equal(r._expanded,false);
  assert.equal(mouse(r,'click',0).handled,true);assert.equal(r._expanded,true);

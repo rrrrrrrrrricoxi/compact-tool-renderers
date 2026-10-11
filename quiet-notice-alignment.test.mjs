@@ -41,11 +41,11 @@ for (const mode of ['quiet', 'compact', 'expanded']) {
     for (const palette of ['dark', 'light']) {
       initTheme(palette, false); card.invalidate();
       const rows = content(card);
-      assert.match(rows.join('\n'), mode === 'quiet' ? /subagent_message · Message om-migration-audit · started/ : /Started/);
+      assert.match(rows.join('\n'), mode === 'quiet' ? /▸ Message · om-migration-audit · Started/ : /Started/);
       assert.equal(firstColumn(rows[0]), mode === 'quiet' ? 0 : outputPad, `${mode}, pad ${outputPad}: standalone notice column`);
       if (mode === 'quiet') {
         assert.equal(card.render(100).length, 2, 'retain native separator plus one notice row');
-        assert.ok(!rows[0].includes('▸') && !rows[0].includes('▾'), 'no invented disclosure indicator');
+        assert.match(rows[0], /^▸ Message/, 'actual result-bearing native expansion target');
         // Existing actual native tool/thinking/completion cards share that column.
         const tool = new ToolExecutionComponent('read', `reference-${id}`, { path: '/tmp/example' }, { showImages: false, outputPad }, { name: 'read', ...resolve('read', () => undefined) }, { requestRender() {} }, dir);
         tool.updateResult({ content: [{ type: 'text', text: 'reference output' }] }, false);
@@ -68,9 +68,9 @@ for (const mode of ['quiet', 'compact', 'expanded']) {
     assert.match(content(card).join('\n'), /[Cc]ancelled/);
     assert.equal(firstColumn(content(card)[0]), mode === 'quiet' ? 0 : outputPad);
     card.updateResult(failed, false);
-    assert.match(content(card).join('\n'), /Failed.*Original failure reason/);
+    assert.match(content(card).join('\n'), /(?:Failed ✗|Failed).*Original failure reason/);
     assert.ok(!content(card).join('\n').includes('Your answer'));
-    assert.equal(firstColumn(content(card)[0]), outputPad, 'existing conspicuous error shell/padding unchanged');
+    assert.equal(firstColumn(content(card)[0]), mode === 'quiet' ? 0 : outputPad, 'Quiet failure strip aligns; non-Quiet error padding unchanged');
     card.updateResult({ content: [{ type: 'text', text: 'Original settled result' }] }, false);
     assert.match(content(card).join('\n'), mode === 'quiet' ? /Tools/ : /Completed/);
     card.updateResult(started, false);

@@ -83,13 +83,12 @@ for (const mode of ['quiet', 'compact', 'expanded']) {
     }
     card.setExpanded(true); // Actual native Ctrl+O target.
     const expanded = card.render(120).join('\n');
-    assert.match(expanded, /Original arguments \(JSON\)/);
-    assert.match(expanded, /Recorded details \(JSON\)/);
-    if (result === selected) assert.match(expanded, /machine_value/);
+    assert.ok(!expanded.includes('Original arguments') && !expanded.includes('Recorded details') && !expanded.includes('Original tool content'));
+    if (result === selected) { assert.match(expanded, /Options:/); assert.ok(!expanded.includes('machine_value')); }
     card.setExpanded(false);
     card.render(120);
     assert.equal(card.handleMouse({ type: 'click', button: 'left', x: 3, y: 2, width: 120, height: 30 })?.handled, true);
-    assert.match(card.render(120).join('\n'), /Recorded details/);
+    assert.match(card.render(120).join('\n'), /Your answer/);
     assert.equal(JSON.stringify({ args, result }), original);
   }
   const q1 = make('q1', optionArgs, selected), q2 = make('q2', textArgs, text);
@@ -125,7 +124,7 @@ for (const mode of ['quiet', 'compact', 'expanded']) {
   assert.match(longCard.render(80).join('\n'), /TAIL ORIGINAL/);
   assert.ok(!longCard.render(80).join('\n').includes('\x1b]8;;bad'));
   const multiline = await fixture(textArgs, 'first\n\nthird\nlast');
-  assert.match(make('multiline', textArgs, multiline).render(120).join('\n').replace(/\x1b\[[0-9;]*m/g, ''), /first\n {2}\n {2}third/);
+  assert.match(make('multiline', textArgs, multiline).render(120).join('\n').replace(/\x1b\[[0-9;]*m/g, ''), /first[^\n]*\n {2}│ [^\n]*\n {2}│ third/);
   assert.equal(JSON.stringify(branch), history);
   // Thinking panes must not move reasoning across the visible human surface.
   const round = id => ({ role: 'assistant', content: [{ type: 'thinking', thinking: `Original round ${id}` }], stopReason: 'stop' });
@@ -177,7 +176,7 @@ for (const answers of [undefined, null, {}, 'wrong array', [null], [undefined], 
     const output = component.render(80).join('\n');
     assert.match(output, /Synthetic unknown result/);
     assert.ok(!output.includes('Your answer') && !output.includes('✓'));
-    if (expanded) assert.match(output, /Recorded details/);
+    if (expanded) assert.ok(!output.includes('Recorded details')); 
     for (const width of [1, 2, 4, 20]) for (const row of component.render(width)) assert.ok(visibleWidth(row) <= width);
     const card = new ToolExecutionComponent('ask_user_question', 'malformed', qArgs, { showImages: false }, { name: 'ask_user_question', ...fallbackRenderer }, { requestRender() {} }, dir);
     card.updateResult(result, false); card.setExpanded(expanded);
@@ -193,7 +192,7 @@ for (const variant of ['context-error', 'result-error', 'partial']) {
   const semanticTheme = { ...theme, fg: (color, value) => { colors.push(color); return value; } };
   const component = fallbackRenderer.renderResult(result, { expanded: false, isPartial: variant === 'partial' }, semanticTheme, context);
   const output = component.render(80).join('\n');
-  assert.match(output, variant === 'partial' ? /Question pending.*\nSynthetic pending/ : /Question failed.*\nSynthetic failure/);
+  assert.match(output, variant === 'partial' ? /Question pending.*\n│ Synthetic pending/ : /Question failed.*\n│ Synthetic failure/);
   assert.ok(!output.includes('✓') && !output.includes('Your answer') && !output.includes('yes'));
   assert.ok(colors.includes(variant === 'partial' ? 'warning' : 'error'));
   assert.ok(!colors.includes('success'));
@@ -248,7 +247,7 @@ try {
     await session.reload();
     assert.throws(() => oldContext.ui, /stale/);
     for (const palette of ['dark', 'light']) { initTheme(palette, false); retained.invalidate(); assert.match(retained.render(100).join('\n'), /Your answer · Selected option/); }
-    retained.setExpanded(true); assert.match(retained.render(100).join('\n'), /machine_value/); retained.setExpanded(false);
+    retained.setExpanded(true); assert.ok(!retained.render(100).join('\n').includes('machine_value')); retained.setExpanded(false);
     assert.equal(JSON.stringify(manager.getBranch()), stored);
     assert.equal(JSON.stringify(session.messages), modelHistory);
   }

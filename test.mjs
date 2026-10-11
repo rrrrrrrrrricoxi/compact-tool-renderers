@@ -11,7 +11,7 @@ const extension = await jiti.import(new URL('./index.ts', import.meta.url).pathn
 let resolver;
 const hooks = [];
 extension({ registerToolRenderer(fn) { resolver = fn; }, on(event) { hooks.push(event); }, registerMarkdownTransformer() {}, registerCommand() {} });
-assert.deepEqual(hooks, ['session_start', 'session_switch', 'session_tree', 'session_compact', 'session_shutdown', 'message_end', 'tool_execution_start', 'tool_execution_end', 'session_start', 'session_switch', 'session_shutdown', 'session_start', 'session_switch', 'session_tree', 'session_compact', 'message_start', 'message_update', 'message_end', 'session_shutdown', 'session_start', 'session_switch', 'session_tree', 'session_compact', 'session_shutdown']);
+assert.deepEqual(hooks, ['session_start', 'session_switch', 'session_tree', 'session_compact', 'session_shutdown', 'message_end', 'tool_execution_start', 'tool_execution_end', 'session_start', 'session_switch', 'session_shutdown', 'session_start', 'session_shutdown', 'session_start', 'session_switch', 'session_tree', 'session_compact', 'message_start', 'message_update', 'message_end', 'session_shutdown', 'session_start', 'session_switch', 'session_tree', 'session_compact', 'session_shutdown']);
 const theme = { fg: (_, s) => s, bg: (_, s) => s, bold: s => s };
 const stockCall = { render() { return ['full script']; } };
 const stockResult = { render() { return ['full result']; } };

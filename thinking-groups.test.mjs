@@ -112,7 +112,7 @@ try{
  // Restore the prior association for the finalization mutation fixture.
  groups.rebuild([entry(a),entry(b)]);ca.updateContent(a);cb.updateContent(b);
  // Core mutation after extension end: render-time eligibility fails back safely.
- b.stopReason='length';assert.match(plain(cb.render(100)),/Thinking · Topic 31/,'mutated finalization fails back before native update builds its notice');cb.updateContent(b);assert.match(plain(cb.render(100)),/truncated/);assert.match(plain(ca.render(100)),/1 round/);
+ b.stopReason='length';assert.match(plain(cb.render(100)),/Thinking · 1 round · Topic 31/,'mutated finalization fails back before native update builds its notice');cb.updateContent(b);assert.match(plain(cb.render(100)),/truncated/);assert.match(plain(ca.render(100)),/1 round/);
  // Two separated groups: commands/state follow handled interaction, never render order.
  const old1=msg(50),old2=msg(51),recent=msg(52);groups.rebuild([entry(old1),entry(old2),entry({role:'user',content:'boundary'}),entry(recent)]);
  const oldCards=[old1,old2].map(m=>new AssistantMessageComponent(m,true,themes.getMarkdownTheme()));const recentCard=new AssistantMessageComponent(recent,true,themes.getMarkdownTheme());

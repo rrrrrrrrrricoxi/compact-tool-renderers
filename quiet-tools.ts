@@ -1,5 +1,5 @@
 import { VERSION, highlightCode, getLanguageFromPath, type ExtensionAPI, type ToolRenderers } from "@earendil-works/pi-coding-agent";
-import { Text, truncateToWidth } from "@earendil-works/pi-tui";
+import { Text, truncateToWidth, getCapabilities } from "@earendil-works/pi-tui";
 
 type Context = Parameters<NonNullable<ToolRenderers["renderCall"]>>[2];
 type Theme = Parameters<NonNullable<ToolRenderers["renderCall"]>>[1];
@@ -7,7 +7,7 @@ type Status = "queued" | "running" | "ok" | "error" | "cancelled" | "started";
 import { GroupPane, readableText, readableValue, detailRows, actionCard, roundedDuration } from "./group-pane.ts";
 import { paneBodyHeight } from "./prompt-blocks.ts";
 type Group = { members: Node[]; dirty: boolean; owner?: Node; pane?: GroupPane; theme?: Theme; revision?: number }; 
-type Node = { id: string; name: string; group: Group; status: Status; images: number; truncated: boolean; saved: boolean; args?: any; result?: any; renderer?: ToolRenderers; context?: Context; caption?: string; nestedCalls?: any; individualPane?: GroupPane }; 
+type Node = { id: string; name: string; invoked?: boolean; invocationOrder?: number; humanTarget?: import("./subagent-cards.ts").ReportTarget; imagePolicy?: string; group: Group; status: Status; images: number; truncated: boolean; saved: boolean; args?: any; result?: any; renderer?: ToolRenderers; context?: Context; caption?: string; nestedCalls?: any; individualPane?: GroupPane }; 
 const categories: Record<string, string> = { read: "Read file", write: "Write file", edit: "Edit file", bash: "Shell command", powershell: "PowerShell command", grep: "Search file contents", find: "Find files", ls: "List files", ask_question: "Ask a question", web_search: "Search the web", web_fetch: "Read web page" };
 const cleanName = (name: string) => name.split("__").at(-1)!.replace(/[\x00-\x1f\x7f]/g, "").slice(0, 36) || "tool";
 
@@ -71,6 +71,8 @@ function memberRows(member: Node, ordinal: string, width: number, raw: boolean, 
     });
     if (member.nestedCalls?.complete === false) body.push(...detailRows("Nested record incomplete", "Arguments/calls may have been omitted.", innerWidth, theme, "warning"));
     if (member.result) {
+      const imageBlocks = member.result.content.filter((c: any) => c.type === "image");
+      if (imageBlocks.length && (!member.context?.showImages || !getCapabilities().images)) body.push(...detailRows("Image preview unavailable", `${imageBlocks.length} image${imageBlocks.length === 1 ? "" : "s"} recorded; ${!member.context?.showImages ? "Show images is disabled" : "terminal image protocol is unsupported"}. Original image data is retained.`, innerWidth, theme, "warning"));
       const text = member.result.content.filter((c: any) => c.type === "text").map((c: any) => raw ? c.text : readableText(c.text)).join("\n");
       if (raw || member.name === "codemode" || !member.renderer || !member.context) {
         body.push(...detailRows(member.name === "codemode" ? "Script output (not attributed to nested calls)" : "Output", text, innerWidth, theme, member.status === "error" ? "error" : "toolOutput"));
@@ -129,6 +131,7 @@ export class QuietGroups {
   }
   private invalidators = new Map<string, () => void>();
   private current: Group | undefined;
+  private invocationOrder = 0;
   private rebuilding = false;
   private ensure(id: string, name: string, grouped = false): Node {
     const existing = this.nodes.get(id);
@@ -166,6 +169,8 @@ export class QuietGroups {
       const node = this.ensure(call.id, call.name || "tool");
       if (node.args !== call.arguments) node.group.revision = (node.group.revision || 0) + 1;
       node.args = call.arguments;
+      if (!node.invoked) node.invocationOrder = ++this.invocationOrder;
+      node.invoked = true;
       if (node.group !== group) {
         node.group.members = node.group.members.filter(member => member !== node);
         node.group.dirty = true; node.group.revision = (node.group.revision || 0) + 1;
@@ -204,7 +209,7 @@ export class QuietGroups {
   }
   rebuild(entries: readonly any[]) {
     this.activePane = undefined;
-    this.nodes.clear(); this.invalidators.clear(); this.boundary(); this.rebuilding = true;
+    this.nodes.clear(); this.invalidators.clear(); this.invocationOrder = 0; this.boundary(); this.rebuilding = true;
     try {
       for (const entry of entries) {
         if (entry.type === "message") this.message(entry.message);
@@ -214,6 +219,7 @@ export class QuietGroups {
   }
   clear() { this.rebuild([]); }
   info(id: string) { return this.nodes.get(id); }
+  latestHumanTarget() { return [...this.nodes.values()].filter(node => node.invoked && node.name === "ask_user_question" && node.humanTarget?.valid() && node.humanTarget.state().open).sort((a, b) => b.invocationOrder! - a.invocationOrder!)[0]?.humanTarget; }
   summary(id: string): string | undefined {
     const node = this.nodes.get(id);
     if (!node || !eligible(node) || representative(node.group) !== node) return undefined;
@@ -225,9 +231,9 @@ export class QuietGroups {
     const active = members.filter(m => m.status === "running" || m.status === "queued");
     const failed = members.filter(m => m.status === "error").length;
     const count = `${members.length} call${members.length === 1 ? "" : "s"}`;
-    let text = active.length ? `… Tools · ${members.length - active.length}/${members.length} settled · ${active.some(m => m.status === "running") ? "running" : "preparing"} ${[...new Set(active.map(m => cleanName(m.name)))].slice(0, 2).join(", ")}` : `Tools · ${count}`;
+    let text = active.length ? `Tools · ${members.length - active.length}/${members.length} settled · ${active.some(m => m.status === "running") ? "running" : "preparing"} ${[...new Set(active.map(m => cleanName(m.name)))].slice(0, 2).join(", ")}` : `Tools · ${count}`;
     text += ` · ${names}${rest}`;
-    if (failed) text += ` · ${failed} failed`;
+    if (failed) text += ` · ✗ ${failed} failed`;
     if (members.some(m => m.truncated)) text += " · truncated";
     if (members.some(m => m.saved)) text += " · full output saved";
     return text;
@@ -248,10 +254,22 @@ export function registerQuietGroups(pi: ExtensionAPI): QuietGroups {
   return groups;
 }
 
-function neutral(text: string, width: number, theme: Theme): string[] {
-  // Quiet standalone notices share the root column of grouped disclosures.
-  // No disclosure glyph: status text is not itself a new collapsible pane.
-  return [theme.fg("muted", truncateToWidth(text, Math.max(1, width), "…"))];
+function quietNotice(node: Node, width: number, theme: Theme, caption: string): string[] {
+  const clean = (value: string) => value.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "").replace(/[\p{Cc}\p{Cf}]/gu, " ").replace(/\s+/g, " ").trim();
+  const target = clean(String(node.args?.name || node.args?.path || node.args?.file_path || ""));
+  const title = node.images && node.name === "read" ? `Read image · ${target.split(/[\\/]/).at(-1) || "Recorded image"}` : node.name === "subagent_message" ? `Message · ${target || "Child"}` : caption || categories[node.name] || cleanName(node.name);
+  const status = node.status === "error" ? "✗ Failed" : node.status === "started" ? "Started" : node.status === "cancelled" ? "⊘ Cancelled" : node.images ? `${node.images} image${node.images === 1 ? "" : "s"}${node.status === "running" ? " · Running" : ""}` : "Running";
+  const output = (node.result?.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join(" ");
+  const d = node.result?.details;
+  const nestedError = Array.isArray(d?.calls) ? d.calls.find((c: any) => c.status === "error" && typeof c.error === "string")?.error : undefined;
+  const exit = ["bash", "powershell"].includes(node.name) ? d?.exitCode ?? /(?:Process exited with (?:code|status)|exit code:)\s*(-?\d+)/i.exec(output)?.[1] : undefined;
+  const detail = typeof d?.error === "string" ? d.error : typeof d?.errorMessage === "string" ? d.errorMessage : nestedError || output;
+  const reason = node.status === "error" ? `${exit !== undefined ? `exit ${exit} · ` : ""}${clean(detail).slice(0, 140)}` : "";
+  // Only a native result-bearing card can be expanded via its click/Ctrl+O.
+  const gutter = node.result ? "▸ " : "  ";
+  const header = node.status === "error" ? `${gutter}Failed ✗ · ${title}${reason ? ` · ${reason}` : ""}` : `${gutter}${title} · ${status}`;
+  const narrow = width <= 2 && node.status === "error" ? `${node.result ? "▸" : " "}✗` : header;
+  return [theme.fg(node.status === "error" ? "error" : "muted", truncateToWidth(narrow, Math.max(1, width), width < 8 ? "" : "…"))];
 }
 export function quietRenderer(name: string, compact: ToolRenderers, groups: QuietGroups, getMode: () => string, caption: (args: any) => string, getHeight: () => number = () => paneBodyHeight("auto")): ToolRenderers {
   const quiet = (context: Context) => getMode() === "quiet" && VERSION === "1.1.0" && typeof context.toolCallId === "string";
@@ -260,6 +278,8 @@ export function quietRenderer(name: string, compact: ToolRenderers, groups: Quie
     renderCall(args, theme, context) {
       if (!quiet(context)) return compact.renderCall!(args, theme, context);
       const observed = groups.observe(context.toolCallId, name, context.invalidate);
+      const imagePolicy = `${context.showImages}/${getCapabilities().images}`;
+      if (observed.imagePolicy !== imagePolicy) { observed.imagePolicy = imagePolicy; observed.group.revision = (observed.group.revision || 0) + 1; }
       if (observed.args !== args) observed.group.revision = (observed.group.revision || 0) + 1;
       Object.assign(observed, { args, renderer: compact, context, caption: caption(args) });
       const pane = groups.pane(observed, theme, getHeight, context.invalidate);
@@ -270,11 +290,7 @@ export function quietRenderer(name: string, compact: ToolRenderers, groups: Quie
         render(width) {
           const node = groups.info(context.toolCallId);
           if (node && !eligible(node) && context.expanded) { const detail = individual(); groups.activePane = detail; return detail.render(width, true); }
-          if (node?.status === "error") return compact.renderCall!(args, theme, { ...context, isError: true }).render(width);
-          if (node && !eligible(node)) {
-            const status = node.status === "started" ? "started" : node.status === "cancelled" ? "⊘ cancelled" : `${node.images} image${node.images === 1 ? "" : "s"}`;
-            return neutral(`${cleanName(name)} · ${caption(args)} · ${status}`, width, theme);
-          }
+          if (node && !eligible(node)) return quietNotice(node, width, theme, caption(args));
           const summary = groups.summary(context.toolCallId);
           if (summary && context.expanded) groups.activePane = pane;
           return summary ? pane.render(width, context.expanded) : [];
@@ -300,13 +316,12 @@ export function quietRenderer(name: string, compact: ToolRenderers, groups: Quie
       groups.observe(context.toolCallId, name, context.invalidate);
       // Rendering must not trigger recursive invalidate -> updateDisplay -> renderResult.
       // Events/replay normally supply this state; silently update only if needed (e.g. export).
-      const next = groups.result(context.toolCallId, name, result, options.isPartial, context.isError, false);
+      groups.result(context.toolCallId, name, result, options.isPartial, context.isError, false);
       // Stop the stock shell clock if this row was previously expanded while streaming.
       if ((name === "bash" || name === "powershell") && context.state?.interval) {
         clearInterval(context.state.interval); context.state.interval = undefined;
       }
-      const error = next.status === "error" && !options.expanded ? compact.renderResult!(result, options, theme, { ...context, isError: true }) : undefined;
-      return { render: width => error ? error.render(width) : [], invalidate() { error?.invalidate(); } };
+      return { render: () => [], invalidate() {} };
     },
   };
 }

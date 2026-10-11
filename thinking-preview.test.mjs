@@ -35,7 +35,7 @@ try {
  const before=JSON.stringify(source);
  const card=new AssistantMessageComponent(source,true,getMarkdownTheme());
  const rows=card.render(160).map(strip);
- assert.match(rows.join('\n'),/Thinking · Considering request behavior · Ctrl\+T to expand/);
+ assert.match(rows.join('\n'),/▸ Thinking · 1 round · Considering request behavior/);
  assert.ok(!rows.join('\n').includes('Hidden explanation'));
  assert.ok(rows.join('\n').includes('Visible final answer'));
  const stock=new AssistantMessageComponent(source,false,getMarkdownTheme());
@@ -57,7 +57,7 @@ try {
  assert.ok(card.render(160).map(strip).join('\n').includes('Hidden explanation'));
  region=card.contentContainer.children.find(child=>child instanceof MouseRegion);
  region.handleMouse({type:'click',button:'left',row:0,column:0});
- assert.match(card.render(160).map(strip).join('\n'),/Thinking · Considering/);
+ assert.match(card.render(160).map(strip).join('\n'),/Thinking · 1 round · Considering/);
  assert.equal(JSON.stringify(source),before);
  assert.equal(card.lastMessage,source);
  // Multiple thinking runs use their own topics, not a global latest-message label.

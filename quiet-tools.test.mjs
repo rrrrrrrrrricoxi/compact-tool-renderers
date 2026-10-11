@@ -94,9 +94,9 @@ try {
   await emit('tool_execution_end',{toolCallId:id,toolName:name,result:r,isError:false});
   const card=make(id,name,r); const output=card.render(200).join('\n');
   assert.ok(output.length>0,name); if(name==='read')assert.match(output,/1 image/);
-  if(name==='bash')assert.match(output,/✗ Failed.*exit 2/);
-  if(name==='future_tool')assert.match(output,/cancelled/);
-  if(name==='subagent')assert.match(output,/started/);
+  if(name==='bash')assert.match(output,/Failed ✗.*exit 2/);
+  if(name==='future_tool')assert.match(output,/Cancelled/);
+  if(name==='subagent')assert.match(output,/Started/);
   if(name==='web_fetch')assert.match(output,/HTTP 403/);
  }
  // Parent-id nested events must not create extra top-level rows/counts.

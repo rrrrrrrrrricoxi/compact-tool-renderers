@@ -40,7 +40,7 @@ try {
  const source=make({stats:{toolCount:7,model:'synthetic',contextTokens:100,inputTokens:5,outputTokens:8,cacheReadTokens:0,cacheWriteTokens:0,cost:0},agent:'worker',sessionFile:'/long/路径/'+ '界'.repeat(180),sessionId:'session-id',unknown:{field:'preserved'}});
  const before=JSON.stringify(source),c=card(source);
  assert.equal(c.message,source);assert.equal(c.customRenderer,nativeRenderer);
- assert.equal(rows(c).length,2,'one native separator + one content row');assert.equal(rows(c)[0],'');assert.match(rows(c).join('\n'),/Completed · Worker · 12s/);assert.ok(rows(c).join('').includes('Original report'));assert.ok(!rows(c).join('').includes('Second line'));
+ assert.equal(rows(c).length,2,'one native separator + one content row');assert.equal(rows(c)[0],'');assert.match(rows(c).join('\n'),/Completed ✓ · Worker · 12s/);assert.ok(rows(c).join('').includes('Original report'));assert.ok(!rows(c).join('').includes('Second line'));
  mode='compact';assert.equal(rows(c).length,3,'one separator + at most two content rows');
  mode='expanded';c.setExpanded(true);assert.match(rows(c).join('\n'),/Sixth line/);assert.ok(!rows(c).join('\n').includes('Recorded metadata')); // readable by default
  mode='quiet';assert.ok(rows(c).length<=13);c.setExpanded(false);assert.equal(rows(c).length,2);

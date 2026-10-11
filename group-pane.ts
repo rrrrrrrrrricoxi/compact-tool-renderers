@@ -60,7 +60,7 @@ export class GroupPane implements Component {
     const summary = this.summary();
     if (!summary) return [];
     const theme = this.theme();
-    const title = theme.fg("muted", truncateToWidth(`${this.isOpen ? "▾" : "▸"} ${summary}`, this.width, "…"));
+    const title = theme.fg("muted", truncateToWidth(`${this.isOpen ? "▾" : "▸"} ${summary}`, this.width, this.width < 8 ? "" : "…"));
     if (!this.isOpen || VERSION !== "1.1.0") return [title];
     // Keep both frame sides outside the scroll lane. Tiny panes prioritize text.
     const framed = this.style().frame && this.width >= 3;
