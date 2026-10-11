@@ -1,0 +1,12 @@
+# Local Pi state and resources (not package source)
+.pi/
+
+# Dependencies, generated output and test artifacts
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+*.log
+
+# macOS metadata
+.DS_Store
