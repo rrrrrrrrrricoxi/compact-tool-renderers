@@ -199,6 +199,14 @@ for (const variant of ['context-error', 'result-error', 'partial']) {
   assert.ok(!colors.includes('success'));
   assert.equal(JSON.stringify({ args: qArgs, result, context }), original);
 }
+for (const [status, label] of [['cancelled', 'Question cancelled'], ['unavailable', 'Question unavailable']]) {
+  const result = { content: [{ type: 'text', text: 'Original status reason' }], details: { status, answers: null } };
+  for (const isPartial of [false, true]) {
+    const output = fallbackRenderer.renderResult(result, { expanded: false, isPartial }, theme, { args: qArgs, outputPad: 0 }).render(80).join('\n');
+    assert.ok(output.includes(label) && output.includes('Original status reason'));
+    assert.ok(!output.includes('Your answer') && !output.includes('✓'));
+  }
+}
 const longFallback = { ...nullAnswers, content: [{ type: 'text', text: '字👩‍💻\x1b[31m'.repeat(1000) + '\nRECORDED FALLBACK TAIL' }] };
 const fallbackPreview = fallbackRenderer.renderResult(longFallback, { expanded: false, isPartial: false }, theme, { args: qArgs, outputPad: 0 });
 assert.ok(fallbackPreview.render(20).length <= 6);

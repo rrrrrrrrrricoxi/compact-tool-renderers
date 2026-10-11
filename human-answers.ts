@@ -66,7 +66,7 @@ export function humanAnswerRenderer(_stock: ToolRenderers | undefined): ToolRend
         // flags. Do not call it when its preconditions are unmet. Paint recorded
         // text literally instead; an error/pending flag always wins over details.
         const status = result.details?.status;
-        const heading = error ? "✗ Question failed" : options.isPartial ? "… Question pending" : status === "cancelled" ? "⊘ Question cancelled" : status === "unavailable" ? "Question unavailable" : "Question result · Recorded output";
+        const heading = error ? "✗ Question failed" : status === "cancelled" ? "⊘ Question cancelled" : status === "unavailable" ? "Question unavailable" : options.isPartial ? "… Question pending" : "Question result · Recorded output";
         const color = error ? "error" : options.isPartial || status === "cancelled" || status === "unavailable" ? "warning" : "muted";
         const text = (Array.isArray(result.content) ? result.content : []).filter(c => c?.type === "text" && typeof c.text === "string").map(c => c.text).join("\n");
         const disclosure = options.expanded ? "\n\nRecorded details (JSON):\n" + JSON.stringify(result.details ?? null, null, 2) : "";
