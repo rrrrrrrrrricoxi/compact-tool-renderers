@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ToolRenderers } from "@earendil-works/pi-coding-agent";
 import registerPromptBlocks from "./prompt-blocks.ts";
+import { humanAnswerRenderer } from "./human-answers.ts";
 import registerThinkingPreview from "./thinking-preview.ts";
 import registerSubagentCards, { type ReportTarget } from "./subagent-cards.ts";
 import { registerQuietGroups, quietRenderer } from "./quiet-tools.ts";
@@ -242,6 +243,8 @@ export default function compactToolRenderers(pi: ExtensionAPI): void {
     onInteract: details.select, onReset: details.reset, onControl: action => { void display.control(action); } });
   pi.registerToolRenderer((name, next): ToolRenderers | undefined => {
     const stock = next();
+    // Public per-tool presentation exception; never swallowed by Quiet groups.
+    if (name === "ask_user_question") return humanAnswerRenderer(stock);
     const wrap = (renderer: ToolRenderers) => quietRenderer(name, renderer, groups, display.getMode, args =>
       name === "bash" ? intent(typeof args?.command === "string" ? args.command : "", "bash") :
       name === "codemode" ? "Run a tool script" : genericTitle(name, args), display.getPaneHeight);

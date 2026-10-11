@@ -28,7 +28,7 @@ export function resultState(name: string, result: any, partial = false, isError 
   return { status, images: content.filter((c: any) => c.type === "image").length,
     truncated: Boolean(details?.truncated || details?.truncation?.truncated), saved: Boolean(details?.fullOutputPath) };
 }
-const eligible = (node: Node) => !["error", "cancelled", "started"].includes(node.status) && !node.images;
+const eligible = (node: Node) => node.name !== "ask_user_question" && !["error", "cancelled", "started"].includes(node.status) && !node.images;
 function representative(group: Group): Node | undefined {
   if (!group.dirty) return group.owner;
   group.owner = undefined;
@@ -156,10 +156,13 @@ export class QuietGroups {
     if (message.errorMessage || content.some((c: any) => c.type === "text" && c.text?.trim())) this.boundary();
     const calls = content.filter((c: any) => c.type === "toolCall" && typeof c.id === "string");
     if (!calls.length) return;
-    const group = this.current ||= { members: [], dirty: true };
-    const before = representative(group)?.id;
-    const changed: string[] = [];
+    const changed: (string | undefined)[] = [];
     for (const call of calls) {
+      // Invocation order is presentation order, not an execution/approval gate.
+      const human = call.name === "ask_user_question";
+      if (human) this.boundary();
+      const group = human ? { members: [], dirty: true } as Group : this.current ||= { members: [], dirty: true };
+      changed.push(representative(group)?.id);
       const node = this.ensure(call.id, call.name || "tool");
       if (node.args !== call.arguments) node.group.revision = (node.group.revision || 0) + 1;
       node.args = call.arguments;
@@ -168,17 +171,21 @@ export class QuietGroups {
         node.group.dirty = true; node.group.revision = (node.group.revision || 0) + 1;
         node.group = group; group.members.push(node); group.dirty = true; group.revision = (group.revision || 0) + 1;
       }
-      changed.push(node.id);
+      changed.push(node.id, representative(group)?.id);
+      if (human) this.boundary();
     }
-    this.redraw([before, representative(group)?.id, ...changed]);
+    this.redraw(changed);
   }
   start(id: string, name: string) {
-    const node = this.ensure(id, name, true);
+    if (name === "ask_user_question") this.boundary();
+    const node = this.ensure(id, name, name !== "ask_user_question");
+    if (name === "ask_user_question") this.boundary();
     if (node.status !== "queued") return;
     node.status = "running"; node.group.revision = (node.group.revision || 0) + 1;
     this.redraw([id, representative(node.group)?.id]);
   }
   result(id: string, name: string, result: any, partial = false, isError = false, notify = true) {
+    if (name === "ask_user_question") this.boundary();
     const node = this.ensure(id, name);
     const before = representative(node.group)?.id;
     if (node.result?.content !== result.content || node.result?.details !== result.details || result.nestedCalls && node.nestedCalls !== result.nestedCalls) node.group.revision = (node.group.revision || 0) + 1;

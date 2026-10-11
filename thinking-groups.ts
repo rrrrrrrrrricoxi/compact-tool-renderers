@@ -6,9 +6,9 @@ import { thinkingTopic } from "./thinking-preview.ts";
 type Record = { message: any; component?: any; trusted?: boolean; textRefs?: string[]; kind: "boundary" | "bridge" | "round"; hidden?: boolean; group?: Group };
 type Group = { members: Record[]; pane?: GroupPane; revision: number; activeVersion?: number; activeMode?: string; activeValue?: boolean };
 const thinking = (message: any) => (message?.content || []).filter((b: any) => b.type === "thinking" && typeof b.thinking === "string" && b.thinking.trim());
-const safe = (message: any) => message?.role === "assistant" && !["error", "aborted", "length"].includes(message.stopReason) && !(message.content || []).some((b: any) => b.type === "text" && b.text?.trim());
+const safe = (message: any) => message?.role === "assistant" && !["error", "aborted", "length"].includes(message.stopReason) && !(message.content || []).some((b: any) => b.type === "text" && b.text?.trim() || b.type === "toolCall" && b.name === "ask_user_question");
 const kind = (message: any): Record["kind"] => !safe(message) ? "boundary" : thinking(message).length ? "round" : "bridge";
-const boundary = (message: any) => message?.role === "assistant" ? !safe(message) : message?.role === "toolResult" ? !!message.isError : message?.role !== "system" && !(message?.role === "custom" && message.display === false);
+const boundary = (message: any) => message?.role === "assistant" ? !safe(message) : message?.role === "toolResult" ? !!message.isError || message.toolName === "ask_user_question" : message?.role !== "system" && !(message?.role === "custom" && message.display === false);
 
 /** Original branch refs + ordered public streaming events only. No timestamps,
  * content matching, transcript-root traversal, or retained full-text copies. */
