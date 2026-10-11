@@ -1,5 +1,5 @@
 import type { ToolRenderers } from "@earendil-works/pi-coding-agent";
-import { Text, truncateToWidth, type Component } from "@earendil-works/pi-tui";
+import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
 import { wrapRecordedLine } from "./subagent-cards.ts";
 
 type Answer = { type: "text" | "other" | "option"; label: string; value: string; index?: number };
@@ -28,7 +28,7 @@ export function answeredDetails(details: any, args: any): details is { question:
 
 // Literal terminal-safe rendering preserves whitespace and escapes control bytes.
 // Collapsed work is bounded in both source characters and rendered rows.
-function literal(text: string, heading: string, expanded: boolean, pad: number, theme: any, limit = 4): Component {
+function literal(text: string, heading: string, expanded: boolean, pad: number, theme: any, limit = 4, color = "accent", notice = "… Ctrl+O for full original answer"): Component {
   return {
     render(width) {
       const padding = Math.min(Math.max(0, pad || 0), Math.floor(Math.max(0, width - 1) / 2));
@@ -42,29 +42,35 @@ function literal(text: string, heading: string, expanded: boolean, pad: number, 
           rows.push(row);
         }
       }
-      const output = [theme.fg("accent", theme.bold(truncateToWidth(heading, inner, "…"))), ...rows.map(row => theme.fg("text", row))];
-      if (clipped) output.push(theme.fg("muted", truncateToWidth("… Ctrl+O for full original answer", inner, "…")));
+      const output = [theme.fg(color, theme.bold(truncateToWidth(heading, inner, "…"))), ...rows.map(row => theme.fg("text", row))];
+      if (clipped) output.push(theme.fg("muted", truncateToWidth(notice, inner, "…")));
       return output.map(row => " ".repeat(padding) + row);
     },
     invalidate() {},
   };
 }
 
-export function humanAnswerRenderer(stock: ToolRenderers | undefined): ToolRenderers {
+export function humanAnswerRenderer(_stock: ToolRenderers | undefined): ToolRenderers {
   return {
     renderShell: "self",
     renderCall(args, theme, context) {
-      if (typeof args?.question !== "string") return stock?.renderCall?.(args, theme, { ...context, lastComponent: undefined }) ?? new Text("ask_user_question\n" + JSON.stringify(args ?? {}, null, 2), 0, 0);
+      if (typeof args?.question !== "string") return literal(JSON.stringify(args ?? {}, null, 2), "Question call · Recorded arguments", context.expanded, context.outputPad, theme, 2, "muted", "… Ctrl+O for full recorded arguments");
       // Keep the question attached to this native call ID, outside ordinary groups.
       return literal(context.expanded ? args.question + "\n\nOriginal arguments (JSON):\n" + JSON.stringify(args, null, 2) : args.question,
-        "Question · ask_user_question", context.expanded, context.outputPad, theme, 2);
+        "Question · ask_user_question", context.expanded, context.outputPad, theme, 2, "accent", "… Ctrl+O for full question");
     },
     renderResult(result, options, theme, context) {
-      if (options.isPartial || context.isError || (result as any).isError || !answeredDetails(result.details, context.args)) {
-        // Preserve native/registered semantics for pending, failed, cancelled,
-        // unavailable and unknown shapes; never label these as a human answer.
-        return stock?.renderResult?.(result, options, theme, { ...context, lastComponent: undefined })
-          ?? new Text(result.content.filter(c => c.type === "text").map(c => c.text).join("\n"), 0, 0);
+      const error = context.isError || (result as any).isError;
+      if (options.isPartial || error || !answeredDetails(result.details, context.args)) {
+        // The registered formatter assumes answers.map and ignores error/partial
+        // flags. Do not call it when its preconditions are unmet. Paint recorded
+        // text literally instead; an error/pending flag always wins over details.
+        const status = result.details?.status;
+        const heading = error ? "✗ Question failed" : options.isPartial ? "… Question pending" : status === "cancelled" ? "⊘ Question cancelled" : status === "unavailable" ? "Question unavailable" : "Question result · Recorded output";
+        const color = error ? "error" : options.isPartial || status === "cancelled" || status === "unavailable" ? "warning" : "muted";
+        const text = (Array.isArray(result.content) ? result.content : []).filter(c => c?.type === "text" && typeof c.text === "string").map(c => c.text).join("\n");
+        const disclosure = options.expanded ? "\n\nRecorded details (JSON):\n" + JSON.stringify(result.details ?? null, null, 2) : "";
+        return literal(text + disclosure, heading, options.expanded, context.outputPad, theme, 4, color, "… Ctrl+O for full recorded result");
       }
       const details = result.details;
       const heading = details.mode === "multi-select" ? "Your answer · Multiple selections" : details.answers[0].type === "option" ? "Your answer · Selected option" : details.answers[0].type === "other" ? "Your answer · Custom reply" : "Your answer · Text reply";

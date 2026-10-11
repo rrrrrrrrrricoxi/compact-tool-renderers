@@ -162,7 +162,48 @@ assert.equal(new Set([...ordinary.nodes.values()].map(n => n.group)).size, 1);
 for (const details of [undefined, { ...selected.details, question: 'different call' }, { ...selected.details, answers: [{ ...selected.details.answers[0], index: 99 }] }, { ...selected.details, answers: [{ type: 'text', label: 'invented', value: 'invented' }] }, { calls: [{ name: 'ask_user_question', result: selected }] }]) assert.equal(answeredDetails(details, optionArgs), false);
 const theme = { fg: (_, s) => s, bold: s => s };
 const stock = { renderResult: () => ({ render: () => ['STOCK FALLBACK'], invalidate() {} }) };
-assert.deepEqual(humanAnswerRenderer(stock).renderResult(text, { isPartial: false, expanded: false }, theme, { args: optionArgs }).render(80), ['STOCK FALLBACK']);
+assert.match(humanAnswerRenderer(stock).renderResult(text, { isPartial: false, expanded: false }, theme, { args: optionArgs }).render(80).join('\n'), /Recorded output/);
+// Parent-reviewed malformed/error repros: stock must not see rejected schemas or
+// valid-looking answer details on a failed/partial result. No catch-all involved.
+const qArgs = { question: 'Q' };
+const fallbackRenderer = humanAnswerRenderer(question);
+const validDetails = { status: 'answered', question: 'Q', mode: 'text', answers: [{ type: 'text', label: 'yes', value: 'yes' }] };
+const nullAnswers = { content: [{ type: 'text', text: 'Synthetic unknown result' }], details: { ...validDetails, answers: null } };
+for (const answers of [undefined, null, {}, 'wrong array', [null], [undefined], [{}], [{ type: 'unknown', label: 'yes', value: 'yes' }]]) {
+  const result = { ...nullAnswers, details: { ...nullAnswers.details, answers } };
+  const original = JSON.stringify({ args: qArgs, result });
+  for (const expanded of [false, true]) {
+    const component = fallbackRenderer.renderResult(result, { expanded, isPartial: false }, theme, { args: qArgs, outputPad: 0 });
+    const output = component.render(80).join('\n');
+    assert.match(output, /Synthetic unknown result/);
+    assert.ok(!output.includes('Your answer') && !output.includes('✓'));
+    if (expanded) assert.match(output, /Recorded details/);
+    for (const width of [1, 2, 4, 20]) for (const row of component.render(width)) assert.ok(visibleWidth(row) <= width);
+    const card = new ToolExecutionComponent('ask_user_question', 'malformed', qArgs, { showImages: false }, { name: 'ask_user_question', ...fallbackRenderer }, { requestRender() {} }, dir);
+    card.updateResult(result, false); card.setExpanded(expanded);
+    assert.ok(!card.render(80).join('\n').includes('Your answer'));
+  }
+  assert.equal(JSON.stringify({ args: qArgs, result }), original);
+}
+for (const variant of ['context-error', 'result-error', 'partial']) {
+  const result = { content: [{ type: 'text', text: variant === 'partial' ? 'Synthetic pending: answer not accepted' : 'Synthetic failure: answer not accepted' }], details: validDetails, ...(variant === 'result-error' ? { isError: true } : {}) };
+  const context = { args: qArgs, outputPad: 0, isError: variant === 'context-error' };
+  const original = JSON.stringify({ args: qArgs, result, context });
+  const colors = [];
+  const semanticTheme = { ...theme, fg: (color, value) => { colors.push(color); return value; } };
+  const component = fallbackRenderer.renderResult(result, { expanded: false, isPartial: variant === 'partial' }, semanticTheme, context);
+  const output = component.render(80).join('\n');
+  assert.match(output, variant === 'partial' ? /Question pending.*\nSynthetic pending/ : /Question failed.*\nSynthetic failure/);
+  assert.ok(!output.includes('✓') && !output.includes('Your answer') && !output.includes('yes'));
+  assert.ok(colors.includes(variant === 'partial' ? 'warning' : 'error'));
+  assert.ok(!colors.includes('success'));
+  assert.equal(JSON.stringify({ args: qArgs, result, context }), original);
+}
+const longFallback = { ...nullAnswers, content: [{ type: 'text', text: '字👩‍💻\x1b[31m'.repeat(1000) + '\nRECORDED FALLBACK TAIL' }] };
+const fallbackPreview = fallbackRenderer.renderResult(longFallback, { expanded: false, isPartial: false }, theme, { args: qArgs, outputPad: 0 });
+assert.ok(fallbackPreview.render(20).length <= 6);
+assert.ok(!fallbackPreview.render(80).join('\n').includes('RECORDED FALLBACK TAIL'));
+assert.match(fallbackRenderer.renderResult(longFallback, { expanded: true, isPartial: false }, theme, { args: qArgs, outputPad: 0 }).render(80).join('\n'), /RECORDED FALLBACK TAIL/);
 // Actual isolated SDK reload with retained native human cards. Rendering owns no
 // ctx, prototype, timer, registry or synthetic message and survives revocation.
 const sdk = await import(pathToFileURL(`${root}/dist/index.js`));

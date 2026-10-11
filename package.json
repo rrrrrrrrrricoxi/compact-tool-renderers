@@ -1,6 +1,6 @@
 {
   "name": "local-compact-tool-renderers",
-  "version": "1.18.0",
+  "version": "1.18.1",
   "private": true,
   "type": "module",
   "description": "Adaptive bounded action panes, quiet grouped tools, prompt templates, skills, and thinking previews",
