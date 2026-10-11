@@ -94,7 +94,7 @@ try{
  const root=new Container();root.addChild(parent);root.addChild(r);root.addChild(q);
  const mouse=(c,type,y,extra={})=>{const offset=parent.render(100).length+(c===q?r.render(100).length:0);root.render(100);return root.handleMouse({type,button:type==='click'?'left':'none',x:2,y:offset+1+y,width:100,height:root.render(100).length,...extra});};
  assert.equal(r.render(100).length,2);assert.equal(q.render(100).length,2);
- assert.match(plain(q.render(100)),/Child question · Scout/);assert.ok(!plain(q.render(100)).includes('Completed'));
+ assert.match(plain(q.render(100)),/Child question · Scout/);assert.ok(!plain(q.render(100)).includes('Subagent completed'));
  assert.equal(cards.readableReport(question),question.details.question);
  assert.equal(mouse(r,'click',-1),undefined);assert.equal(r._expanded,false);
  assert.equal(mouse(r,'click',0).handled,true);assert.equal(r._expanded,true);
@@ -125,7 +125,7 @@ try{
  assert.equal(details.action('open'),true);assert.equal(r._expanded,true);
  const oldToolCount=toolActions.length;details.action('down');assert.equal(toolActions.length,oldToolCount,'report action does not scroll previous tool pane');
  assert.equal(mouse(q,'click',0).handled,true);assert.equal(q._expanded,true);assert.equal(details.state().label,'Question · Scout');
- assert.ok(q.render(100).length<=paneBodyHeight('auto',24)+3);assert.match(plain(q.render(100)),/Parent decision/);assert.ok(!plain(q.render(100)).includes('Completed'));
+ assert.ok(q.render(100).length<=paneBodyHeight('auto',24)+3);assert.match(plain(q.render(100)),/Parent decision/);assert.ok(!plain(q.render(100)).includes('Subagent completed'));
  details.action('close');assert.equal(q._expanded,false);assert.equal(r._expanded,true,'another report remains open');
  details.action('open latest');assert.equal(toolOpen,true);assert.equal(details.state().kind,'tools');
  mouse(r,'click',0); // closes and selects r

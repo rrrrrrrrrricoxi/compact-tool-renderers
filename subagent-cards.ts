@@ -149,7 +149,7 @@ function summary(message: any) {
   const cancelled = ["cancelled", "canceled"].includes(d.status) || /^(?:cancelled|canceled)$/i.test(error) || nativeCancelled;
   const failed = !!error || (typeof d.exitCode === "number" && d.exitCode !== 0) || ["failed", "error"].includes(d.status);
   const success = d.exitCode === 0 || ["completed", "success"].includes(d.status);
-  const status = cancelled ? "⊘ Cancelled" : failed ? "✗ Failed" : success ? "✓ Completed" : "? Result (status unknown)";
+  const status = cancelled ? "⊘ Cancelled" : failed ? "✗ Failed" : success ? "✓ Subagent completed" : "? Result (status unknown)";
   const color = failed || cancelled ? "error" : success ? "success" : "warning";
   const elapsed = typeof d.elapsed === "number" && Number.isFinite(d.elapsed) && d.elapsed >= 0 ? `${d.elapsed}s` : "elapsed unknown";
   const reason = error || (nativeCancelled ? "Subagent cancelled." : failed && d.exitCode !== undefined ? `exit ${d.exitCode}` : "");
@@ -268,7 +268,7 @@ export function installSubagentCards(getMode: () => string, active = () => true,
           }
           footerY = -1;
           const disclosure = expanded ? "▾" : "▸";
-          const title = mode === "quiet" ? info.title.replace(/^\? Question/, "Child question").replace(/^✓ Completed/, "Completed ✓").replace(/^✗ Failed/, "Failed ✗").replace(/^⊘ Cancelled/, "Cancelled ⊘") : info.title;
+          const title = mode === "quiet" ? info.title.replace(/^\? Question/, "Child question").replace(/^✓ Subagent completed/, "Subagent completed ✓").replace(/^✗ Failed/, "Failed ✗").replace(/^⊘ Cancelled/, "Cancelled ⊘") : info.title;
           const header = mode === "quiet" && inner <= 2 && info.failed ? `${disclosure}${info.icon}` : mode !== "quiet" && inner < 8 ? `${disclosure}${info.icon}${info.name}` :
             `${disclosure} ${title}${!expanded && mode !== "compact" && !info.failed && excerpt ? ` · ${excerpt}` : ""}`;
           let lines = [theme.fg(info.color, truncateToWidth(header, inner, inner < 8 ? "" : "…"))];

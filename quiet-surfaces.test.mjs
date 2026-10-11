@@ -57,7 +57,7 @@ for(const mode of ['quiet','compact','expanded']){
   const custom=m=>new sdk.CustomMessageComponent(m,native.messageRenderers.get(m.customType),themes.getMarkdownTheme(),pad);
   const completion=custom(done),question=custom(childQuestion),statusCard=custom(status);
   const rows=[routine,message,image,thinking,completion,question,statusCard];
-  const kinds=['Tools','Message','Read image','Thinking','Completed ✓','Child question','Status'];
+  const kinds=['Tools','Message','Read image','Thinking','Subagent completed ✓','Child question','Status'];
   for(const palette of ['dark','light','system']){
    themes.initTheme(palette,false);rows.forEach(c=>c.invalidate());
    if(mode==='quiet'){

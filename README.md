@@ -2,7 +2,13 @@
 
 Local, presentation-only Pi extension, installed globally on this MacBook. No prompt injection or command annotation is required.
 
-## Combined human Q&A card (v1.19.1)
+## Explicit subagent completion labels (v1.19.2)
+
+Successful child-report cards now identify their source: **Subagent completed ✓ · child name · elapsed time** in Quiet, and **✓ Subagent completed** in Compact/Expanded headers. This is a label-only change: child identity/time/report, failure/cancellation/unknown states, disclosure gutter, bounded previews, full expansion/Raw and completion delivery are unchanged. Ordinary tool `Completed` labels are not renamed. Tests include the screenshot's two child names/timings, all presets, no completion label on child questions, and existing width/theme/source/lifecycle checks.
+
+A bounded image evaluation concluded that reliable inline images through the current **Ghostty → tmux → Pi** path are not a small renderer-only fix. Pi's native output uses ordinary Kitty placements, without tmux passthrough or Unicode-placeholder emission. tmux's passthrough option requires wrapped escape sequences, so forcing Pi's image detection alone is insufficient. Kitty's official `icat` documentation couples tmux passthrough with Unicode placeholders and warns about multiplexer cleanup affecting all panes. Robust support would need scoped transport/placement/scroll/resize/cleanup work and live acceptance, not merely a protocol override. Under the user's “only if not too much work” boundary, transport implementation is **deferred**; image bytes and truthful unsupported notices remain intact. No terminal/tmux/Pi setting, dependency or core patch is made. See the local image evaluation note for inspected primary sources and limitations.
+
+## Combined human Q&A card (v1.19.1, historical)
 
 A human `ask_user_question` interaction is now **one continuous neutral card** with a shared accent rail, distinct **Question** and **Your answer** sections, and a short internal divider instead of a blank gap or separately tinted answer strip. Collapsed question/answer previews remain readable and bounded; native click/Ctrl+O expands the whole interaction, including question context/options and the full answer. Pending, failed, cancelled, unavailable and malformed results remain explicit recorded-result sections, never accepted answers.
 

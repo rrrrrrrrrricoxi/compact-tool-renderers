@@ -40,15 +40,16 @@ try {
  const source=make({stats:{toolCount:7,model:'synthetic',contextTokens:100,inputTokens:5,outputTokens:8,cacheReadTokens:0,cacheWriteTokens:0,cost:0},agent:'worker',sessionFile:'/long/路径/'+ '界'.repeat(180),sessionId:'session-id',unknown:{field:'preserved'}});
  const before=JSON.stringify(source),c=card(source);
  assert.equal(c.message,source);assert.equal(c.customRenderer,nativeRenderer);
- assert.equal(rows(c).length,2,'one native separator + one content row');assert.equal(rows(c)[0],'');assert.match(rows(c).join('\n'),/Completed ✓ · Worker · 12s/);assert.ok(rows(c).join('').includes('Original report'));assert.ok(!rows(c).join('').includes('Second line'));
- mode='compact';assert.equal(rows(c).length,3,'one separator + at most two content rows');
- mode='expanded';c.setExpanded(true);assert.match(rows(c).join('\n'),/Sixth line/);assert.ok(!rows(c).join('\n').includes('Recorded metadata')); // readable by default
+ assert.equal(rows(c).length,2,'one native separator + one content row');assert.equal(rows(c)[0],'');assert.match(rows(c).join('\n'),/Subagent completed ✓ · Worker · 12s/);assert.ok(rows(c).join('').includes('Original report'));assert.ok(!rows(c).join('').includes('Second line'));
+ for(const [name,elapsed] of [['pi-sync-portability',109],['pi-bundle-staging',572]])assert.match(rows(card(make({name,elapsed}))).join('\n'),new RegExp(`Subagent completed ✓ · ${name} · ${elapsed}s`),'screenshot-equivalent completion identifies the child, not a routine tool');
+ mode='compact';assert.equal(rows(c).length,3,'one separator + at most two content rows');assert.match(rows(c).join('\n'),/✓ Subagent completed · Worker · 12s/);
+ mode='expanded';c.setExpanded(true);assert.match(rows(c).join('\n'),/✓ Subagent completed · Worker · 12s/);assert.match(rows(c).join('\n'),/Sixth line/);assert.ok(!rows(c).join('\n').includes('Recorded metadata')); // readable by default
  mode='quiet';assert.ok(rows(c).length<=13);c.setExpanded(false);assert.equal(rows(c).length,2);
  for(const [d,pattern] of [[{exitCode:2},/Failed.*exit 2/],[{errorMessage:'Subscription quota limit reached'},/Failed.*Subscription quota/],[{error:'Provider failed'},/Failed.*Provider failed/],[{error:'cancelled'},/Cancelled.*cancelled/],[{status:'cancelled'},/Cancelled/],[{exitCode:null},null]]) {
   const m=make(d),cc=card(m);if(pattern)assert.match(rows(cc).join('\n'),pattern);else assert.deepEqual(rows(cc),rows(card(m,1,nativeRenderer)));
  }
  const cancel=make({exitCode:1},'Sub-agent "Worker" failed (exit code 1).\n\nSubagent cancelled.\n\nFollow up with subagent_message({ name: "Worker", message: "…" })');assert.match(rows(card(cancel)).join('\n'),/Cancelled/);
- assert.match(rows(card(make({},'Please cancel obsolete work next time.'))).join('\n'),/Completed/);
+ assert.match(rows(card(make({},'Please cancel obsolete work next time.'))).join('\n'),/Subagent completed/);
  for(const elapsed of [-1,null,'12'])assert.match(rows(card(make({elapsed}))).join('\n'),/elapsed unknown/);
  const unknown=make();delete unknown.details.exitCode;delete unknown.details.elapsed;assert.match(rows(card(unknown)).join('\n'),/status unknown.*elapsed unknown/);
  // Exact full original text, including huge Unicode/ASCII tails and follow-up source,
