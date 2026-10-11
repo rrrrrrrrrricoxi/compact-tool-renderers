@@ -1,6 +1,22 @@
 # Compact Tool Renderers
 
-Local, presentation-only Pi extension, installed globally on this MacBook. No prompt injection or command annotation is required.
+A presentation-only Pi extension for quiet grouped tools, bounded action panes, thinking previews and readable human Q&A cards. No prompt injection or command annotation is required; execution, stored messages and model context are unchanged.
+
+## Install and compatibility
+
+```sh
+pi install git:github.com/rrrrrrrrrricoxi/compact-tool-renderers
+```
+
+Reload only when Pi and its children are idle, or start a new session. If you already load a local checkout, do **not** also install/load the Git copy: these are distinct package identities. This repository does not change the author's existing local installation.
+
+Tested with **Pi 1.1.0** and Node **26.11.1** on macOS. Compatibility adapters are version/shape gated; unsupported hosts fall back rather than being certified compatible. Inline images still require native terminal support; tmux image transport is not implemented here.
+
+The full regression suite currently depends on the author's local Pi/Amos installation, sticky-prompt companion fixtures and configured load order. `PI_INSTALL_ROOT` and `PI_AMOS_EXTENSION` override some defaults, but do not make every test portable. The passing 16-suite local result is **not** a clean-machine/CI or live-terminal guarantee. Historical development notes below retain local paths and acceptance limits; private settings, transcripts, notes and companion packages are not included in this repository.
+
+## License
+
+[MIT](LICENSE). This repository remains `private: true` in the npm manifest to prevent accidental npm publication; that flag does not make the GitHub repository private.
 
 ## Disambiguated grouped failure counts (v1.19.3)
 
