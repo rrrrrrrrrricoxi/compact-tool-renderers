@@ -2,6 +2,12 @@
 
 Local, presentation-only Pi extension, installed globally on this MacBook. No prompt injection or command annotation is required.
 
+## Standalone Quiet status alignment (v1.18.2)
+
+The screenshot's gray `subagent_message · Message … · started` strip used the standalone ineligible-tool path, not the completed custom-report card fixed in v1.17.3. That Quiet neutral path no longer adds native `outputPad` to collapsed started/cancelled/image notices: their text now starts at the same root column as grouped tools, hidden thinking and custom completion disclosures. There is **no invented disclosure glyph** or new pane. Native result-bearing tool click/Ctrl+O expansion still works; expanded details, error shells, Compact/Expanded presets and missing-ID fallback retain their existing padding and status semantics. Running/preparing, started, cancellation and errors stay visible and distinct from human answers; delivery/source data are untouched.
+
+`quiet-notice-alignment.test.mjs` first reproduced the bug against v1.18.1 (Quiet native outputPad 1: standalone column 1 versus grouped/reference column 0). It now uses actual native tool, assistant-thinking and custom-completion components across outputPad 0/1/2/4, dark/light themes and widths 1/2/3/4/8/28/50/100. It checks before/after running→started→cancelled→failed→settled→started transitions, native separator and mouse/Ctrl+O target, expanded/non-Quiet/missing-ID padding, source equality and nonrecursive redraws. `npm test` runs this focused regression plus all 14 previous suites. Tests are isolated, without real models, histories or live master reload; live terminal/fullscreen/IME acceptance remains a separate user check.
+
 ## Human result fallback corrections (v1.18.1)
 
 Review reproduced two flaws in v1.18.0: malformed answered details (`answers: null`) were rejected by validation but still passed to the installed formatter, whose `answers.map` crashed; an error/partial result with valid-looking answered details could instead paint a green `✓ yes` and hide the recorded failure. These cases now choose a **safe literal recorded-text fallback before any stock formatter invocation**. Error flags from either the component context or the result take precedence and show **✗ Question failed** plus recorded error text. Partial data shows **… Question pending**, never an accepted answer. Cancelled/unavailable results remain explicitly labeled; unknown/malformed results show recorded output without human-answer/approval styling. No catch-all exception suppression is added.

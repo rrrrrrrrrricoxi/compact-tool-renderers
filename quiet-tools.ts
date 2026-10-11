@@ -248,9 +248,10 @@ export function registerQuietGroups(pi: ExtensionAPI): QuietGroups {
   return groups;
 }
 
-function neutral(text: string, width: number, theme: Theme, context: Context): string[] {
-  const pad = Math.min(Math.max(0, context.outputPad || 0), Math.floor(width / 2));
-  return [theme.fg("muted", truncateToWidth(" ".repeat(pad) + text, Math.max(1, width), "…"))];
+function neutral(text: string, width: number, theme: Theme): string[] {
+  // Quiet standalone notices share the root column of grouped disclosures.
+  // No disclosure glyph: status text is not itself a new collapsible pane.
+  return [theme.fg("muted", truncateToWidth(text, Math.max(1, width), "…"))];
 }
 export function quietRenderer(name: string, compact: ToolRenderers, groups: QuietGroups, getMode: () => string, caption: (args: any) => string, getHeight: () => number = () => paneBodyHeight("auto")): ToolRenderers {
   const quiet = (context: Context) => getMode() === "quiet" && VERSION === "1.1.0" && typeof context.toolCallId === "string";
@@ -272,7 +273,7 @@ export function quietRenderer(name: string, compact: ToolRenderers, groups: Quie
           if (node?.status === "error") return compact.renderCall!(args, theme, { ...context, isError: true }).render(width);
           if (node && !eligible(node)) {
             const status = node.status === "started" ? "started" : node.status === "cancelled" ? "⊘ cancelled" : `${node.images} image${node.images === 1 ? "" : "s"}`;
-            return neutral(`${cleanName(name)} · ${caption(args)} · ${status}`, width, theme, context);
+            return neutral(`${cleanName(name)} · ${caption(args)} · ${status}`, width, theme);
           }
           const summary = groups.summary(context.toolCallId);
           if (summary && context.expanded) groups.activePane = pane;
