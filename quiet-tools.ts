@@ -7,7 +7,7 @@ type Status = "queued" | "running" | "ok" | "error" | "cancelled" | "started";
 import { GroupPane, readableText, readableValue, detailRows, actionCard, roundedDuration } from "./group-pane.ts";
 import { paneBodyHeight } from "./prompt-blocks.ts";
 type Group = { members: Node[]; dirty: boolean; owner?: Node; pane?: GroupPane; theme?: Theme; revision?: number }; 
-type Node = { id: string; name: string; invoked?: boolean; invocationOrder?: number; humanTarget?: import("./subagent-cards.ts").ReportTarget; imagePolicy?: string; group: Group; status: Status; images: number; truncated: boolean; saved: boolean; args?: any; result?: any; renderer?: ToolRenderers; context?: Context; caption?: string; nestedCalls?: any; individualPane?: GroupPane }; 
+type Node = { id: string; name: string; invoked?: boolean; invocationOrder?: number; humanTarget?: import("./subagent-cards.ts").ReportTarget; imagePolicy?: string; group: Group; status: Status; images: number; truncated: boolean; saved: boolean; args?: any; result?: any; renderer?: ToolRenderers; context?: Context; caption?: string; nestedCalls?: any; individualPane?: GroupPane };
 const categories: Record<string, string> = { read: "Read file", write: "Write file", edit: "Edit file", bash: "Shell command", powershell: "PowerShell command", grep: "Search file contents", find: "Find files", ls: "List files", ask_question: "Ask a question", web_search: "Search the web", web_fetch: "Read web page" };
 const cleanName = (name: string) => name.split("__").at(-1)!.replace(/[\x00-\x1f\x7f]/g, "").slice(0, 36) || "tool";
 

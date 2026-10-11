@@ -176,7 +176,7 @@ for (const answers of [undefined, null, {}, 'wrong array', [null], [undefined], 
     const output = component.render(80).join('\n');
     assert.match(output, /Synthetic unknown result/);
     assert.ok(!output.includes('Your answer') && !output.includes('✓'));
-    if (expanded) assert.ok(!output.includes('Recorded details')); 
+    if (expanded) assert.ok(!output.includes('Recorded details'));
     for (const width of [1, 2, 4, 20]) for (const row of component.render(width)) assert.ok(visibleWidth(row) <= width);
     const card = new ToolExecutionComponent('ask_user_question', 'malformed', qArgs, { showImages: false }, { name: 'ask_user_question', ...fallbackRenderer }, { requestRender() {} }, dir);
     card.updateResult(result, false); card.setExpanded(expanded);
