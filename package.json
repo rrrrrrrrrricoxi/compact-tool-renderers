@@ -1,15 +1,32 @@
 {
-  "name": "local-compact-tool-renderers",
-  "version": "1.19.3",
+  "name": "pi-compact-renderer",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Adaptive bounded action panes, quiet grouped tools, prompt templates, skills, and thinking previews",
+  "description": "Display-only successful action groups, recorded thinking, prompt cards, and permission presentation for Pi",
   "license": "MIT",
-  "repository": { "type": "git", "url": "git+https://github.com/rrrrrrrrrricoxi/compact-tool-renderers.git" },
-  "scripts": { "test": "node test.mjs && node prompt-blocks.test.mjs && node quiet-tools.test.mjs && node group-pane.test.mjs && node visual-controls.test.mjs && node thinking-preview.test.mjs && node thinking-groups.test.mjs && node footer-sdk.test.mjs && node subagent-cards.test.mjs && node report-panes.test.mjs && node reload-lifecycle.test.mjs && node reload-reports.test.mjs && node control-lifecycle.test.mjs && node human-answers.test.mjs && node quiet-notice-alignment.test.mjs && node quiet-surfaces.test.mjs" },
-  "pi": { "extensions": ["./index.ts"] },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rrrrrrrrrricoxi/compact-tool-renderers.git"
+  },
+  "scripts": {
+    "test": "node test.mjs"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-tui": "*"
-  }
+  },
+  "files": [
+    "*.ts",
+    "*.mjs",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    "IMPLEMENTATION.md"
+  ]
 }
