@@ -41,7 +41,7 @@ call('question-1', 'ask_user_question', { question: 'Which sample should be show
 call('failed-1', 'bash', { command: 'fixture-failure' }, 'Invented failure: sample file not found. No command ran.', { exitCode: 1 }, true);
 call('question-2', 'ask_user_question', { question: 'Cancelled example' }, 'No answer recorded.', { status: 'cancelled', question: 'Cancelled example' });
 call('read-2', 'read', { path: '/fixture/last.txt' }, 'Recorded final output.');
-assistant([{ type: 'text', text: 'Preview controls: Alt+G focuses tools; Left/Right selects an action; Enter expands its output; Up/Down or PageUp/PageDown scroll; Esc releases focus. Alt+T focuses recorded thinking; Alt+I focuses the prompt. /fixture-permission opens a harmless approval dialog. /compact-rendering switches display. Ctrl+D exits.' }]);
+assistant([{ type: 'text', text: 'Preview controls: Alt+G focuses tools; Left/Right selects an action; Enter expands its output; Up/Down scroll; Esc releases focus. Alt+T focuses recorded thinking; Alt+I focuses the prompt. /fixture-permission opens a harmless approval dialog. /compact-rendering switches display. Ctrl+D exits.' }]);
 manager.appendSessionInfo('compact-renderer-preview');
 let runtime, ui;
 try {

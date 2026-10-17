@@ -8,7 +8,7 @@ const runtime = process.env.PI_RUNTIME || path.join(homedir(), '.local/state/pi-
 const root = process.env.PI_INSTALL_ROOT || path.join(runtime, 'node_modules/@earendil-works/pi-coding-agent');
 const require = createRequire(path.join(root, 'package.json'));
 const tuiPath = require.resolve('@earendil-works/pi-tui');
-const { visibleWidth } = await import(pathToFileURL(tuiPath));
+const { visibleWidth, TuiAltScreen, Container, Text, getKeybindings, setKeybindings } = await import(pathToFileURL(tuiPath));
 const { createEventBus } = await import(pathToFileURL(path.join(root, 'dist/core/event-bus.js')));
 const { createJiti } = require('jiti');
 const jiti = createJiti(import.meta.url, { fsCache: false, alias: { '@earendil-works/pi-tui': tuiPath } });
@@ -45,6 +45,10 @@ big.handleInput('\x1b[H'); big.render(40); big.handleInput('\x1b[6~');
 assert.match(big.render(40).join('\n'), /exact line 8/, 'PageDown scrolls Details');
 big.handleInput('\x1b[5~');
 assert.match(big.render(40).join('\n'), /exact line 0/, 'PageUp returns to first page');
+big.handleInput('\x1b[C');
+assert.match(big.render(40).join('\n'), /exact line 8/, 'Right pages Details without relying on fullscreen transcript keys');
+big.handleInput('\x1b[D');
+assert.match(big.render(40).join('\n'), /exact line 0/, 'Left pages Details backwards');
 const controls = new PermissionDialog({ ...description, target: '\x1b]52;c;unsafe\x07' }, theme, () => {}, () => {});
 assert.ok(!controls.render(80).join('\n').includes('\x1b'), 'labels cannot inject terminal controls');
 const unicode = new PermissionDialog({ ...description, action: '处理😀', target: '文件/目录' }, theme, () => {}, () => {});
@@ -170,4 +174,72 @@ await assert.rejects(failed.request().result, /UI unavailable/);
 assert.equal(failed.fallbackCalls, 0, 'claimed failure never asks twice');
 const before = new AbortController(); before.abort();
 assert.equal(await failed.request({ signal: before.signal }).result, false, 'pre-aborted request creates no UI');
-console.log('Permission presentation: native keyboard, exact Details, bounded viewport, narrow Unicode, fallback, single resolution, abort, mode and session lifecycle passed.');
+
+// Exercise the native fullscreen listener chain and InteractiveMode's actual
+// custom-component mounting, input focus and restoration. No terminal process,
+// session, network, credentials or model is needed for this UI boundary.
+const { InteractiveMode, initTheme } = await import(pathToFileURL(path.join(root, 'dist/index.js')));
+const { KeybindingsManager } = await import(pathToFileURL(path.join(root, 'dist/core/keybindings.js')));
+initTheme('dark', false);
+const previousKeys = getKeybindings();
+const nativeKeys = new KeybindingsManager();
+setKeybindings(nativeKeys);
+let input;
+const terminal = { columns: 80, rows: 30, kittyProtocolActive: false,
+  start(onInput) { input = onInput; }, stop() {}, write() {}, hideCursor() {}, showCursor() {},
+  clearLine() {}, clearFromCursor() {}, clearScreen() {}, moveBy() {}, setTitle() {}, setProgress() {}, setProgramStatus() {} };
+const fullscreen = new TuiAltScreen(terminal, false, undefined, { mouse: false });
+const editor = { text: 'preserved draft', getText() { return this.text; }, setText(value) { this.text = value; },
+  render() { return [this.text]; }, invalidate() {}, handleInput() {} };
+const editorContainer = new Container(); editorContainer.addChild(editor);
+fullscreen.addChild(new Text(Array.from({ length: 120 }, (_, i) => `Background transcript ${i}`).join('\n'), 0, 0));
+fullscreen.addChild(editorContainer);
+const nativeUI = Object.assign(Object.create(InteractiveMode.prototype), {
+  ui: fullscreen, editor, editorContainer, keybindings: nativeKeys,
+  extensionTerminalInputSubscriptions: new Set(),
+});
+const pipeline = fixture();
+const disposePipeline = registerPermissionPresentation(pipeline.pi, pipeline.mode);
+try {
+  fullscreen.start(); fullscreen.renderNow();
+  const pending = pipeline.request({ ui: nativeUI.createExtensionUIContext(),
+    details: Array.from({ length: 1000 }, (_, i) => `Pipeline exact line ${i}`).join('\n') });
+  await new Promise(resolve => setImmediate(resolve));
+  fullscreen.renderNow();
+  const card = fullscreen.getFocusedComponent();
+  assert.ok(card instanceof PermissionDialog, 'native custom UI focuses the permission component');
+  input('d'); fullscreen.renderNow();
+  assert.match(card.render(80).join('\n'), /←\/→ page Details/, 'show the usable fullscreen controls');
+  input('\x1b[F'); fullscreen.renderNow();
+  const atEnd = card.detailsViewport.range.start;
+  const backgroundBeforePageUp = fullscreen.viewportTop;
+  let extensionPagingCalls = 0;
+  const removeProbe = nativeUI.addExtensionTerminalInputListener(() => { extensionPagingCalls++; });
+  input('\x1b[5~'); fullscreen.renderNow();
+  assert.equal(card.detailsViewport.range.start, atEnd, 'native fullscreen consumes PageUp before the custom dialog');
+  assert.ok(fullscreen.viewportTop < backgroundBeforePageUp, 'the original failure scrolls the native transcript');
+  assert.equal(extensionPagingCalls, 0, 'a public extension listener runs too late to override transcript PageUp');
+  removeProbe();
+  const background = fullscreen.viewportTop;
+  input('\x1b[D'); fullscreen.renderNow();
+  const preceding = card.detailsViewport.range.start;
+  assert.ok(preceding < atEnd && preceding > 0, 'Left after End reaches adjacent preceding Details');
+  assert.equal(fullscreen.viewportTop, background, 'Left leaves the background transcript in place');
+  input('\x1b[C'); fullscreen.renderNow();
+  assert.ok(card.detailsViewport.range.start > preceding, 'Right pages Details forward through the native input pipeline');
+  assert.equal(fullscreen.viewportTop, background);
+  input('\x1b[H'); fullscreen.renderNow();
+  assert.equal(card.detailsViewport.range.start, 0, 'Home remains reachable in fullscreen');
+  input('\x1b[A'); fullscreen.renderNow();
+  assert.match(card.render(80).join('\n'), /→ Allow once/, 'plain Up still reaches native permission choice navigation');
+  input('\x1b[B'); fullscreen.renderNow();
+  assert.match(card.render(80).join('\n'), /→ Deny/, 'plain Down still reaches native permission choice navigation');
+  input('\x1b');
+  assert.equal(await pending.result, false, 'native Escape denies and closes the one prompt');
+  assert.equal(fullscreen.getFocusedComponent(), editor, 'native close restores editor focus');
+  assert.equal(editor.text, 'preserved draft');
+  assert.equal(pipeline.fallbackCalls, 0, 'fullscreen paging never starts another approval');
+} finally {
+  disposePipeline(); nativeUI.clearExtensionTerminalInputListeners(); fullscreen.stop(); setKeybindings(previousKeys);
+}
+console.log('Permission presentation: native fullscreen input pipeline, keyboard, exact Details, bounded viewport, narrow Unicode, fallback, single resolution, abort, mode and session lifecycle passed.');

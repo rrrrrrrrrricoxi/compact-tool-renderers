@@ -113,7 +113,7 @@ export class ModernThinkingGroups {
     if (pane.open) {
       this.sources(group);
       rows.push(...pane.view(width, recordedPaneHeight()).map(paint));
-      rows.push(paint(`↑/↓ PgUp/PgDn scroll · Home first · ${pane.more ? "more below" : "end"} · Ctrl+T native`));
+      rows.push(paint(`↑/↓ scroll · Home first · ${pane.more ? "more below" : "end"} · Ctrl+T native`));
     }
     return rows;
   }

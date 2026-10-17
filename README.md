@@ -25,12 +25,12 @@ Thinking groups require Pi's native `hideThinkingBlock: true` preference. Pi Con
 
 | Surface | Controls |
 | --- | --- |
-| Tool groups | Alt+G focuses/cycles panes; Left/Right selects an action; Enter opens its output; Up/Down and PageUp/PageDown scroll; `c` collapses; Esc releases focus. |
-| Thinking | Alt+T focuses/cycles groups; Enter opens/closes; Up/Down, PageUp/PageDown, and Home scroll; Esc releases focus; Ctrl+T retains native visibility control. |
+| Tool groups | Alt+G focuses/cycles panes; Left/Right selects an action; Enter opens its output; Up/Down scroll; `c` collapses; Esc releases focus. |
+| Thinking | Alt+T focuses/cycles groups; Enter opens/closes; Up/Down and Home scroll; Esc releases focus; Ctrl+T retains native visibility control. |
 | Prompt cards | Alt+I focuses/cycles; Enter opens/closes; Esc releases focus. |
-| Permission | Up/Down chooses Allow once, Deny, or Details; Enter selects; `d` toggles Details; Esc denies. Deny is selected initially. |
+| Permission | Up/Down chooses Allow once, Deny, or Details; Enter selects; `d` toggles Details; Esc denies. Deny is selected initially. With Details open, Left/Right pages and Home/End jumps. |
 
-Mouse controls support tool and thinking headers, individual action expansion, wheel scrolling inside open panes, and prompt headers. Terminal mouse support depends on the terminal and transport. Keyboard controls remain available over mosh/tmux. Arrows are captured only while a pane has focus. Opening a native question or approval releases transcript focus.
+Mouse controls support tool and thinking headers, individual action expansion, wheel scrolling inside open panes, and prompt headers. Terminal mouse support depends on the terminal and transport. Keyboard controls remain available over mosh/tmux. Arrows are captured only while a pane has focus. In fullscreen Pi, PageUp/PageDown scroll the transcript before extension controls receive them; use the arrows shown above for pane content. Opening a native question or approval releases transcript focus.
 
 ## Permission presentation seam
 

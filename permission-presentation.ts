@@ -198,7 +198,7 @@ export class PermissionDialog implements Component {
       rows.push(fg(index === this.selected ? 'accent' : 'text', truncateToWidth(`${index === this.selected ? '→' : ' '} ${title}`, width)));
     }
     const hints = lines('↑↓ choose · Enter select · Esc deny · d Details');
-    if (this.detailsOpen) hints.push(...lines('PgUp/PgDn scroll Details · Home/End'));
+    if (this.detailsOpen) hints.push(...lines('←/→ page Details · Home/End'));
     this.pageSize = Math.max(1, Math.min(8, this.availableRows() - rows.length - hints.length - 1));
     if (this.detailsOpen) {
       const body = this.detailsViewport.render(width, this.pageSize);
@@ -218,8 +218,10 @@ export class PermissionDialog implements Component {
     else if (kb.matches(data, 'tui.select.confirm') || data === '\n') {
       if (this.selected === 2) this.detailsOpen = !this.detailsOpen;
       else { this.finish(this.selected === 0); return; }
-    } else if (this.detailsOpen && matchesKey(data, 'pageup')) this.detailsViewport.pageUp();
-    else if (this.detailsOpen && matchesKey(data, 'pagedown')) this.detailsViewport.pageDown();
+    // Fullscreen Pi consumes PgUp/PgDn in its first input listener, before any
+    // extension listener or custom component. Plain arrows reach this dialog.
+    } else if (this.detailsOpen && (matchesKey(data, 'left') || matchesKey(data, 'pageup'))) this.detailsViewport.pageUp();
+    else if (this.detailsOpen && (matchesKey(data, 'right') || matchesKey(data, 'pagedown'))) this.detailsViewport.pageDown();
     else if (this.detailsOpen && matchesKey(data, 'home')) this.detailsViewport.home();
     else if (this.detailsOpen && matchesKey(data, 'end')) this.detailsViewport.end(this.width, this.pageSize);
     else return;

@@ -13,7 +13,7 @@ Authoritative package: rrrrrrrrrricoxi/compact-tool-renderers. The approved scop
 - [x] Display-only prompt-template collapse through public markdown transformer.
 - [x] Native /compact-rendering selector and typed controls; no model/history mutations.
 - [x] Native lifecycle regression coverage: redraw/re-registration, stock component ownership, running-shell timer disposal, toggles, refresh/reload/resume/switch/compaction.
-- [ ] Unicode/narrow layouts, bounded painting, focus/scroll/keyboard terminal checks.
+- [x] Unicode/narrow layouts, bounded painting, focus/scroll and native fullscreen input checks. Human terminal appearance acceptance remains below.
 - [ ] Publish standalone version and pin it in Pi Config; remove competing embedded implementation.
 - [ ] User visual acceptance in local Herdr and mosh/tmux CCC with harmless fixtures.
 - [ ] Publish config, stage both hosts, guarded activation and actual startup-label checks.
@@ -39,4 +39,4 @@ No child edits another child's or parent's files without coordination. No live d
 
 No renderer release is published or activated yet. Package metadata targets 2.0.0; Pi Config release integration remains pending after visual acceptance.
 
-Final source review also verified native-off ANSI/background/padding parity and bounded preceding-page navigation after End in permission Details. The only review findings were fixed before freezing the next candidate.
+Final source review also verified native-off ANSI/background/padding parity and bounded preceding-page navigation after End in permission Details. A subsequent real mosh/tmux check exposed Pi fullscreen capturing PageUp/PageDown before extension input. Permission Details now advertises Left/Right paging; a native TuiAltScreen/InteractiveMode input regression verifies paging, unchanged background position, option selection, denial, and editor restoration. Transcript pane hints use their working Up/Down controls.
