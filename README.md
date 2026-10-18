@@ -10,12 +10,12 @@ This repository is the authoritative source. The npm manifest stays `private: tr
 
 ## Display
 
-- Cards restore the original renderer’s native backgrounds and horizontal padding: successful tools, running actions, and failures use their native status colors. Questions use a neutral tool surface and a distinct heading; user messages keep their blue surface; recorded thinking uses the custom-message surface with readable body text.
+- Compact tool and thinking summaries use one neutral line instead of filled color blocks. Expanded details use indentation and clear headings. Warnings/errors retain status color; keyboard selection alone fills the active heading or item. Native user messages and skill cards keep their own presentation.
 - Running actions remain separate. Only successful completed actions join a group, within visible conversation boundaries.
 - A single-action card opens directly to its output without repeating a numbered action row. Status marks follow the title so headings align. Empty details objects do not add a section.
 - Open a group to see its actions. Expand several action outputs independently in the same scrollable pane. Exact arguments, recorded output, and recorded details remain available.
-- Errors, cancellations, unanswered questions, and background notices stay separate. Question cards combine the question and its recorded answer or actual status.
-- Stock `pi-subagents`, Fleet UI, and code mode renderers remain unchanged. Code mode keeps native JavaScript highlighting, nested calls, timing, cost, and Ctrl+O expansion. Images retain their native display behavior.
+- Errors, cancellations, unanswered questions, and background notices stay separate. Question cards retain the question, context, choices, and recorded answer or actual status. They omit duplicate raw Arguments/Details objects; stored transcripts retain the original data.
+- Stock `pi-subagents` and Fleet UI renderers remain unchanged. Code mode has its own collapsible card, separate from consecutive successful actions. Its expanded body keeps native JavaScript highlighting, nested calls, timing, and cost. Images retain their native display behavior.
 - Recorded thinking rounds can group across tools. Replies, questions, errors, and other visible boundaries separate groups. Each round has a short title taken from its recorded heading or first sentence and expands independently. The pane shows the full recorded text on demand; it does not generate summaries or make model calls.
 - Recognized prompt templates show their command and authored description, or a bounded excerpt when no description is available. Expansion reveals the original text inline. Ordinary user messages stay open. Skill invocations are a separate native Pi component: the purple `[skill] name` card retains click/Ctrl+O expansion.
 
@@ -34,7 +34,7 @@ Thinking groups require Pi's native `hideThinkingBlock: true` preference. Pi Con
 | Prompt cards | Enter opens/closes the original text. |
 | Permission | Up/Down chooses Allow once, Deny, or Details; Enter selects; `d` toggles Details; Esc denies. Deny is selected initially. With Details open, Left/Right pages and Home/End jumps. |
 
-Esc returns to the editor. Typing, pasting, or using an editor key also releases inspection; the next Enter submits normally. Clicking or scrolling a card changes its display without taking keyboard focus. Cards keep Pi’s native one-cell gutter and top/bottom padding. Expanded actions show output first, followed by exact arguments and details; unfocused cards omit repeated control/count footers.
+Esc returns to the editor. Typing, pasting, or using an editor key also releases inspection; the next Enter submits normally. Clicking or scrolling a card changes its display without taking keyboard focus. Compact activity keeps a one-cell gutter without filled backgrounds or top/bottom padding. Expanded ordinary actions show output first, followed by exact arguments and details; questions use readable history only; unfocused cards omit repeated control/count footers.
 
 Alt+G, Alt+T, and Alt+I remain optional shortcuts for tools, thinking, and prompts when the terminal sends Alt key sequences. On macOS, Option may instead type characters. Those characters remain ordinary input; use `/inspect` without changing terminal settings.
 

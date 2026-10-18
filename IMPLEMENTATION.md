@@ -62,3 +62,9 @@ Expanded actions show output before exact arguments/details, with distinct headi
 ## Singleton and preview clarification
 
 The next screenshot identified duplicate single-action headings, status-prefix misalignment, terse template labels, and question/user surface ambiguity. Single actions now expand directly, status marks follow title text, and question cards use the native neutral tool surface. Prompt templates show existing descriptions or bounded recorded excerpts. Actual native skill cards remain separate and unchanged. The isolated preview includes native code mode and skill rendering plus detailed recorded question states; no examples execute scripts, services, or models. Visual acceptance is still pending.
+
+## Code-mode affordance and question history
+
+The native code-mode collapsed view still showed ten script lines, eight nested calls, and five output lines. The user requested a true collapsed card consistent with other blocks. Code mode remains a separate script execution; its nested calls do not become adjacent top-level successful actions. Expanded content retains native presentation. Question cards now retain readable history only, without duplicate raw argument/result objects. These are display changes; execution, permissions, and stored transcripts are unchanged.
+
+The user then clarified that filled status strips were too visually heavy: the primary goal is to compress flat tool activity. This supersedes the earlier padded/color-filled compact-card requirement. Tool, question, code-mode, and thinking summaries now share a neutral single-line treatment. Expanded content stays indented and bounded; keyboard focus remains highlighted. Native user/skill presentation and noncompact mode stay unchanged.

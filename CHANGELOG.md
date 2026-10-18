@@ -2,6 +2,9 @@
 
 ## 2.0.0 — Grouped display for Pi 1.3.0
 
+- Replace filled activity cards with neutral single-line summaries and indented expansion.
+- Add consistent code-mode collapse while retaining native expanded content; show only readable question history in question cards.
+
 - Open single-action cards directly to output, align headings by moving status marks after the title, and distinguish questions from user prompts.
 - Add descriptive collapsed template labels and richer native code-mode, question, and skill examples to the isolated preview.
 

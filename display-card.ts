@@ -37,3 +37,9 @@ export function fillBackground(line: string, width: number, theme: any, backgrou
 export function cardRow(line: string, width: number, theme: any, background: string): string {
   return fillBackground(" ".repeat(cardPadding(width)) + truncateToWidth(line, cardContentWidth(width), ""), width, theme, background);
 }
+
+/** Compact activity stays on the terminal surface; only keyboard selection is filled. */
+export function activityRow(line: string, width: number, theme: any, selected = false): string {
+  const row = " ".repeat(cardPadding(width)) + truncateToWidth(line, cardContentWidth(width), "");
+  return selected ? fillBackground(row, width, theme, "selectedBg") : row;
+}

@@ -49,17 +49,17 @@ const capture = (label, component) => { const lines = component.render(120); evi
 const read = make('read', 'a', { path: '/tmp/first.txt' });
 read.markExecutionStarted(); read.updateResult(result('first output'));
 capture('Single successful action collapsed', read);
-assert.match(read.render(120).map(stripAnsi)[2], /^ ▸ read · /, 'tool name starts after the common disclosure column');
+assert.match(read.render(120).map(stripAnsi)[1], /^ ▸ read · /, 'tool name starts after the common disclosure column');
 const clickSingle = (component, y) => {
   const lines = component.render(120);
   return component.handleMouse({ type: 'click', button: 'left', x: 2, y, screenX: 2, screenY: y, width: 120, height: lines.length, shift: false, alt: false, ctrl: false });
 };
-clickSingle(read, 2);
+clickSingle(read, 1);
 assert.match(paint(read), /first output/, 'one header click reveals singleton details');
 assert.doesNotMatch(paint(read), /1\. read|Details|\{\}/, 'singleton has no duplicate action row or empty Details section');
 assert.match(paint(read), /Arguments/);
 capture('Single successful action opened by header click', read);
-clickSingle(read, 2);
+clickSingle(read, 1);
 assert.doesNotMatch(paint(read), /first output/);
 read.setExpanded(true);
 assert.match(paint(read), /first output/, 'native expansion opens singleton details directly');
@@ -68,24 +68,19 @@ const inspectRead = [];
 pi.events.emit('compact-renderer:inspect:v1', { add: entry => inspectRead.push(entry) });
 inspectRead[0].focus();
 assert.match(paint(read), /first output/, 'inspection focus opens singleton details directly');
-assertCardBackground([read.render(100)[2]], 100, 'selectedBg');
+assertCardBackground([read.render(100)[1]], 100, 'selectedBg');
 assert.match(paint(read), /Enter collapse/);
 capture('Single successful action focused through inspection', read);
 input('\r'); assert.doesNotMatch(paint(read), /first output/, 'Enter collapses a focused singleton');
 input('\r'); assert.match(paint(read), /first output/, 'Enter opens a focused singleton in one step');
-input('\x1b'); clickSingle(read, 2);
+input('\x1b'); clickSingle(read, 1);
 const shell = make('bash', 'b', { command: 'printf hello' }); shell.markExecutionStarted(); shell.updateResult(result('streaming'), true);
 assert.match(paint(read), /read · \/tmp\/first\.txt · ✓ Completed/);
 assert.match(paint(shell), /Running/);
-for (const component of [read]) {
-  const rows = component.render(100);
-  assert.equal(rows.length, 4, 'collapsed card retains the native spacer plus Box(1,1) height');
-  assert.equal(stripAnsi(rows[1]).trim(), '', 'native top background row');
-  assert.equal(stripAnsi(rows.at(-1)).trim(), '', 'native bottom background row');
-}
-assertCardBackground(read.render(100).slice(1), 100, 'toolSuccessBg');
-assertCardBackground(read.render(100).filter(row => stripAnsi(row).trim()), 100, 'toolSuccessBg');
-assertCardBackground(shell.render(100).filter(row => stripAnsi(row).trim()), 100, 'toolPendingBg');
+assert.equal(read.render(100).length, 2, 'collapsed activity uses one summary plus native spacer');
+const assertNeutral = rows => { for (const row of rows) assert.ok(backgroundCells(row).every(value => value === ''), 'compact activity keeps terminal surface'); };
+assertNeutral(read.render(100));
+assertNeutral(shell.render(100));
 assert.doesNotMatch(paint(read), /Alt\+G/, 'unfocused collapsed cards omit repeated key hints');
 shell.updateResult(result('hello', { exitCode: 0 }));
 assert.match(paint(read), /2 successful actions/);
@@ -101,11 +96,11 @@ assert.match(paint(read), /Arguments/);
 assert.match(paint(read), /first output/);
 assert.doesNotMatch(paint(read), /arguments \(object\)|arguments\.path|\(string\)/, 'recorded values use local field labels');
 const detailLayout = read.render(100).map(stripAnsi);
-assert.match(detailLayout[2], /^ ▾ /, 'header uses the native one-cell gutter');
+assert.match(detailLayout[1], /^ ▾ /, 'header uses the native one-cell gutter');
 assert.match(detailLayout.find(row => row.includes('1. read')), /^   › ▾ /, 'actions sit inside the group heading');
 assert.equal(detailLayout.find(row => row.includes('first output')).indexOf('first output'), detailLayout.find(row => row.includes('1. read')).indexOf('read'), 'recorded output aligns with the expanded action label');
-assert.match(detailLayout.at(-2), /^ ←\/→ action/, 'focused hint shares the header gutter');
-assertCardBackground([read.render(100)[2]], 100, 'selectedBg');
+assert.match(detailLayout.at(-1), /^ ←\/→ action/, 'focused hint shares the header gutter');
+assertCardBackground([read.render(100)[1]], 100, 'selectedBg');
 assert.ok(detailLayout.findIndex(row => row.trim() === 'Output') < detailLayout.findIndex(row => row.trim() === 'Arguments'), 'output appears before arguments');
 assert.doesNotMatch(detailLayout.join('\n'), /c collapse/);
 input('\x1b[C'); input('\r');
@@ -114,7 +109,7 @@ assert.match(paint(read), /hello/);
 input('\x1b[D');
 assert.match(paint(read), /first output/, 'first action remains expanded');
 input('\x1b'); assert.equal(input('\x1b[B'), undefined);
-assertCardBackground(read.render(100).filter(row => stripAnsi(row).trim()), 100, 'toolSuccessBg');
+assertNeutral(read.render(100));
 assert.doesNotMatch(paint(read), /Enter details|Alt\+G|to inspect/, 'unfocused open cards omit keyboard hints');
 // Mode changes synchronously rerender the actual native component and preserve slot ownership.
 for (let iteration = 0; iteration < 8; iteration++) {
@@ -169,18 +164,18 @@ const after = make('read', 'd', { path: '/tmp/after.txt' }); after.updateResult(
 assert.match(paint(fail), /bash · false · ✗ Failed/); assert.match(paint(after), /read · \/tmp\/after\.txt · ✓ Completed/);
 assert.equal(paint(fail).split('\n').filter(line => line.includes('bash · false')).length, 1, 'failure uses one exceptional header');
 assert.match(paint(fail), /Failed · failure/, 'header includes a bounded recorded failure excerpt');
-assert.match(fail.render(120).map(stripAnsi)[2], /^ ▸ bash · /, 'failure status does not shift the tool name');
+assert.match(fail.render(120).map(stripAnsi)[1], /^ ▸ bash · /, 'failure status does not shift the tool name');
 capture('Single failed action collapsed with status after command', fail);
 const failedHeader = fail.render(120).find(line => stripAnsi(line).includes('Failed'));
 assert.ok(failedHeader.includes(themeModule.theme.getFgAnsi('error')), 'failed header uses native error color');
-assertCardBackground([failedHeader], 120, 'toolErrorBg');
+assertNeutral([failedHeader]);
 const partialFailureOutput = 'partial failure output\nexact second failure line';
 fail.updateResult({ ...result(partialFailureOutput, { error: 'Recorded denial: ' + 'x'.repeat(5000) }), isError: true }, true);
 assert.match(paint(fail), /Failed · Recorded denial:/, 'partial errors remain visible as exceptional cards');
 assert.equal(paint(fail).split('\n').filter(line => line.includes('bash · false')).length, 1);
 assert.ok(paint(fail, 500).split('\n').map(row => row.trim()).join('').length < 400, 'collapsed failure reason has a bounded length before the full-width card gutter');
 const failureMouse = (y) => fail.handleMouse({ type: 'click', button: 'left', x: 2, y, screenX: 2, screenY: y, width: 120, height: fail.render(120).length, shift: false, alt: false, ctrl: false });
-failureMouse(2); failureMouse(3);
+failureMouse(1); failureMouse(2);
 assert.match(paint(fail), /partial failure output/);
 assert.match(paint(fail), /exact second failure line/, 'full recorded failure output remains inline');
 assert.doesNotMatch(paint(fail), /1\. bash/, 'failed action opens without a numbered duplicate');
@@ -201,13 +196,13 @@ for (const status of ['cancelled', 'unavailable']) assert.equal(toolStatus('ask_
 assert.equal(toolStatus('ask_user_question', result('', { status: 'answered', answers: [] })).status, 'unanswered');
 const ask = make('ask_user_question', 'q', { question: 'Which host?' });
 assert.match(paint(ask), /Question · Pending · Which host/);
-assert.match(ask.render(120).map(stripAnsi)[2], /^ ▸ Question · /, 'question title shares the tool disclosure column');
-assertCardBackground(ask.render(100).filter(row => stripAnsi(row).trim()), 100, 'toolPendingBg');
-assert.ok(ask.render(100).find(row => stripAnsi(row).includes('Question ·')).includes(themeModule.theme.getFgAnsi('warning')), 'question heading uses warning color');
+assert.match(ask.render(120).map(stripAnsi)[1], /^ ▸ Question · /, 'question title shares the tool disclosure column');
+assertNeutral(ask.render(100));
+assert.ok(ask.render(100).find(row => stripAnsi(row).includes('Question ·')).includes(themeModule.theme.getFgAnsi('toolTitle')), 'question heading uses neutral title color');
 capture('Question pending with neutral native surface', ask);
 ask.updateResult(result('User answered: MacBook', { question: 'Which host?', status: 'answered', answers: [{ label: 'MacBook', value: 'mac' }] }));
 assert.match(paint(ask), /Question · Answered · Which host\? · MacBook/);
-assertCardBackground(ask.render(100).filter(row => stripAnsi(row).trim()), 100, 'toolPendingBg');
+assertNeutral(ask.render(100));
 assert.equal((paint(ask).match(/Question ·/g) || []).length, 1);
 ask.setExpanded(true);
 assert.match(paint(ask), /Answer\s*\n +MacBook/);
@@ -220,9 +215,15 @@ for (const [status, expected, isError] of [['unavailable', 'Unavailable', false]
   assert.doesNotMatch(paint(ask), /MacBook/, 'prior answers cannot leak into a later unresolved interaction');
   ask.setExpanded(true);
   assert.match(paint(ask), new RegExp(`Answer\\s*\\n +${expected}`), 'answer section shows the recorded unresolved state');
-  assert.doesNotMatch(paint(ask), /MacBook/);
+  assert.doesNotMatch(paint(ask), /MacBook|Arguments|Details|Output/);
+  assert.match(paint(ask), /No recorded answer/, 'unresolved question retains its readable recorded message');
   ask.setExpanded(false);
 }
+ask.updateResult(result('unnecessary raw output', { status: 'unavailable', question: 'Which host?', message: 'Question UI is unavailable in this session.' }));
+ask.setExpanded(true);
+assert.match(paint(ask), /Question UI is unavailable in this session/);
+assert.doesNotMatch(paint(ask), /unnecessary raw output|Arguments|Details|Output/);
+ask.setExpanded(false);
 const detailedArgs = { question: 'Choose a host?', details: 'Use the machine that owns the checkout.', options: [
   { label: 'MacBook (Recommended)', value: 'mac', description: 'Use the local checkout.' },
   { label: 'CCC', value: 'ccc' },
@@ -241,7 +242,7 @@ scrollQuestion();
 assert.match(paint(detailedAsk), /Answer\s*\n +1\. MacBook \(Recommended\)/, 'structured option answers use their recorded labels and indices');
 capture('Detailed question scrolled to recorded answer', detailedAsk);
 scrollQuestion();
-assert.match(paint(detailedAsk), /Arguments/, 'exact arguments remain accessible after the readable question sections');
+assert.doesNotMatch(paint(detailedAsk), /Arguments|Details|Output|mode:|value:/, 'question history omits raw duplicate records');
 assert.equal(JSON.stringify({ args: detailedArgs, result: detailedResult }), detailedSource, 'question presentation preserves all stored source');
 let laterOptionReads = 0;
 const lazyOptions = [{ label: 'Large recorded option '.repeat(100000) }];
@@ -267,12 +268,10 @@ const mouseAt = (component, type, y, extra = {}) => {
 const rowAt = (component, fragment) => component.render(120).findIndex(line => stripAnsi(line).includes(fragment));
 assert.equal(mouseAt(mouseFirst, 'click', 0), undefined, 'native spacer cannot focus a pane');
 assert.equal(input('\x1b[A'), undefined);
-assert.equal(mouseAt(mouseFirst, 'wheel', 2, { wheelDelta: 3 }), undefined, 'closed pane preserves transcript wheel scrolling');
-assert.equal(mouseAt(mouseFirst, 'click', 2, { x: -1 }).handled, true);
+assert.equal(mouseAt(mouseFirst, 'wheel', 1, { wheelDelta: 3 }), undefined, 'closed pane preserves transcript wheel scrolling');
+assert.equal(mouseAt(mouseFirst, 'click', 1, { x: -1 }).handled, true);
 assert.equal(input('\x1b[A'), undefined, 'outside x suppresses native toggle without focus');
-assert.equal(mouseAt(mouseFirst, 'click', 1).handled, true, 'top padding contains clicks without toggling');
-assert.doesNotMatch(paint(mouseFirst), /1\. read/);
-assert.equal(mouseAt(mouseFirst, 'click', 2).handled, true);
+assert.equal(mouseAt(mouseFirst, 'click', 1).handled, true, 'single summary header opens details');
 assert.doesNotMatch(paint(mouseFirst), /focused/);
 assert.equal(input('\r'), undefined, 'mouse expansion leaves Enter with the editor');
 assert.match(paint(mouseFirst), /1\. read/);
@@ -292,7 +291,7 @@ assert.equal(input('\x1b[A'), undefined, 'output text click does not take keyboa
 assert.match(paint(mouseFirst), /mouse second output/, 'output click cannot trigger native whole-row collapse');
 mouseAt(mouseFirst, 'wheel', 3, { wheelDelta: -20 });
 assert.match(paint(mouseFirst), /mouse first output/);
-mouseAt(mouseFirst, 'click', 2);
+mouseAt(mouseFirst, 'click', 1);
 assert.doesNotMatch(paint(mouseFirst), /1\. read/, 'group header closes the inline pane');
 input('\x1b');
 assert.equal(input('\x1b[A'), undefined);
@@ -333,7 +332,7 @@ const huge = '漢字🙂 exact\x1b[31m\n'.repeat(400000);
 const simplePane = new ToolPane([{ id: 'simple', label: 'read · exact.txt', sections: function* () { yield { text: 'Output', kind: 'section' }; yield 'exact output'; } }], '1 successful action', () => 20);
 simplePane.theme = themeModule.theme; simplePane.open = true; simplePane.expanded.add('simple');
 const simpleRows = simplePane.render(80);
-assert.equal(simpleRows.length, 5, 'an unfocused complete pane has no footer row');
+assert.equal(simpleRows.length, 3, 'an unfocused complete pane has no footer row');
 assert.doesNotMatch(stripAnsi(simpleRows.join('\n')), /to inspect|Alt\+G|more ↓/);
 assert.doesNotMatch(stripAnsi(simpleRows.join('\n')), /1\. read/, 'a singleton has no duplicate action heading');
 assert.equal(stripAnsi(simpleRows.find(row => stripAnsi(row).includes('exact output'))).indexOf('exact output'), 3, 'singleton details align after the disclosure column');
@@ -357,14 +356,11 @@ argumentPane.open = true; argumentPane.expanded.add('args'); argumentPane.render
 assert.equal(laterFieldReads, 0, 'painting a large argument does not visit later fields');
 assert.equal(largeArguments.command, huge, 'argument formatting does not change stored source');
 assert.equal([...textRows('\x1b[31m\u202eexact\u{e0001}', 80)].join(''), '\\u001b[31m\\u202eexact\\u{e0001}', 'terminal and bidi controls are visible text');
-// Pi's real Box establishes the reference for default card spacing.
-const nativeBox = new tui.Box(1, 1, text => themeModule.theme.bg('toolSuccessBg', text));
-nativeBox.addChild(new tui.Text('▸ Ref', 0, 0));
-const referencePane = new ToolPane([], 'Ref');
-referencePane.theme = themeModule.theme;
+// Compact summaries retain the native gutter without colored Box padding.
+const referencePane = new ToolPane([], 'Ref'); referencePane.theme = themeModule.theme;
 for (const width of [8, 30, 80]) {
-  assert.deepEqual(referencePane.render(width).map(stripAnsi), nativeBox.render(width).map(stripAnsi));
-  assertCardBackground(referencePane.render(width), width, 'toolSuccessBg');
+  const rows = referencePane.render(width);
+  assert.equal(rows.length, 1); assert.match(stripAnsi(rows[0]), /^ ▸ Ref/); assertNeutral(rows);
 }
 const multiDigit = new ToolPane(Array.from({ length: 10 }, (_, index) => ({ id: String(index), label: 'read', sections: function* () { yield 'tenth output'; } })), 'Ten actions');
 multiDigit.open = true;

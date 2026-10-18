@@ -3,16 +3,17 @@ import type { ExtensionAPI, ToolRenderers } from "@earendil-works/pi-coding-agen
 import { NativeToolOwner, nativeToolsSupported, nativeToolContextSupported, nativeTextFallback } from "./modern-native-tools.ts";
 import { ToolPane, type PaneAction, type PaneContent } from "./modern-tool-pane.ts";
 import { recordedValues } from "./modern-tool-content.ts";
-import { cardContentWidth, cardRow } from "./display-card.ts";
+import { CodePane } from "./modern-code-pane.ts";
+import { cardContentWidth, activityRow } from "./display-card.ts";
 
 type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
 type Context = Parameters<NonNullable<ToolRenderers["renderCall"]>>[2];
 type Status = "pending" | "running" | "success" | "failed" | "cancelled" | "unavailable" | "unanswered" | "answered" | "notice";
-type Node = { id: string; name: string; args: any; epoch: number; status: Status; result?: any; note?: string; pane?: ToolPane; group?: Group; native: NativeToolOwner; invalidate?: () => void; nativeExpanded?: boolean; rendererAttached?: boolean; revision: number };
+type Node = { id: string; name: string; args: any; epoch: number; status: Status; result?: any; note?: string; pane?: ToolPane; code?: CodePane; group?: Group; native: NativeToolOwner; invalidate?: () => void; nativeExpanded?: boolean; rendererAttached?: boolean; revision: number };
 type Group = { members: Node[]; pane: ToolPane; signature: string };
 const shortName = (name: string) => name.split("__").at(-1) || name;
-const usesNativePresentation = (name: string) => name === 'codemode' || isNativeSubagent(name);
 export const isNativeSubagent = (name: string) => /^(?:subagents?(?:_|$)|fleet(?:_|$))/i.test(shortName(name));
+const usesNativePresentation = isNativeSubagent;
 const clean = (value: unknown) => String(value ?? "").slice(0, 240).replace(/[\uD800-\uDBFF]$/, "").replace(/[\x00-\x1f\x7f-\x9f]|\p{Cf}/gu, " ").trim();
 const question = (name: string) => shortName(name) === "ask_user_question";
 const json = (value: any) => { try { return JSON.stringify(value, null, 2) ?? "null"; } catch { return "[value could not be serialized]"; } };
@@ -30,8 +31,6 @@ export function toolStatus(name: string, result: any, partial = false, error = f
   if (error || result?.isError) return { status: "failed" };
   if (["bash", "powershell"].includes(name) && typeof details?.exitCode === "number" && details.exitCode !== 0) return { status: "failed" };
   if (name === "codemode" && Array.isArray(details?.calls)) {
-    if (details.calls.some((call: any) => ["error", "failed"].includes(call.status))) return { status: "failed" };
-    if (details.calls.some((call: any) => call.status === "cancelled")) return { status: "cancelled" };
     if (details.calls.some((call: any) => ["started", "running", "unavailable"].includes(call.status))) return { status: "notice", note: "Nested action remains unresolved" };
   }
   // Unknown tools own their status contracts. A recorded non-success status is visible, never ✓ Completed.
@@ -68,7 +67,12 @@ function* sections(node: Node): Generator<PaneContent> {
       yield prefix + String(answer.label ?? answer.value ?? "");
     }
     else yield questionState(node);
-    yield " ";
+    if (node.status !== "answered") {
+      const message = typeof details?.message === "string" ? details.message :
+        (node.result?.content ?? []).filter((block: any) => block.type === "text" && typeof block.text === "string").map((block: any) => block.text).join("\n");
+      if (message && message.trim() !== questionState(node)) yield message;
+    }
+    return;
   }
   if (node.result) {
     yield { text: "Output", kind: "section" };
@@ -121,7 +125,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
   let epoch = 0;
   let nodes = new Map<string, Node>();
   let groups = new Map<string, Group>();
-  let focused: ToolPane | undefined;
+  let focused: ToolPane | CodePane | undefined;
   let inputOff: (() => void) | undefined;
   const height = () => Math.max(4, Math.min(20, (process.stdout.rows || 24) - 10));
   let generation = 0;
@@ -133,12 +137,12 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     for (const invalidate of [...new Set([...nodes.values()].map(node => node.invalidate).filter(Boolean))]) invalidate!();
   };
   const release = () => { if (focused) { focused.focused = false; focused = undefined; } };
-  const panes = () => [...nodes.values()].flatMap(node => node.group ? node.group.members[0] === node ? [node.group.pane] : [] : node.pane ? [node.pane] : []);
-  const focusPane = (pane: ToolPane) => {
+  const panes = () => [...nodes.values()].flatMap<ToolPane | CodePane>(node => node.group ? node.group.members[0] === node ? [node.group.pane] : [] : node.code ? [node.code] : node.pane ? [node.pane] : []);
+  const focusPane = (pane: ToolPane | CodePane) => {
     if (disposed || !mode.isEnabled() || !panes().includes(pane)) return;
     release(); focused = pane; pane.focused = true; pane.open = true; redraw();
     pi.events.emit("compact-renderer:focus:v1", { owner: "tools", label: pane.title,
-      target: (component: any) => component instanceof DynamicComponent && (component.owner?.group?.pane || component.owner?.pane) === pane });
+      target: (component: any) => component instanceof DynamicComponent && (component.owner?.group?.pane || component.owner?.code || component.owner?.pane) === pane });
   };
   const action = (node: Node): PaneAction => ({ id: node.id, label: toolLabel(node.name, node.args) + indicators(node), sections: () => sections(node) });
   const refreshGroups = () => {
@@ -164,17 +168,18 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     };
     for (const node of nodes.values()) {
       node.group = undefined;
-      if (node.status !== "success" || node.result?.content?.some((block: any) => block.type === "image")) { finish(); continue; }
+      if (node.name === "codemode" || node.status !== "success" || node.result?.content?.some((block: any) => block.type === "image")) { finish(); continue; }
       if (run.length && node.epoch !== run[0].epoch) finish();
       run.push(node);
     }
     finish(); groups = next;
-    if (focused && ![...groups.values()].some(group => group.pane === focused) && ![...nodes.values()].some(node => !node.group && node.pane === focused)) release();
+    if (focused && ![...groups.values()].some(group => group.pane === focused) && ![...nodes.values()].some(node => !node.group && (node.code || node.pane) === focused)) release();
   };
   const ensure = (id: string, name: string, args?: any, stock?: ToolRenderers) => {
     let node = nodes.get(id);
     if (!node) { node = { id, name, args, epoch, status: "pending", revision: 0, native: new NativeToolOwner(name, stock) }; nodes.set(id, node); }
     if (args !== undefined && node.args !== args) { node.args = args; node.revision++; node.pane?.reset(); }
+    if (name === "codemode") node.code ||= new CodePane(height);
     return node;
   };
   const record = (node: Node, result: any, partial: boolean, error: boolean) => {
@@ -283,11 +288,11 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       if (theme) {
         node.pane.theme = theme;
         node.pane.background = question(name) ? "toolPendingBg" : node.status === "failed" ? "toolErrorBg" : node.status === "success" ? "toolSuccessBg" : "toolPendingBg";
-        node.pane.styleHeader = text => theme.fg(question(name) ? "warning" : node.status === "failed" ? "error" : node.status === "success" ? "success" : "warning", theme.bold(text));
+        node.pane.styleHeader = text => theme.fg(question(name) ? "toolTitle" : node.status === "failed" ? "error" : node.status === "success" ? "toolTitle" : "warning", theme.bold(text));
       }
       return node.pane;
     };
-    const mouse = (pane: ToolPane | undefined, event: TuiMouseEvent) => {
+    const mouse = (pane: ToolPane | CodePane | undefined, event: TuiMouseEvent) => {
       if (!pane || disposed || !mode.isEnabled()) return undefined;
       const result = pane.handleMouse(event);
       if (result?.handled && result.render !== false) {
@@ -299,8 +304,20 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       return result;
     };
     const syncExpansion = (node: Node, expanded: boolean) => {
-      if ((node.nativeExpanded !== undefined && node.nativeExpanded !== expanded) || (node.nativeExpanded === undefined && expanded)) (node.group?.pane || individual(node)).open = expanded;
+      if ((node.nativeExpanded !== undefined && node.nativeExpanded !== expanded) || (node.nativeExpanded === undefined && expanded)) (node.group?.pane || node.code || individual(node)).open = expanded;
       node.nativeExpanded = expanded;
+    };
+    const codePane = (node: Node, theme: any, context: Context) => {
+      const pane = node.code!;
+      const calls = Array.isArray(node.result?.details?.calls) ? node.result.details.calls : [];
+      const errors = calls.filter((call: any) => ["error", "failed"].includes(call.status)).length;
+      const cancelled = calls.filter((call: any) => call.status === "cancelled").length;
+      const unresolved = calls.filter((call: any) => ["started", "running", "unavailable"].includes(call.status)).length;
+      const status = node.status === "failed" ? "✗ Failed" : context.isPartial ? context.executionStarted ? "… Running" : "Preparing" : "✓ Completed";
+      pane.title = `codemode · ${status}${calls.length ? ` · ${calls.length} nested call${calls.length === 1 ? "" : "s"}` : ""}${errors ? ` · ${errors} nested error${errors === 1 ? "" : "s"}` : ""}${cancelled ? ` · ${cancelled} nested cancelled` : ""}${unresolved ? ` · ${unresolved} nested unresolved` : ""}${typeof context.durationMs === "number" ? ` · ${(context.durationMs / 1000).toFixed(2)}s` : ""}${indicators(node)}`;
+      pane.theme = theme; pane.tone = node.status === "failed" ? "error" : errors || cancelled || unresolved || context.isPartial ? "warning" : "toolTitle";
+      pane.setNative(node.native.context(context, "call").lastComponent, node.native.context(context, "result").lastComponent);
+      return pane;
     };
     return {
       renderShell: "self",
@@ -308,20 +325,30 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
         if (disposed || !nativeToolContextSupported(context) || stale(context)) return stock?.renderCall?.(args, theme, { ...context, executionStarted: false, state: {}, lastComponent: undefined }) ?? new Text(json(args), 0, 0);
         const node = get(args, context);
         if (disposed || !mode.isEnabled()) return node.native.renderCall(args, theme, context);
+        if (node.code) {
+          node.native.renderCall(args, theme, { ...context, expanded: true });
+          syncExpansion(node, context.expanded); codePane(node, theme, context);
+          return new DynamicComponent(width => node.code!.render(width), event => mouse(node.code, event), node);
+        }
         node.native.suspend(); syncExpansion(node, context.expanded);
         return new DynamicComponent(width => {
           if (node.group) return [];
           if (singleCard(node)) return individual(node, theme).render(width);
-          return [cardRow(truncateToWidth(theme.fg("toolTitle", theme.bold(`${node.result ? "" : "… "}${toolLabel(name, node.args)}${node.result ? "" : ` · ${context.executionStarted ? "running" : "preparing"}`}`)), cardContentWidth(width)), width, theme, node.result && node.status === "success" ? "toolSuccessBg" : "toolPendingBg")];
+          return [activityRow(truncateToWidth(theme.fg("toolTitle", theme.bold(`${node.result ? "" : "… "}${toolLabel(name, node.args)}${node.result ? "" : ` · ${context.executionStarted ? "running" : "preparing"}`}`)), cardContentWidth(width)), width, theme)];
         }, event => mouse(!node.group && singleCard(node) ? individual(node, theme) : undefined, event), node);
       },
       renderResult(result, options, theme, context) {
         if (disposed || !nativeToolContextSupported(context) || stale(context)) return stock?.renderResult?.(result, options, theme, { ...context, executionStarted: false, state: {}, lastComponent: undefined }) ?? nativeTextFallback(result, theme);
         const node = get(context.args, context); record(node, result, options.isPartial, context.isError);
         if (disposed || !mode.isEnabled()) return node.native.renderResult(result, options, theme, context);
+        if (node.code) {
+          node.native.renderResult(result, { ...options, expanded: true }, theme, { ...context, expanded: true });
+          syncExpansion(node, context.expanded); codePane(node, theme, context);
+          return new DynamicComponent(() => [], undefined, node);
+        }
         node.native.suspend(); syncExpansion(node, context.expanded);
         return new DynamicComponent(width => {
-          if (node.group) { const group = node.group; if (group.members[0] !== node) return []; group.pane.theme = theme; group.pane.styleHeader = text => theme.fg("success", theme.bold(text)); return group.pane.render(width); }
+          if (node.group) { const group = node.group; if (group.members[0] !== node) return []; group.pane.theme = theme; group.pane.styleHeader = text => theme.fg("toolTitle", theme.bold(text)); return group.pane.render(width); }
           if (singleCard(node)) return [];
           return individual(node, theme).render(width);
         }, event => mouse(node.group ? node.group.members[0] === node ? node.group.pane : undefined : !singleCard(node) ? individual(node, theme) : undefined, event), node);

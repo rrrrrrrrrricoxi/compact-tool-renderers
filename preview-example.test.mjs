@@ -32,7 +32,7 @@ try {
   assert.equal(registered.renderResult, codemodeRenderers.renderResult, 'the actual native result renderer is registered');
   await assert.rejects(registered.execute(), /Code execution is disabled/);
   const renderers = runtime.session.extensionRunner.resolveToolRenderers('codemode', () => registered);
-  assert.equal(renderers, registered, 'compact renderer leaves the native definition unchanged');
+  assert.notEqual(renderers, registered, 'compact mode adds collapse around the native definition');
 
   // Replay the saved transcript through the real InteractiveMode, including its native skill parser.
   const ui = new core.InteractiveMode(runtime, { tuiMode: 'fullscreen' });
@@ -41,17 +41,24 @@ try {
   const code = ui.chatContainer.children.find(item => item instanceof core.ToolExecutionComponent && item.toolName === 'codemode');
   assert.ok(code, 'actual transcript replay creates a native codemode component');
   const collapsed = paint(code);
-  assert.equal(code.callRendererComponent.constructor.name, 'Container');
-  assert.equal(code.callRendererComponent.children[1].constructor.name, 'VisualLinePreview');
-  assert.match(collapsed, /✓ read/); assert.match(collapsed, /✗ read/);
-  assert.match(collapsed, /125ms/); assert.match(collapsed, /Took 1\.5s/);
-  assert.match(collapsed, /Model calls: \$0\.0030/);
-  assert.doesNotMatch(collapsed, /Invented missing file/, 'native nested error detail waits for expansion');
-  assert.ok(code.callRendererComponent.render(100).some(row => /\x1b\[[\d;]+mconst/.test(row)), 'native JavaScript is syntax highlighted');
+  assert.match(collapsed, /▸ codemode/);
+  assert.match(collapsed, /nested error/);
+  assert.doesNotMatch(collapsed, /const reads|Invented missing file|Script completed/);
+  assert.ok(code.render(100).length <= 2, 'code mode closes to one summary plus native spacing');
+  const pane = code.callRendererComponent.owner.code;
+  assert.equal(pane.nativeCall.constructor.name, 'Container');
+  assert.ok(pane.nativeCall.render(100).some(row => /\x1b\[[\d;]+mconst/.test(row)), 'native JavaScript is syntax highlighted');
   code.setExpanded(true);
-  const expanded = paint(code);
+  assert.match(paint(code), /▾ codemode/);
+  assert.ok(code.render(100).length <= 22, 'expanded native content uses a bounded viewport');
+  const expanded = paint(pane.nativeCall) + '\n' + paint(pane.nativeResult);
   for (const text of ['Invented missing file. No file was accessed.', 'models.classify', 'All calls, durations, and costs shown here are synthetic. Nothing ran.']) assert.ok(expanded.includes(text));
+  assert.match(expanded, /✓ read/); assert.match(expanded, /✗ read/);
+  assert.match(expanded, /125ms/); assert.match(expanded, /Took 1\.5s/);
+  assert.match(expanded, /Model calls: \$0\.0030/);
   assert.match(expanded, /\$0\.0012/); assert.match(expanded, /\$0\.0018/);
+  code.setExpanded(false);
+  assert.doesNotMatch(paint(code), /const reads/);
   const skill = ui.chatContainer.children.find(item => item instanceof core.SkillInvocationMessageComponent);
   assert.ok(skill, 'actual transcript replay uses the native skill component');
   assert.match(paint(skill), /\[skill\] fixture-review/);
