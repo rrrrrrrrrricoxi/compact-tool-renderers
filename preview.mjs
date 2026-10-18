@@ -147,6 +147,9 @@ export async function createPreview() {
     if (!questionsPath) assistant([{ type: 'text', text: 'Native question UI is unavailable on this host. Recorded question cards still show schema-shaped examples. Set PI_QUESTIONS_PATH to an existing pi-questions/index.ts to enable /fixture-question.' }]);
     if (promptJump) assistant([{ type: 'text', text: 'Prompt navigation: /prompt-jump list selects one of the three invented user prompts; /prompt-jump back returns; /prompt-jump end follows the latest output.' }]);
     assistant([{ type: 'text', text: 'Subagent display examples follow. These records are invented. No child or workflow was launched.' }]);
+    for (const topic of ['tool-reference/parameter-reference', 'tool-reference/execution-parameters', 'tool-reference/fork-context-details']) {
+      call(`guide-${topic}`, 'subagent', { action: 'guide', options: { topic } }, `# ${topic}\n\nSynthetic guide content for inspection. No guide was fetched and no task was started.`, { mode: 'management', results: [] });
+    }
     call('child-launch', 'subagent', { agent: 'worker', task: 'Review the synthetic sample', async: true }, 'Async: worker [fixture-worker]', { mode: 'single', asyncId: 'fixture-worker', runId: 'fixture-worker', results: [] });
     call('child-scout-launch', 'subagent', { agent: 'scout', task: 'Check the synthetic field names', async: true }, 'Async: scout [fixture-scout]', { mode: 'single', asyncId: 'fixture-scout', runId: 'fixture-scout', results: [] });
     call('child-status', 'subagent', { action: 'status', id: 'fixture-worker' }, 'Synthetic worker is running. This status does not establish completion.', { mode: 'management', agent: 'worker', results: [] });

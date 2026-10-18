@@ -10,6 +10,7 @@ const plain = c => c.render(95).map(stripAnsi).join('\n');
 const result = (id, name, details = {}, error = false) => ({ role: 'toolResult', toolCallId: id, toolName: name, content: [{ type: 'text', text: 'Exact delivery receipt' }], details, isError: error, timestamp: 2 });
 const call = (id, name, args) => ({ type: 'message', id: `call-${id}`, message: { role: 'assistant', content: [{ type: 'toolCall', id, name, arguments: args }], timestamp: 1 } });
 const tool = (id, agent = 'worker') => [call(id, 'subagent', { agent, action: 'status' }), { type: 'message', id: `result-${id}`, message: result(id, 'subagent', { agent }) }];
+const guideTool = (id, topic, { error = false, content = [{ type: 'text', text: 'Guide result details' }] } = {}) => [call(id, 'subagent', { action: 'guide', options: { topic } }), { type: 'message', id: `result-${id}`, message: { ...result(id, 'subagent', { mode: 'management', results: [] }), content, isError: error } }];
 const notice = (id, agent = 'worker', status = 'completed') => ({ type: 'custom_message', id, customType: 'subagent-notify', display: true, content: 'Exact completion text', details: { runs: [{ agent, status }] }, timestamp: id });
 const decision = (id = 'request-1') => ({ type: 'custom_message', id: `ask-${id}`, customType: 'subagent_supervisor_request', display: true, content: 'Original request framing', details: { id, requestId: id, reason: 'need_decision', agent: 'worker', runId: 'run-1', requestBody: 'Which exact option?' }, timestamp: id });
 const answer = (id = 'request-1') => ({ type: 'custom', id: `entry-${id}`, customType: 'subagent_supervisor_reply', data: { requestId: id, agent: 'worker', runId: 'run-1', message: 'Use option A once.' } });
@@ -36,6 +37,37 @@ const imageAck = exchange('image-ack'); imageAck.at(-1).message.content.push({ t
 projection.rebuild([notice('error', 'worker', 'failed'), ...tool('a'), notice('unknown', 'worker', 'future')]); assert.equal(projection.viewTool('a'), undefined);
 for (const attention of [{ results: [{ exitCode: 2 }] }, { results: [{ interrupted: true }] }, { results: [{ detached: true }] }, { results: [{ execution: { status: 'running' } }] }]) {
   projection.rebuild([...tool('a'), call('attention', 'subagent', { agent: 'worker' }), { type: 'message', message: result('attention', 'subagent', attention) }, ...tool('b')]); assert.equal(projection.viewTool('a'), undefined); assert.equal(projection.viewTool('attention'), undefined); assert.equal(projection.viewTool('b'), undefined);
+}
+const guideTopics = ['tool-reference/parameter-reference', 'tool-reference/execution-parameters', 'tool-reference/fork-context-details'];
+const guideEntries = guideTopics.flatMap((topic, index) => guideTool(`guide-${index + 1}`, topic, { content: [{ type: 'text', text: `Exact guide response ${index + 1}` }] }));
+projection.rebuild(guideEntries);
+const guideView = projection.viewTool('guide-1');
+assert.ok(guideView); assert.equal(guideView.pane.title, 'Subagents · 3 guide lookups');
+assert.equal(projection.viewTool('guide-2').hidden, true); assert.equal(projection.viewTool('guide-3').hidden, true);
+assert.deepEqual(guideView.pane.actions.map(item => item.label), guideTopics.map(topic => `Subagent · guide · ${topic}`));
+guideView.pane.open = true; guideView.pane.actions.forEach(item => guideView.pane.expanded.add(item.id));
+for (const [index, topic] of guideTopics.entries()) {
+  const action = guideView.pane.actions[index];
+  assert.ok(Array.from(action.sections()).some(item => item.text === `Exact guide response ${index + 1}`));
+  const exactDetails = Array.from(action.details());
+  assert.ok(exactDetails.some(item => JSON.stringify(item).includes(topic)));
+  assert.ok(exactDetails.some(item => JSON.stringify(item).includes('management')));
+}
+const longTopic = 't'.repeat(80);
+projection.rebuild(guideTool('long-guide', longTopic));
+assert.equal(projection.viewTool('long-guide'), undefined, 'a singleton guide remains standalone');
+const runningGuide = [call('running-guide', 'subagent', { action: 'guide', options: { topic: 'running-topic' } })];
+projection.rebuild(runningGuide); assert.equal(projection.viewTool('running-guide'), undefined);
+for (const invalid of [
+  [...guideTool('failed-guide', 'failed-topic', { error: true }), ...guideTool('after-failure', 'after-topic')],
+  [...guideTool('nontext-guide', 'image-topic', { content: [{ type: 'text', text: 'text' }, { type: 'image', data: 'exact-image', mimeType: 'image/png' }] }), ...guideTool('after-image', 'after-topic')],
+  [...guideTool('guide-before-status', 'before-topic'), ...tool('runtime-status'), ...guideTool('guide-after-status', 'after-topic')],
+  [...guideTool('guide-before-running', 'before-topic'), call('running-guide-boundary', 'subagent', { action: 'guide', options: { topic: 'running-topic' } }), ...guideTool('guide-after-running', 'after-topic')],
+  [...guideTool('guide-before-user', 'before-topic'), { type: 'message', message: { role: 'user', content: 'Visible user text' } }, ...guideTool('guide-after-user', 'after-topic')],
+  [...guideTool('guide-before-assistant', 'before-topic'), { type: 'message', message: { role: 'assistant', content: [{ type: 'text', text: 'Visible assistant text' }] } }, ...guideTool('guide-after-assistant', 'after-topic')],
+]) {
+  projection.rebuild(invalid);
+  for (const id of ['failed-guide', 'after-failure', 'nontext-guide', 'after-image', 'guide-before-status', 'runtime-status', 'guide-after-status', 'guide-before-running', 'running-guide-boundary', 'guide-after-running', 'guide-before-user', 'guide-after-user', 'guide-before-assistant', 'guide-after-assistant']) assert.equal(projection.viewTool(id), undefined, 'failed, running, non-text, visible, or runtime boundaries keep guide rows standalone');
 }
 for (const custom of [notice('paused', 'worker', 'paused'), notice('stopped', 'worker', 'stopped'), { ...notice('future'), customType: 'future-subagent-event' }]) { projection.rebuild([...tool('a'), custom, ...tool('b')]); assert.equal(projection.viewTool('a'), undefined); assert.equal(view(custom), undefined); }
 projection.rebuild([...tool('a'), call('future', 'subagent_future', { agent: 'worker' }), { type: 'message', message: result('future', 'subagent_future') }, ...tool('b')]); assert.equal(projection.viewTool('a'), undefined); assert.equal(projection.viewTool('future'), undefined);

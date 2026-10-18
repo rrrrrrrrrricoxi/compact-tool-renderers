@@ -17,10 +17,11 @@ const request = (r: Row) => textContent(r.source || {}) && typeof r.source?.deta
 const reply = (r: Row) => textContent(r.result || {}) && r.kind === 'tool' && short(r.name || '') === 'subagent_supervisor' && r.args?.action === 'reply' && !r.failed && !r.pending && (!r.result?.details?.status || ['success', 'ok', 'completed'].includes(r.result.details.status)) && typeof r.result?.details?.replyTo === 'string' && (!r.args.replyTo || r.args.replyTo === r.result.details.replyTo) && (!r.args.requestId || r.args.requestId === r.result.details.replyTo) ? r.result.details.replyTo : undefined;
 const answer = (r: Row) => r.kind === 'entry' && r.source.customType === 'subagent_supervisor_reply' && typeof r.source.data?.message === 'string' && typeof r.source.data?.agent === 'string' ? requestId(r.source.data) : undefined;
 const agents = (r: Row): string[] => r.kind === 'tool' ? [r.result?.details?.agent ?? r.args?.agent].filter(x => typeof x === 'string') : r.kind === 'entry' ? [r.source.data?.agent].filter(x => typeof x === 'string') : r.source.details?.runs?.map((x: any) => x.agent) || [r.source.details?.agent].filter(x => typeof x === 'string');
+const guide = (r: Row) => r.kind === 'tool' && ['subagent', 'subagents'].includes(short(r.name || '')) && r.args?.action === 'guide';
 const routine = (r: Row) => {
   const results = r.result?.details?.results;
   if (Array.isArray(results) && results.some((x: any) => !x || x.error || typeof x.exitCode === 'number' && x.exitCode !== 0 || x.detached || x.interrupted || x.timedOut || x.stopped || x.outputPartial || x.turnBudgetExceeded || x.toolBudgetBlocked || x.structuredOutputFailed || x.execution && x.execution.status !== 'completed')) return false;
-  if (r.kind === 'tool') return ['subagent', 'subagents'].includes(short(r.name || '')) && ['launch', 'resume', 'status', 'pending', 'list', 'steer'].includes(r.args?.action || 'launch') && compactSubagent(r.name || '') && !r.pending && !r.failed && !subagentDecision(r.name || '', r.args) && short(r.name || '') !== 'contact_supervisor' && short(r.name || '') !== 'subagent_supervisor' && !['partial', 'failed'].includes(r.result?.details?.steering?.state) && (!r.result?.details?.status || ['success', 'ok', 'completed'].includes(r.result.details.status)) && !r.result?.content?.some((b: any) => b.type !== 'text');
+  if (r.kind === 'tool') return ['subagent', 'subagents'].includes(short(r.name || '')) && ['launch', 'resume', 'status', 'pending', 'list', 'steer', 'guide'].includes(r.args?.action || 'launch') && compactSubagent(r.name || '') && !r.pending && !r.failed && !subagentDecision(r.name || '', r.args) && short(r.name || '') !== 'contact_supervisor' && short(r.name || '') !== 'subagent_supervisor' && !['partial', 'failed'].includes(r.result?.details?.steering?.state) && (!r.result?.details?.status || ['success', 'ok', 'completed'].includes(r.result.details.status)) && !r.result?.content?.some((b: any) => b.type !== 'text');
   const d = r.source.details;
   return r.kind === 'message' && (r.source.customType === 'subagent-notify' && Array.isArray(d?.runs) && d.runs.length > 0 && d.runs.every((x: any) => typeof x.agent === 'string' && x.status === 'completed') || r.source.customType === 'subagent_supervisor_request' && d?.reason === 'progress_update' && typeof d.agent === 'string') && (typeof r.source.content === 'string' || Array.isArray(r.source.content) && r.source.content.every((b: any) => b.type === 'text' && typeof b.text === 'string'));
 };
@@ -104,7 +105,7 @@ export class SubagentProjection {
       }
       g.members = members; g.answered = answered;
       const names = [...new Set(members.flatMap(agents).map(clean).filter(Boolean))];
-      g.pane.title = answered ? `${clean(members[0].source.details.agent)} · Decision answered` : `Subagents · ${members.length} updates${names.length ? ` · ${names.slice(0, 3).join(', ')}${names.length > 3 ? ', …' : ''}` : ''}`;
+      g.pane.title = answered ? `${clean(members[0].source.details.agent)} · Decision answered` : `Subagents · ${members.length} ${guide(members[0]) ? "guide lookups" : "updates"}${names.length ? ` · ${names.slice(0, 3).join(', ')}${names.length > 3 ? ', …' : ''}` : ''}`;
       g.pane.headingTone = answered ? 'customMessageLabel' : 'mdLink';
       for (const row of members) row.group = g;
       this.groups.set(key, g);
@@ -114,7 +115,10 @@ export class SubagentProjection {
     for (let i = 0; i < this.rows.length; i++) {
       const row = this.rows[i], id = row && request(row), ack = this.rows[i + 1], recorded = this.rows[i + 2];
       if (row && id && counts.get(id) === 1 && receipts.get(id) === 1 && answers.get(id) === 1 && ack && recorded && reply(ack) === id && answer(recorded) === id && row.source.details.agent === recorded.source.data.agent && (!row.source.details.runId || row.source.details.runId === recorded.source.data.runId) && [ack.args, ack.result?.details].every(d => (!d?.agent || d.agent === row.source.details.agent) && (!d?.runId || d.runId === row.source.details.runId))) { flush(); group([row, ack, recorded], true); i += 2; }
-      else if (row && routine(row)) run.push(row);
+      else if (row && routine(row)) {
+        if (run.length && guide(run[0]) !== guide(row)) flush();
+        run.push(row);
+      }
       else flush();
     }
     flush();

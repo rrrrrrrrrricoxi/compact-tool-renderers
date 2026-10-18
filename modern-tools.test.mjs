@@ -799,6 +799,12 @@ for (const [field, state] of [['stopped', 'Stopped'], ['timedOut', 'Timed out']]
 const statusCard = make('subagent', 'sub-status', { action: 'status', id: 'raw-run-id' });
 statusCard.updateResult(result('Run: raw-run-id\nState: running', { mode: 'management', results: [] }));
 assert.match(paint(statusCard), /Subagent · status · Status recorded/); assert.doesNotMatch(paint(statusCard), /Completed|raw-run-id/);
+const standaloneGuideTopic = 't'.repeat(80);
+const standaloneGuide = make('subagent', 'sub-standalone-guide', { action: 'guide', options: { topic: standaloneGuideTopic } });
+standaloneGuide.updateResult(result('Exact standalone guide response.', { mode: 'management', results: [] }));
+assert.equal(paint(standaloneGuide).split('\n').find(line => line.includes('Subagent · guide')), ` ▸ Subagent · guide · ${standaloneGuideTopic.slice(0, 72)}`, 'standalone guide titles include the sanitized, bounded topic');
+assert.doesNotMatch(paint(standaloneGuide), /Result recorded/);
+standaloneGuide.setExpanded(true); assert.match(paint(standaloneGuide), /Exact standalone guide response/);
 const enableCard = make('subagents_enable', 'sub-enable', {});
 enableCard.updateResult(result('Enabled the native subagent tools.', { enabled: true }));
 assert.match(paint(enableCard), /Subagent · enable · Result recorded/); assert.doesNotMatch(paint(enableCard), /launch|Started|Completed/);

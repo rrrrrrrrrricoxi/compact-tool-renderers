@@ -1,5 +1,10 @@
 # Release notes
 
+## 2.2.1 — Guide lookup grouping
+
+- Collapse consecutive completed subagent guide calls into one guide-lookup group. Keep runtime updates in their own groups and preserve failures, running calls, and visible conversation boundaries.
+- Show the requested guide topic in each expandable action instead of the generic Result recorded label. Exact content and arguments remain available.
+
 ## 2.2.0 — Grouped subagent history
 
 - Group consecutive routine subagent updates and combine explicitly matched decision exchanges; keep failures and pending decisions separate. Use compact expandable rows for subagent calls and recognized asynchronous notices. Keep native Fleet and execution controls.

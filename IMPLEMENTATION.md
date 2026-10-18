@@ -124,3 +124,7 @@ The custom-message adapter is isolated to Pi 1.3.0 renderer resolution and retai
 ### Subagent grouping revision
 
 The first subagent preview still had one heading per bookkeeping event. The user approved grouping consecutive routine updates and combining a matched decision exchange. Failures and unresolved decisions remain visible separately. Correlation uses recorded identifiers and transcript order, never similar labels or component render order. Exact entries stay unchanged; acknowledgements and technical identifiers remain available under Details. The revised preview adds adjacent worker/scout launches, a status update, a matched exchange, and an unanswered request after a visible reply.
+
+## Guide lookup grouping — 2.2.1
+
+Live acceptance on 19 October 2026 showed three consecutive successful guide calls on both hosts. The runtime-update allowlist omitted guide, so each remained a standalone card. Completed text guide results now form their own consecutive group, separate from runtime activity. Per-action titles use the recorded topic with existing label sanitization; expansion and Details preserve exact result content and arguments. Failed, running, nontext, and visible conversation boundaries remain separate. Replay checks against both private acceptance transcripts confirm one guide heading with three exact topics and no transcript mutation. Native preview checks retain the existing runtime group and decision card. The user approved the terminal preview on both machines on 19 October 2026.

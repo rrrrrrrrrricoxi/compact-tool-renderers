@@ -21,9 +21,11 @@ export function subagentTitle(name: string, args: any, result: any, status: stri
   const action = label(args?.action) || (supervisor ? "request" : ["subagent", "subagents"].includes(short) ? "launch" : label(short.replace(/^subagents?_/, "")));
   // Targets such as run/request UUIDs and arbitrary messages belong in Details.
   const agent = label(details?.agent ?? args?.agent);
-  const title = `${supervisor ? "Supervisor" : "Subagent"} · ${action}${agent ? ` · ${agent}` : ""}`;
+  const topic = action === "guide" ? label(args?.options?.topic) : "";
+  const title = `${supervisor ? "Supervisor" : "Subagent"} · ${action}${topic ? ` · ${topic}` : agent ? ` · ${agent}` : ""}`;
   if (failed) return `${title} · ✗ Failed · ${action === "steer" ? details?.steering ? "Steering failed" : "Steering rejected" : action === "launch" ? details?.activeAsyncCapacity ? "Capacity reached" : "Launch failed" : "Request failed"}`;
   if (waiting) return `${title} · ${phase}`;
+  if (action === "guide") return title;
   if (supervisor && action === "reply" && typeof details?.replyTo === "string") return `${title} · Reply recorded`;
   if (action === "steer") {
     const steering = details?.steering;
