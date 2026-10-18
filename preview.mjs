@@ -130,7 +130,7 @@ export async function createPreview() {
     const factory = async ({ sessionManager, sessionStartEvent }) => {
       const modelRuntime = await core.ModelRuntime.create({ authPath: path.join(agentDir, 'auth.json'), modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
       const services = await core.createAgentSessionServices({ cwd, agentDir, modelRuntime,
-        resourceLoaderOptions: { eventBus, disabledBuiltinExtensions: ['codemode', 'mcp', 'tool_search'], noContextFiles: true } });
+        resourceLoaderOptions: { eventBus, disabledBuiltinExtensions: ['codemode', 'mcp', 'tool-search', 'llama.cpp'], noContextFiles: true } });
       for (const extension of services.resourceLoader.getExtensions().extensions) {
         const question = extension.tools.get('ask_user_question');
         if (question) {
