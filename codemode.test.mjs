@@ -44,7 +44,8 @@ try {
   const before = JSON.stringify(final);
   code.updateResult(final);
   assert.equal(intervals.size, 0, 'native completion stops its timer');
-  assert.match(paint(code), /✓ Completed · 2 nested calls · 1 nested error · 0.75s/);
+  assert.match(paint(code), /▸ codemode · 2 nested calls · 1 nested error · 0.75s/);
+  assert.doesNotMatch(paint(code), /✓|Completed/, 'successful code-mode summary omits redundant status');
   assert.doesNotMatch(paint(code), /✗ Failed|Recorded script output|Recorded nested failure/);
   assert.equal(toolStatus('codemode', final).status, 'success', 'handled nested errors do not fail the script');
   const header = code.render(140).find(row => stripAnsi(row).includes('nested error'));
@@ -94,8 +95,8 @@ try {
  event('message_end', { message: { role: 'assistant', content: [{ type: 'toolCall', id: 'replay-code', name: 'codemode', arguments: { code: 'text(1)' } }] } });
  const replayCode = create('codemode', 'replay-code', { code: 'text(1)' }, codemodeRenderers); replayCode.updateResult(result('done'));
  const last = create('read', 'after-code', { path: '/fixture/after' }, readRenderers); last.updateResult(result('last'));
- assert.match(paint(last), /read · \/fixture\/after · ✓ Completed/); assert.doesNotMatch(paint(last), /2 successful actions/);
+ assert.match(paint(last), /read · \/fixture\/after/); assert.doesNotMatch(paint(last), /2 actions/);
  assert.doesNotMatch(paint(replayCode), /successful action/);
- assert.match(paint(replayFirst), /read · \/fixture\/replay-before · ✓ Completed/); assert.doesNotMatch(paint(replayFirst), /2 successful actions/);
+ assert.match(paint(replayFirst), /read · \/fixture\/replay-before/); assert.doesNotMatch(paint(replayFirst), /2 actions/);
  console.log('codemode: collapsed summary, native detail components, nested outcome, timer, mouse/inspection/editor/Ctrl+O, viewport and transcript checks passed');
 } finally { dispose(); }

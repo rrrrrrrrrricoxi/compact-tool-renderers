@@ -8,7 +8,7 @@ for (const width of [1, 2, 8, 30]) assertCardBackground([cardRow('a\x1b[0mb\x1b[
 const nested = cardRow('a\x1b[48;5;0mb\x1b[49mc', 12, themeModule.theme, 'toolSuccessBg');
 assert.equal(backgroundCells(nested)[2], '48;5;0', 'an explicit nested surface stays intact');
 assert.equal(backgroundCells(nested)[3], backgroundCells(nested)[0], 'base surface resumes after a nested background reset');
-const { registerModernTools, toolStatus, isNativeSubagent } = await loadSource('./modern-tools.ts');
+const { registerModernTools, toolStatus, toolLabel, isNativeSubagent } = await loadSource('./modern-tools.ts');
 const { ToolPane, textRows } = await loadSource('./modern-tool-pane.ts');
 const { recordedValues } = await loadSource('./modern-tool-content.ts');
 const { ToolExecutionComponent } = await loadAgent('modes/interactive/components/tool-execution.js');
@@ -75,7 +75,7 @@ input('\r'); assert.doesNotMatch(paint(read), /first output/, 'Enter collapses a
 input('\r'); assert.match(paint(read), /first output/, 'Enter opens a focused singleton in one step');
 input('\x1b'); clickSingle(read, 1);
 const shell = make('bash', 'b', { command: 'printf hello' }); shell.markExecutionStarted(); shell.updateResult(result('streaming'), true);
-assert.match(paint(read), /read · \/tmp\/first\.txt · ✓ Completed/);
+assert.match(paint(read), /read · \/tmp\/first\.txt/);
 assert.match(paint(shell), /Running/);
 assert.equal(read.render(100).length, 2, 'collapsed activity uses one summary plus native spacer');
 const assertNeutral = rows => { for (const row of rows) assert.ok(backgroundCells(row).every(value => value === ''), 'compact activity keeps terminal surface'); };
@@ -83,7 +83,7 @@ assertNeutral(read.render(100));
 assertNeutral(shell.render(100));
 assert.doesNotMatch(paint(read), /Alt\+G/, 'unfocused collapsed cards omit repeated key hints');
 shell.updateResult(result('hello', { exitCode: 0 }));
-assert.match(paint(read), /2 successful actions/);
+assert.match(paint(read), /2 actions/);
 assert.equal(paint(shell), '');
 assert.equal(input('\x1b[A'), undefined, 'editor arrows remain untouched until pane focus');
 assert.equal(input('\x1bg').consume, true);
@@ -123,7 +123,7 @@ for (let iteration = 0; iteration < 8; iteration++) {
   assert.deepEqual(shell.callRendererComponent.children.map(child => child.constructor.name), ['Text', 'Container']);
   assert.equal(shell.resultRendererComponent.render(120).length, 0, 'one Box owns both stock render slots');
   toggle(true);
-  assert.match(paint(read), /2 successful actions/);
+  assert.match(paint(read), /2 actions/);
 }
 // Mode off reproduces the full default native shell, including ANSI backgrounds and padding.
 toggle(false);
@@ -161,9 +161,9 @@ try {
 const fail = make('bash', 'c', { command: 'false' });
 fail.updateResult({ ...result('failure', { exitCode: 1 }), isError: true });
 const after = make('read', 'd', { path: '/tmp/after.txt' }); after.updateResult(result('after'));
-assert.match(paint(fail), /bash · false · ✗ Failed/); assert.match(paint(after), /read · \/tmp\/after\.txt · ✓ Completed/);
+assert.match(paint(fail), /bash · false · ✗ Failed/); assert.match(paint(after), /read · \/tmp\/after\.txt/);
 assert.equal(paint(fail).split('\n').filter(line => line.includes('bash · false')).length, 1, 'failure uses one exceptional header');
-assert.match(paint(fail), /Failed · failure/, 'header includes a bounded recorded failure excerpt');
+assert.match(paint(fail), /Failed · Command failed \(exit 1\)/, 'header includes a bounded recorded failure excerpt');
 assert.match(fail.render(120).map(stripAnsi)[1], /^ ▸ bash · /, 'failure status does not shift the tool name');
 capture('Single failed action collapsed with status after command', fail);
 const failedHeader = fail.render(120).find(line => stripAnsi(line).includes('Failed'));
@@ -171,7 +171,7 @@ assert.ok(failedHeader.includes(themeModule.theme.getFgAnsi('error')), 'failed h
 assertNeutral([failedHeader]);
 const partialFailureOutput = 'partial failure output\nexact second failure line';
 fail.updateResult({ ...result(partialFailureOutput, { error: 'Recorded denial: ' + 'x'.repeat(5000) }), isError: true }, true);
-assert.match(paint(fail), /Failed · Recorded denial:/, 'partial errors remain visible as exceptional cards');
+assert.match(paint(fail), /Failed · Command failed/, 'partial errors remain visible as exceptional cards');
 assert.equal(paint(fail).split('\n').filter(line => line.includes('bash · false')).length, 1);
 assert.ok(paint(fail, 500).split('\n').map(row => row.trim()).join('').length < 400, 'collapsed failure reason has a bounded length before the full-width card gutter');
 const failureMouse = (y) => fail.handleMouse({ type: 'click', button: 'left', x: 2, y, screenX: 2, screenY: y, width: 120, height: fail.render(120).length, shift: false, alt: false, ctrl: false });
@@ -185,7 +185,7 @@ assert.equal(toolStatus('read', result('Error is a word in successful recorded o
 // Visible transcript boundaries, question contracts and native subagent exemption.
 event('message_end', { message: { role: 'user', content: 'next task' } });
 const next = make('read', 'e', { path: '/tmp/next.txt' }); next.updateResult(result('next'));
-assert.match(paint(next), /read · \/tmp\/next\.txt · ✓ Completed/);
+assert.match(paint(next), /read · \/tmp\/next\.txt/);
 for (const name of ['subagent', 'subagent_message', 'subagents', 'fleet_status', 'mcp__fleet_status']) {
   assert.equal(isNativeSubagent(name), true);
   const stock = {}; assert.equal(resolver(name, () => stock), stock);
@@ -296,6 +296,51 @@ assert.doesNotMatch(paint(mouseFirst), /1\. read/, 'group header closes the inli
 input('\x1b');
 assert.equal(input('\x1b[A'), undefined);
 assert.equal(mouseAt(mouseFirst, 'click', 10000), undefined);
+// Replay script-shaped shell fallbacks without running any command.
+const nodeScripts = [
+  `node -e 'const paths = ["/fixture/a", "/fixture/b"]; console.log(paths.map(path => ({ path })));'`,
+  `node - <<'NODE'\nconst paths = ["/fixture/a", "/fixture/b"];\nconsole.log(paths.map(path => ({ path })));\nNODE`,
+];
+for (const command of nodeScripts) {
+  assert.equal(toolLabel('bash', { command }), 'bash · Run Node.js script');
+  assert.doesNotMatch(toolLabel('bash', { command }), /paths|fixture|console|codemode/);
+}
+assert.equal(toolLabel('bash', { command: 'node --version' }), 'bash · node --version', 'non-script interpreter operations stay truthful');
+assert.equal(toolLabel('bash', { command: 'python3 -c "print(1)"' }), 'bash · Run Python script');
+assert.equal(toolLabel('bash', { command: 'node /fixture/check.mjs' }), 'bash · Run Node.js script · /fixture/check.mjs');
+assert.ok(toolLabel('bash', { command: 'custom-command ' + 'x'.repeat(10000) }).length < 80);
+event('message_end', { message: { role: 'user', content: 'synthetic script replay' } });
+const scripted = make('bash', 'script-label', { command: nodeScripts[1] });
+scripted.updateResult(result('# literal stdout **unchanged** _log_\nSynthetic script output', { exitCode: 0 }));
+assert.equal(paint(scripted).trim(), '▸ bash · Run Node.js script');
+assert.doesNotMatch(paint(scripted), /successful|Completed|✓|const paths/);
+scripted.setExpanded(true);
+let scriptPaint = scripted.render(120).join('\n');
+assert.match(stripAnsi(scriptPaint), /const paths/);
+assert.match(stripAnsi(scriptPaint), /# literal stdout \*\*unchanged\*\* _log_/, 'Bash stdout remains literal');
+assert.ok(scriptPaint.includes(themeModule.theme.getFgAnsi('syntaxKeyword')), 'heredoc source uses native JavaScript keyword colors');
+scripted.setExpanded(false);
+const exactError = `Error: ENAMETOOLONG: name too long, lstat '${'\"/fixture/very-long-path\",'.repeat(10000)}'`;
+const scriptFailure = make('bash', 'script-failure', { command: nodeScripts[0] });
+const failureRecording = { ...result(exactError, { error: exactError, exitCode: 1 }), isError: true };
+scriptFailure.updateResult(failureRecording);
+assert.equal(paint(scriptFailure).trim(), '▸ bash · Run Node.js script · ✗ Failed · Path too long');
+assert.ok(paint(scriptFailure, 500).trim().length < 100);
+scriptFailure.setExpanded(true);
+assert.match(paint(scriptFailure), /ENAMETOOLONG: name too long, lstat/);
+const styled = new ToolPane([{ id: 'styles', label: 'read', sections: function* () {
+  yield { text: '# Recorded heading\n**Emphasis** and `inline` code.\n```javascript\nconst paths = ["/fixture/a"];\n```', format: 'markdown' };
+  yield { text: '-const before = 1;\n+const after = 2;', format: 'code', language: 'diff' };
+} }], 'Styles', () => 20);
+styled.open = true; styled.theme = themeModule.theme;
+const styledRows = styled.render(120).join('\n');
+assert.match(stripAnsi(styledRows), /Recorded heading/);
+assert.doesNotMatch(stripAnsi(styledRows), /# Recorded heading|\*\*Emphasis\*\*/);
+assert.ok(styledRows.includes(themeModule.theme.getFgAnsi('syntaxKeyword')), 'fenced code uses native syntax colors');
+assert.ok(styledRows.includes(themeModule.theme.getFgAnsi('syntaxString')), 'code strings use their native token color');
+assert.ok(styledRows.includes(themeModule.theme.getFgAnsi('toolDiffAdded')), 'diff additions use native highlighting');
+assert.equal(failureRecording.content[0].text, exactError, 'expanded formatting leaves exact recorded output unchanged');
+assert.equal(failureRecording.details.error, exactError, 'expanded formatting leaves exact recorded details unchanged');
 // Track actual native shell intervals, without leaking a real clock if an assertion fails.
 const actualSetInterval = globalThis.setInterval, actualClearInterval = globalThis.clearInterval;
 const intervals = new Set();
@@ -319,7 +364,7 @@ try {
   event('session_start', { reason: 'resume' }); assert.equal(typeof input, 'function');
   running.invalidate(); assert.equal(intervals.size, 0, 'late old-session invalidation does not restart a timer');
   const resumed = make('read', 'resumed', { path: '/tmp/resumed' }); resumed.updateResult(result('resumed output'));
-  toggle(true); assert.match(paint(resumed), /read · \/tmp\/resumed · ✓ Completed/);
+  toggle(true); assert.match(paint(resumed), /read · \/tmp\/resumed/);
   event('session_compact'); event('session_tree');
   toggle(false);
   const shutdownRunning = make('bash', 'clock-shutdown', { command: 'printf safe' });
@@ -429,12 +474,12 @@ for (const message of nativeMessages) {
   if (message.role === 'toolResult') retainedRows.at(-1).updateResult(message);
 }
 assert.equal(retainedRows.length, 2);
-assert.match(paint(retainedRows[0]), /2 successful actions/);
+assert.match(paint(retainedRows[0]), /2 actions/);
 assert.equal(paint(retainedRows[1]), '');
-event('session_compact'); assert.match(paint(retainedRows[0]), /2 successful actions/);
+event('session_compact'); assert.match(paint(retainedRows[0]), /2 actions/);
 // Old native rows are stale after rebuild; newly replayed rows use the retained projection again.
 const replayed = make('read', 'retained-1', recordedArgs[1]); replayed.updateResult(result('retained output 1'));
-assert.match(paint(replayed), /2 successful actions/);
+assert.match(paint(replayed), /2 actions/);
 // Import only installed presentation functions; never initialize extension execution/watchers or launch an agent.
 const subagentRenderFile = path.join(runtime, 'node_modules/pi-subagents/src/tui/render.js');
 if (existsSync(subagentRenderFile)) {

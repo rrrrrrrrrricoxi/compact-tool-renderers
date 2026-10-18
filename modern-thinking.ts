@@ -14,7 +14,7 @@ export function recordedThinkingLabel(sources: readonly string[]): string {
   const heading = sample.match(/^ {0,3}#{1,6}[ \t]+([^\r\n]+)/m)?.[1];
   const first = sample.trimStart().match(/^[^\r\n]+/)?.[0] || "";
   const sentence = first.match(/^.*?[.!?。！？](?:\s|$)/u)?.[0] || first;
-  const extract = (heading || sentence).replace(/[\p{Cc}\p{Cf}]/gu, char => `\\u${char.codePointAt(0)!.toString(16).padStart(4, "0")}`).trim();
+  const extract = (heading || sentence).replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, (_match, bold, underlined) => bold || underlined).replace(/`([^`]+)`/g, "$1").replace(/[\p{Cc}\p{Cf}]/gu, char => `\\u${char.codePointAt(0)!.toString(16).padStart(4, "0")}`).trim();
   return truncateToWidth(extract || "Recorded thinking", 80, "…");
 }
 
@@ -117,7 +117,7 @@ export class ModernThinkingGroups {
       const sources = record.message.content.filter((block: any) => block.type === "thinking" && typeof block.thinking === "string" && block.thinking.trim()).map((block: any) => block.thinking);
       if (!record.sources || sources.length !== record.sources.length || sources.some((source: string, index: number) => source !== record.sources![index])) {
         record.sources = sources;
-        record.action = { id: String(record.id), label: recordedThinkingLabel(sources), sections: () => record.sources! };
+        record.action = { id: String(record.id), label: recordedThinkingLabel(sources), sections: () => record.sources!.map(text => ({ text, format: "markdown" as const })) };
         changed = true;
       }
       return record.action!;

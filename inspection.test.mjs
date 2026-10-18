@@ -36,7 +36,7 @@ const ctx = { hasUI: true, mode: 'tui', ui: {
 const emit = (name, value = {}) => { for (const fn of [...hooks.get(name) || []]) fn(value, ctx); };
 const mode = createDisplayMode();
 const dispose = registerInspection(pi, mode);
-pi.events.on('compact-renderer:inspect:v1', request => request.add({ id: 'fixture', kind: 'Tools', label: '2 successful actions', focus() { focused++; pi.events.emit('compact-renderer:focus:v1', { owner: 'tools', label: '2 successful actions', target: component => component === inner }); } }));
+pi.events.on('compact-renderer:inspect:v1', request => request.add({ id: 'fixture', kind: 'Tools', label: '2 actions', focus() { focused++; pi.events.emit('compact-renderer:focus:v1', { owner: 'tools', label: '2 actions', target: component => component === inner }); } }));
 try {
  emit('session_start'); assert.equal(widgets.size, 1); assert.deepEqual([...widgets.values()][0].render(80), []);
  await commands.get('inspect').handler('', ctx); assert.equal(focused, 1);

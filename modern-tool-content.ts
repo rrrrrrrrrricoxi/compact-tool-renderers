@@ -4,9 +4,9 @@ const scalar = (value: any) => value === undefined ? "undefined" : typeof value 
 
 /** Local field names keep structure readable without constructing a serialized payload.
  * Strings remain separate, lazy chunks; no traversal of later fields occurs before painting them. */
-export function* recordedValues(value: any, indent = 0, ancestors = new Set<object>()): Generator<PaneContent> {
-  if (typeof value === "string") { yield { text: value.length ? value : '""', indent }; return; }
-  if (value === null || typeof value !== "object") { yield { text: scalar(value), indent }; return; }
+export function* recordedValues(value: any, indent = 0, ancestors = new Set<object>(), languages: Record<string, string | undefined> = {}, language?: string): Generator<PaneContent> {
+  if (typeof value === "string") { yield { text: value.length ? value : '""', indent, ...(language ? { format: "code" as const, language } : {}) }; return; }
+  if (value === null || typeof value !== "object") { yield { text: scalar(value), indent, format: "code", language: "json" }; return; }
   if (ancestors.has(value)) { yield { text: "[circular reference]", indent }; return; }
   ancestors.add(value);
   let count = 0;
@@ -14,10 +14,10 @@ export function* recordedValues(value: any, indent = 0, ancestors = new Set<obje
     count++;
     const field = value[key];
     const label = Array.isArray(value) ? `[${key}]` : key;
-    if (field === null || typeof field !== "object" && typeof field !== "string") yield { text: `${label}: ${scalar(field)}`, indent, kind: "field" };
+    if (field === null || typeof field !== "object" && typeof field !== "string") yield { text: `${label}: ${scalar(field)}`, indent, kind: "field", format: "code", language: "json" };
     else {
       yield { text: `${label}:`, indent, kind: "field" };
-      yield* recordedValues(field, indent + 2, ancestors);
+      yield* recordedValues(field, indent + 2, ancestors, languages, languages[key]);
     }
   }
   if (!count) yield { text: Array.isArray(value) ? "[]" : "{}", indent };

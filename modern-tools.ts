@@ -1,5 +1,5 @@
 import { Text, truncateToWidth, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
-import type { ExtensionAPI, ToolRenderers } from "@earendil-works/pi-coding-agent";
+import { getLanguageFromPath, type ExtensionAPI, type ToolRenderers } from "@earendil-works/pi-coding-agent";
 import { NativeToolOwner, nativeToolsSupported, nativeToolContextSupported, nativeTextFallback } from "./modern-native-tools.ts";
 import { ToolPane, type PaneAction, type PaneContent } from "./modern-tool-pane.ts";
 import { recordedValues } from "./modern-tool-content.ts";
@@ -37,12 +37,40 @@ export function toolStatus(name: string, result: any, partial = false, error = f
   if (typeof details?.status === "string" && !["success", "ok", "completed"].includes(details.status)) return { status: "notice", note: `Recorded status: ${clean(details.status)}` };
   return { status: "success" };
 }
+/** Labels describe recorded operations, never infer a script's business purpose. */
+export function shellOperation(command: unknown): string {
+  if (typeof command !== "string" || !command.length) return "Shell command";
+  const sample = command.slice(0, 1024).trimStart();
+  if (!sample) return "Shell command";
+  const executable = sample.match(/^(?:(?:[A-Za-z_]\w*=(?:"[^"\n]*"|'[^'\n]*'|[^\s]+))\s+)*(?:env\s+)?(?:[\w./-]*\/)?(node(?:js)?|python[\d.]*|ruby|perl|deno|bun|bash|sh|zsh|pwsh|powershell)(?=\s|$)/i)?.[1].toLowerCase();
+  const interpreter = executable && (/^node/.test(executable) ? "Node.js" : /^python/.test(executable) ? "Python" : /^(?:bash|sh|zsh)$/.test(executable) ? executable : /^(?:pwsh|powershell)$/.test(executable) ? "PowerShell" : executable[0].toUpperCase() + executable.slice(1));
+  if (interpreter) {
+    // Only a literal filename directly after the interpreter is reliable metadata.
+    const file = sample.match(/^(?:[\w./-]*\/)?[\w.]+\s+([\w./-]+\.(?:[cm]?js|ts|py|rb|pl|sh|ps1))(?=\s|$)/)?.[1];
+    const script = file || /<<|(?:^|\s)(?:-[ecp]|--eval|--print|--command)(?=\s|=|$)|(?:^|\s)-(?:\s|$)/i.test(sample);
+    if (script) return `Run ${interpreter} script${file ? ` · ${clean(file).slice(0, 72)}` : ""}`;
+    if (command.length <= 100 && !/[\r\n;&|]/.test(command)) return clean(command);
+    return `${interpreter} command`;
+  }
+  if (command.length > 100 || /[\r\n]|<<|[;&|]|(?:^|\s)(?:-e|-c|--eval|--command)(?:\s|=|$)/i.test(sample)) {
+    const program = sample.match(/^(?:[\w./-]*\/)?([\w.-]+)(?=\s|$)/)?.[1];
+    return `Shell script${program ? ` · ${program}` : ""}`;
+  }
+  return clean(command);
+}
 export function toolLabel(name: string, args: any): string {
   const short = shortName(name);
   const target = args?.path ?? args?.file_path ?? args?.url ?? args?.pattern ?? args?.query;
-  if (["bash", "powershell"].includes(short)) return `${short} · ${clean(args?.command) || "Shell command"}`;
-  return `${clean(short)}${target === undefined ? "" : ` · ${clean(target)}`}`;
+  if (["bash", "powershell"].includes(short)) return `${short} · ${shellOperation(args?.command)}`;
+  return `${clean(short)}${target === undefined ? "" : ` · ${clean(target).slice(0, 100)}`}`;
 }
+function argumentLanguages(node: Node): Record<string, string | undefined> {
+  const path = node.args?.path ?? node.args?.file_path;
+  const language = typeof path === "string" ? getLanguageFromPath(path) : undefined;
+  return { command: shortName(node.name) === "powershell" ? "powershell" : "bash", code: "javascript", source: language,
+    content: language, oldText: language, newText: language, diff: "diff" };
+}
+
 function indicators(node: Node) {
   const details = node.result?.details;
   return `${details?.truncation?.truncated || details?.truncated ? " · output truncated" : ""}${details?.fullOutputPath ? " · full output saved" : ""}${details?.warning || details?.warnings?.length ? " · warning recorded" : ""}`;
@@ -77,16 +105,21 @@ function* sections(node: Node): Generator<PaneContent> {
   if (node.result) {
     yield { text: "Output", kind: "section" };
     for (const block of node.result.content ?? []) {
-      if (block.type === "text") yield String(block.text ?? "");
+      if (block.type === "text") {
+        const path = node.args?.path ?? node.args?.file_path;
+        const language = shortName(node.name) === "read" && typeof path === "string" ? getLanguageFromPath(path) : undefined;
+        const markdown = language === "markdown" || block.mimeType === "text/markdown";
+        yield { text: String(block.text ?? ""), ...(markdown ? { format: "markdown" as const } : language ? { format: "code" as const, language } : {}) };
+      }
       else if (block.type === "image") yield `[Recorded image: ${clean(block.mimeType)}; native preview is retained outside groups]`;
       else yield* recordedValues(block);
     }
   }
   if (node.result) yield " ";
-  yield { text: "Arguments", kind: "section" }; yield* recordedValues(node.args);
+  yield { text: "Arguments", kind: "section" }; yield* recordedValues(node.args, 0, new Set(), argumentLanguages(node));
   const details = node.result?.details;
   const emptyDetails = details !== null && typeof details === "object" && !Array.isArray(details) && Object.keys(details).length === 0;
-  if (details !== undefined && !emptyDetails) { yield " "; yield { text: "Details", kind: "section" }; yield* recordedValues(details); }
+  if (details !== undefined && !emptyDetails) { yield " "; yield { text: "Details", kind: "section" }; yield* recordedValues(details, 0, new Set(), { diff: "diff", code: "javascript" }); }
 }
 function failureReason(node: Node): string {
   if (node.status !== "failed") return "";
@@ -99,8 +132,15 @@ function failureReason(node: Node): string {
       if (reason) break;
     }
   }
-  if (!reason && typeof details?.exitCode === "number") reason = `exit ${details.exitCode}`;
-  return clean(reason).slice(0, 120);
+  // A short known category is enough here. Arbitrary prose and paths stay in Details.
+  const sample = reason.slice(0, 512);
+  const code = sample.match(/\b(ENAMETOOLONG|ENOENT|EACCES|EPERM|EISDIR|ENOTDIR|ETIMEDOUT|ECONNREFUSED|ENOSPC|ENOMEM|EEXIST)\b/)?.[1];
+  if (code) {
+    const categories: Record<string, string> = { ENAMETOOLONG: "Path too long", ENOENT: "File not found", EACCES: "Permission denied", EPERM: "Operation not permitted", EISDIR: "Expected a file", ENOTDIR: "Expected a directory", ETIMEDOUT: "Timed out", ECONNREFUSED: "Connection refused", ENOSPC: "No space left", ENOMEM: "Out of memory", EEXIST: "Already exists" };
+    return categories[code];
+  }
+  if (typeof details?.exitCode === "number") return `Command failed (exit ${details.exitCode})`;
+  return ["bash", "powershell"].includes(shortName(node.name)) ? "Command failed" : "Tool failed";
 }
 function questionState(node: Node): string {
   const statuses: Record<string, string> = { pending: "Pending", running: "Pending", failed: "Failed", answered: "Answered", cancelled: "Cancelled", unavailable: "Unavailable", unanswered: "Unanswered" };
@@ -159,7 +199,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       const counts = new Map<string, number>();
       for (const node of run) { const name = clean(shortName(node.name)); counts.set(name, (counts.get(name) || 0) + 1); }
       const kinds = [...counts].slice(0, 3).map(([name, count]) => `${name}${count > 1 ? ` ×${count}` : ""}`).join(", ");
-      group.pane.title = run.length === 1 ? `${toolLabel(run[0].name, run[0].args)} · ✓ Completed` : `${run.length} successful actions · ${kinds}${counts.size > 3 ? ` +${counts.size - 3} types` : ""} · ✓`;
+      group.pane.title = run.length === 1 ? toolLabel(run[0].name, run[0].args) : `${run.length} actions · ${kinds}${counts.size > 3 ? ` +${counts.size - 3} types` : ""}`;
       if (run.some(node => node.result?.details?.truncation?.truncated || node.result?.details?.truncated)) group.pane.title += " · output truncated";
       if (run.some(node => node.result?.details?.fullOutputPath)) group.pane.title += " · full output saved";
       if (run.some(node => node.result?.details?.warning || node.result?.details?.warnings?.length)) group.pane.title += " · warning recorded";
@@ -282,7 +322,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     const individual = (node: Node, theme?: any) => {
       node.pane ||= new ToolPane([action(node)], "", height);
       const status = node.note || node.status[0].toUpperCase() + node.status.slice(1);
-      node.pane.title = question(name) ? questionTitle(node) : `${toolLabel(name, node.args)} · ${node.status === "failed" ? "✗ Failed" : node.status === "success" ? "✓ Completed" : `… ${status}`}${indicators(node)}`;
+      node.pane.title = question(name) ? questionTitle(node) : `${toolLabel(name, node.args)}${node.status === "success" ? "" : ` · ${node.status === "failed" ? "✗ Failed" : `… ${status}`}`}${indicators(node)}`;
       const reason = failureReason(node);
       if (reason) node.pane.title += ` · ${reason}`;
       if (theme) {
@@ -313,8 +353,8 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       const errors = calls.filter((call: any) => ["error", "failed"].includes(call.status)).length;
       const cancelled = calls.filter((call: any) => call.status === "cancelled").length;
       const unresolved = calls.filter((call: any) => ["started", "running", "unavailable"].includes(call.status)).length;
-      const status = node.status === "failed" ? "✗ Failed" : context.isPartial ? context.executionStarted ? "… Running" : "Preparing" : "✓ Completed";
-      pane.title = `codemode · ${status}${calls.length ? ` · ${calls.length} nested call${calls.length === 1 ? "" : "s"}` : ""}${errors ? ` · ${errors} nested error${errors === 1 ? "" : "s"}` : ""}${cancelled ? ` · ${cancelled} nested cancelled` : ""}${unresolved ? ` · ${unresolved} nested unresolved` : ""}${typeof context.durationMs === "number" ? ` · ${(context.durationMs / 1000).toFixed(2)}s` : ""}${indicators(node)}`;
+      const status = node.status === "failed" ? "✗ Failed" : context.isPartial ? context.executionStarted ? "… Running" : "Preparing" : "";
+      pane.title = `codemode${status ? ` · ${status}` : ""}${calls.length ? ` · ${calls.length} nested call${calls.length === 1 ? "" : "s"}` : ""}${errors ? ` · ${errors} nested error${errors === 1 ? "" : "s"}` : ""}${cancelled ? ` · ${cancelled} nested cancelled` : ""}${unresolved ? ` · ${unresolved} nested unresolved` : ""}${typeof context.durationMs === "number" ? ` · ${(context.durationMs / 1000).toFixed(2)}s` : ""}${indicators(node)}`;
       pane.theme = theme; pane.tone = node.status === "failed" ? "error" : errors || cancelled || unresolved || context.isPartial ? "warning" : "toolTitle";
       pane.setNative(node.native.context(context, "call").lastComponent, node.native.context(context, "result").lastComponent);
       return pane;

@@ -94,6 +94,25 @@ export async function createPreview() {
       { name: 'models.classify', args: 'fixture/synthetic-classifier · sample-a', status: 'ok', durationMs: 690, cost: 0.0012 },
       { name: 'models.classify', args: 'fixture/synthetic-classifier · sample-b', status: 'ok', durationMs: 880, cost: 0.0018 },
     ] }, false, '', 1480);
+    assistant([{ type: 'text', text: 'The next card is an ordinary Bash fallback carrying a long Node script. It is separate from native code mode above. Expand it to inspect the exact recorded command and JavaScript colors.' }]);
+    const shellScript = [
+      "node - <<'NODE'",
+      '// Synthetic recording only. This script is never executed.',
+      'const paths = ["/fixture/sample-a.json", "/fixture/sample-b.json"];',
+      'const records = paths.map((path, index) => ({ path, index, available: true }));',
+      'console.log(JSON.stringify({ records, count: records.length }, null, 2));',
+      'NODE',
+    ].join('\n');
+    call('bash-node-singleton', 'bash', { command: shellScript }, 'Recorded JSON output: { "count": 2, "available": true }', { exitCode: 0 }, false,
+      '**Inspect the recorded script**\n\nCompare **path fields** and `count`.\n\n```javascript\nconst count = 2;\n```');
+    assistant([{ type: 'text', text: 'The previous script is one action. The next failure stays separate and keeps its exact long error inside the expanded card.' }]);
+    const longPathError = `Error: ENAMETOOLONG: name too long, lstat '${'/fixture/invented-long-path/'.repeat(180)}'`;
+    call('bash-node-path-failure', 'bash', { command: shellScript }, longPathError, { exitCode: 1, error: longPathError }, true);
+    assistant([{ type: 'text', text: 'The following four ordinary actions form a group. Expand them to compare source, diff, Markdown, and interpreter arguments with native syntax colors.' }]);
+    call('source-read', 'read', { path: '/fixture/source.js' }, 'const paths = ["/fixture/a", "/fixture/b"];\nexport const count = paths.length;');
+    call('source-edit', 'edit', { path: '/fixture/source.js', oldText: 'const count = 1;', newText: 'const count = 2;' }, 'Synthetic edit recorded.', { diff: '-const count = 1;\n+const count = 2;' });
+    call('markdown-read', 'read', { path: '/fixture/notes.md' }, '# Recorded notes\n\n**Complete:** both samples have `kg/L` units.\n\n- Keep the warning.\n- Compare the recorded count.\n\n```javascript\nconst count = 2;\n```');
+    call('bash-node-inline', 'bash', { command: `node -e 'const paths = ["/fixture/a", "/fixture/b"]; console.log(paths.length);'` }, '2', { exitCode: 0 });
     const question = {
       question: 'Which synthetic sample should the preview compare?',
       details: 'Display exercise only. Your answer does not start an analysis or approve an operation.',

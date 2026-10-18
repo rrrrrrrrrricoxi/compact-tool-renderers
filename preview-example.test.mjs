@@ -59,6 +59,19 @@ try {
   assert.match(expanded, /\$0\.0012/); assert.match(expanded, /\$0\.0018/);
   code.setExpanded(false);
   assert.doesNotMatch(paint(code), /const reads/);
+  // Find by recorded arguments as native component IDs are internal to Pi.
+  const scripts = ui.chatContainer.children.filter(item => item instanceof core.ToolExecutionComponent && item.toolName === 'bash' && item.args?.command?.startsWith("node - <<"));
+  assert.equal(scripts.length, 2, 'singleton and separate error use ordinary Bash renderers');
+  assert.equal(paint(scripts[0]).trim(), '▸ bash · Run Node.js script');
+  assert.match(paint(scripts[1]), /Path too long/);
+  assert.doesNotMatch(paint(scripts[1]), /ENAMETOOLONG|lstat|invented-long-path/);
+  scripts[0].setExpanded(true);
+  assert.match(paint(scripts[0]), /count/);
+  scripts[1].setExpanded(true);
+  assert.match(paint(scripts[1]), /ENAMETOOLONG: name too long, lstat/);
+  const fourGroup = ui.chatContainer.children.find(item => item instanceof core.ToolExecutionComponent && item.toolName === 'read' && item.args?.path === '/fixture/source.js');
+  assert.match(paint(fourGroup), /4 actions · read ×2, edit, bash/);
+  assert.doesNotMatch(paint(fourGroup), /successful|Completed|✓/);
   const skill = ui.chatContainer.children.find(item => item instanceof core.SkillInvocationMessageComponent);
   assert.ok(skill, 'actual transcript replay uses the native skill component');
   assert.match(paint(skill), /\[skill\] fixture-review/);

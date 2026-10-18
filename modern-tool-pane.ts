@@ -1,25 +1,12 @@
-import { matchesKey, truncateToWidth, wrapTextWithAnsi, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
+import { matchesKey, truncateToWidth, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
+import { richTextRows, type TextFormat } from "./modern-rich-text.ts";
 import { activityRow, cardContentWidth } from "./display-card.ts";
 
-export type PaneContent = string | { text: string; kind?: "section" | "field"; indent?: number };
+export type PaneContent = string | { text: string; kind?: "section" | "field"; indent?: number } & TextFormat;
 export type PaneAction = { id: string; label: string; sections: () => Iterable<PaneContent> };
 // Render only visited text chunks. Never split/highlight an entire result to paint a viewport.
 export function* textRows(text: string, width: number): Generator<string> {
-  let offset = 0;
-  while (offset < text.length) {
-    let end = Math.min(text.length, offset + 512);
-    const newline = text.slice(offset, end).indexOf("\n");
-    if (newline >= 0) end = offset + newline;
-    // Keep surrogate pairs intact at chunk boundaries.
-    if (end < text.length && end > offset && /[\uD800-\uDBFF]/.test(text[end - 1])) end--;
-    const chunk = text.slice(offset, end).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]|\p{Cf}/gu, c => {
-      const code = c.codePointAt(0)!;
-      return code > 0xffff ? `\\u{${code.toString(16)}}` : `\\u${code.toString(16).padStart(4, "0")}`;
-    }).replace(/\t/g, "    ");
-    yield* wrapTextWithAnsi(chunk, Math.max(1, width));
-    offset = end + (text[end] === "\n" ? 1 : 0);
-  }
-  if (!text.length) yield "(empty)";
+  yield* richTextRows(text, width);
 }
 
 /** Inline viewport. Expansion belongs to each action, never to a native renderer cache. */
@@ -83,7 +70,7 @@ export class ToolPane {
       if (this.directDetails || this.expanded.has(action.id)) for (const section of action.sections()) {
         const content = typeof section === "string" ? { text: section } : section;
         const indent = detailsIndent + " ".repeat(Math.min(content.indent || 0, Math.max(0, width - detailsIndent.length - 1)));
-        for (const row of textRows(content.text, Math.max(1, width - indent.length))) {
+        for (const row of richTextRows(content.text, Math.max(1, width - indent.length), content)) {
           if (content.kind) this.rowKinds.set(this.rows.length, content.kind);
           yield indent + row;
         }

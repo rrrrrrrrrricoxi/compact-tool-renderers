@@ -1,5 +1,12 @@
 # Release notes
 
+## 2.0.1 — Readable inspection and concise summaries
+
+- Show compact operation labels for embedded scripts and short failure categories. Keep exact commands and errors in expanded details.
+- Label groups as `N actions` and omit redundant success labels, including code mode.
+- Restore native syntax colors for expanded source, commands, and diffs. Format Markdown files and recorded thinking while keeping shell output literal.
+- Keep formatting work bounded to visited content and preserve transcript data, focus controls, and separate native code-mode inspection.
+
 ## 2.0.0 — Compact activity for Pi 1.3.0
 
 - Group consecutive successful completed calls behind neutral one-line summaries. Running calls, failures, questions, and background notices remain separate.

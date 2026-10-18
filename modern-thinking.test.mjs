@@ -131,6 +131,8 @@ try {
   longChoices[0].focus();assert.equal(key('\x14'),false,'Ctrl+T remains available to native Pi');assert.equal(ended,2);unsubEnded();
   assert.equal(JSON.stringify(longRounds),longOriginal,'long raw recorded transcript remains exact');
   assert.equal(recordedThinkingLabel(['# Existing recorded title\nLong body']), 'Existing recorded title');
+  assert.equal(recordedThinkingLabel(['**Inspect recorded fields**\nLong body']), 'Inspect recorded fields');
+  assert.equal(recordedThinkingLabel(['# **Inspect recorded fields**\nLong body']), 'Inspect recorded fields');
   assert.equal(recordedThinkingLabel(['First recorded sentence. Another thought.']), 'First recorded sentence.');
   assert.ok(!recordedThinkingLabel(['\x1b]52;c;secret\x07\u202eunsafe']).includes('\x1b'),'labels cannot execute terminal controls');
   for (const width of [1,2,3,8,24,70]) for (const line of cards[2].render(width)) assert.ok(tui.visibleWidth(line)<=width);
