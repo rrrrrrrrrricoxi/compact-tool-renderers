@@ -1,5 +1,11 @@
 # Release notes
 
+## 2.2.0 — Grouped subagent history
+
+- Group consecutive routine subagent updates and combine explicitly matched decision exchanges; keep failures and pending decisions separate. Use compact expandable rows for subagent calls and recognized asynchronous notices. Keep native Fleet and execution controls.
+- Distinguish launch acknowledgements, queued steering, delivery, decisions, replies, and completion. Preserve exact recorded content and Details.
+- Add native fallback, replay, lifecycle, focus, and bounded-output checks plus inert preview examples.
+
 ## 2.1.2 — Distinct codemode labels
 
 - Use native teal for the `codemode` label, with muted nested-call counts and timing. Keep ordinary action headings blue.

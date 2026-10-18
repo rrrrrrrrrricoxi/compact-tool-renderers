@@ -5,6 +5,8 @@ import { ToolPane, type PaneAction, type PaneContent } from "./modern-tool-pane.
 import { recordedValues } from "./modern-tool-content.ts";
 import { CodePane } from "./modern-code-pane.ts";
 import { cardContentWidth, activityRow } from "./display-card.ts";
+import { acquireSubagentProjection, hiddenSubagent } from "./modern-subagent-groups.ts";
+import { compactSubagent, subagentDecision, subagentTitle } from "./modern-subagents.ts";
 
 type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
 type Context = Parameters<NonNullable<ToolRenderers["renderCall"]>>[2];
@@ -13,14 +15,16 @@ type Node = { id: string; name: string; args: any; epoch: number; status: Status
 type Group = { members: Node[]; pane: ToolPane; signature: string };
 const shortName = (name: string) => name.split("__").at(-1) || name;
 export const isNativeSubagent = (name: string) => /^(?:subagents?(?:_|$)|fleet(?:_|$))/i.test(shortName(name));
-const usesNativePresentation = isNativeSubagent;
+const usesNativePresentation = (name: string) => isNativeSubagent(name) && !compactSubagent(name);
 const clean = (value: unknown) => String(value ?? "").slice(0, 240).replace(/[\uD800-\uDBFF]$/, "").replace(/[\x00-\x1f\x7f-\x9f]|\p{Cf}/gu, " ").trim();
 const question = (name: string) => shortName(name) === "ask_user_question";
 const json = (value: any) => { try { return JSON.stringify(value, null, 2) ?? "null"; } catch { return "[value could not be serialized]"; } };
 export function toolStatus(name: string, result: any, partial = false, error = false): { status: Status; note?: string } {
   if (error || result?.isError) return { status: "failed" };
+  if (compactSubagent(name) && result?.details?.steering?.state === "failed") return { status: "failed" };
   if (partial) return { status: "running" };
   const details = result?.details;
+  if (compactSubagent(name) && details?.steering?.state === "partial") return { status: "notice", note: "Partial steering result" };
   if (question(name)) {
     if (error || result?.isError) return { status: "failed" };
     const status = details?.status;
@@ -201,12 +205,14 @@ class DynamicComponent {
   constructor(private draw: (width: number) => string[], private mouse?: (event: TuiMouseEvent) => TuiMouseEventResult | undefined, readonly owner?: Node) {}
   render(width: number) { return this.draw(Math.max(1, width)); }
   handleMouse(event: TuiMouseEvent) { return this.mouse?.(event); }
+  [hiddenSubagent]?: () => boolean;
   invalidate() {}
 }
 
 /** Display-only tools: public renderer/event/input APIs; no messages or tool execution are changed. */
 export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
   if (!nativeToolsSupported) return () => {};
+  const subagents = acquireSubagentProjection(pi);
   let disposed = false;
   let epoch = 0;
   let nodes = new Map<string, Node>();
@@ -223,12 +229,13 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     for (const invalidate of [...new Set([...nodes.values()].map(node => node.invalidate).filter(Boolean))]) invalidate!();
   };
   const release = (preserveAnchor = false) => { if (focused) { focused.focused = false; if (!preserveAnchor && focused instanceof ToolPane) focused.releaseInspection(); focused = undefined; } };
-  const panes = () => [...nodes.values()].flatMap<ToolPane | CodePane>(node => node.group ? node.group.members[0] === node ? [node.group.pane] : [] : node.code ? node.code.content.supported ? [node.code] : [] : node.pane ? [node.pane] : []);
+  const subagentView = (node: Node) => { subagents.sync(); return compactSubagent(node.name) ? subagents.projection.viewTool(node.id) : undefined; };
+  const panes = () => [...nodes.values()].flatMap<ToolPane | CodePane>(node => subagentView(node) ? subagentView(node)!.hidden ? [] : [subagentView(node)!.pane] : node.group ? node.group.members[0] === node ? [node.group.pane] : [] : node.code ? node.code.content.supported ? [node.code] : [] : node.pane ? [node.pane] : []);
   const focusPane = (pane: ToolPane | CodePane) => {
     if (disposed || !mode.isEnabled() || !panes().includes(pane)) return;
     release(); focused = pane; pane.focused = true; pane.open = true; redraw();
     pi.events.emit("compact-renderer:focus:v1", { owner: "tools", label: pane.title,
-      target: (component: any) => component instanceof DynamicComponent && (component.owner?.group?.pane || component.owner?.code || component.owner?.pane) === pane });
+      target: (component: any) => component instanceof DynamicComponent && (component.owner && subagentView(component.owner)?.pane || component.owner?.group?.pane || component.owner?.code || component.owner?.pane) === pane });
   };
   const action = (node: Node): PaneAction => ({ id: node.id, label: toolLabel(node.name, node.args) + indicators(node), sections: () => sections(node), ...(question(node.name) ? {} : { details: () => actionDetails(node) }) });
   const refreshGroups = () => {
@@ -254,7 +261,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     };
     for (const node of nodes.values()) {
       node.group = undefined;
-      if (node.name === "codemode" || node.status !== "success" || node.result?.content?.some((block: any) => block.type === "image")) { finish(); continue; }
+      if (compactSubagent(node.name) || node.name === "codemode" || node.status !== "success" || node.result?.content?.some((block: any) => block.type === "image")) { finish(); continue; }
       if (run.length && node.epoch !== run[0].epoch) finish();
       run.push(node);
     }
@@ -369,18 +376,25 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       // History events may create a node before its renderer definition is available.
       if (!node.rendererAttached) { node.native.dispose(); node.native = new NativeToolOwner(name, stock); node.rendererAttached = true; }
       node.invalidate = context.invalidate;
+      if (compactSubagent(name) && !node.result) node.status = context.executionStarted ? "running" : "pending";
       return node;
     };
-    const singleCard = (node: Node) => question(name) || !!node.result && !["pending", "running", "success"].includes(node.status);
+    const singleCard = (node: Node) => compactSubagent(name) || question(name) || !!node.result && !["pending", "running", "success"].includes(node.status);
     const individual = (node: Node, theme?: any) => {
+      const projected = subagentView(node);
+      if (projected) {
+        const pane = projected.pane;
+        if (theme) { pane.theme = theme; pane.styleHeader = text => theme.fg(pane.headingTone, theme.bold(text)); }
+        return pane;
+      }
       node.pane ||= new ToolPane([action(node)], "", height);
       const status = node.note || node.status[0].toUpperCase() + node.status.slice(1);
-      node.pane.title = question(name) ? questionTitle(node) : `${toolLabel(name, node.args)}${node.status === "success" ? "" : ` · ${node.status === "failed" ? "✗ Failed" : `… ${status}`}`}${indicators(node)}`;
-      const reason = failureReason(node);
+      node.pane.title = compactSubagent(name) ? subagentTitle(name, node.args, node.result, node.status) + indicators(node) : question(name) ? questionTitle(node) : `${toolLabel(name, node.args)}${node.status === "success" ? "" : ` · ${node.status === "failed" ? "✗ Failed" : `… ${status}`}`}${indicators(node)}`;
+      const reason = compactSubagent(name) ? "" : failureReason(node);
       if (reason) node.pane.title += ` · ${reason}`;
       if (theme) {
         node.pane.theme = theme;
-        node.pane.styleHeader = text => theme.fg(node.status === "failed" ? "error" : question(name) ? "accent" : "mdLink", theme.bold(text));
+        node.pane.styleHeader = text => theme.fg(node.status === "failed" ? "error" : question(name) || subagentDecision(name, node.args) ? "accent" : compactSubagent(name) && node.status === "notice" ? "warning" : "mdLink", theme.bold(text));
       }
       return node.pane;
     };
@@ -424,10 +438,10 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
         }
         node.native.suspend(); syncExpansion(node, context.expanded);
         return new DynamicComponent(width => {
-          if (node.group) return [];
+          if (subagentView(node)?.hidden || node.group) return [];
           if (singleCard(node)) return individual(node, theme).render(width);
           return [activityRow(truncateToWidth(theme.fg("mdLink", theme.bold(`${node.result ? "" : "… "}${toolLabel(name, node.args)}${node.result ? "" : ` · ${context.executionStarted ? "running" : "preparing"}`}`)), cardContentWidth(width)), width, theme)];
-        }, event => mouse(!node.group && singleCard(node) ? individual(node, theme) : undefined, event), node);
+        }, event => mouse(!subagentView(node)?.hidden && !node.group && singleCard(node) ? individual(node, theme) : undefined, event), node);
       },
       renderResult(result, options, theme, context) {
         if (disposed || !nativeToolContextSupported(context) || stale(context)) return stock?.renderResult?.(result, options, theme, { ...context, executionStarted: false, state: {}, lastComponent: undefined }) ?? nativeTextFallback(result, theme);
@@ -440,6 +454,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
         }
         node.native.suspend(); syncExpansion(node, context.expanded);
         return new DynamicComponent(width => {
+          if (subagentView(node)?.hidden) return [];
           if (node.group) { const group = node.group; if (group.members[0] !== node) return []; group.pane.theme = theme; group.pane.styleHeader = text => theme.fg("mdLink", theme.bold(text)); return group.pane.render(width); }
           if (singleCard(node)) return [];
           return individual(node, theme).render(width);
@@ -447,5 +462,5 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       },
     };
   });
-  return () => { if (disposed) return; disposed = true; clear(); for (const off of subscriptions.splice(0)) off(); };
+  return () => { if (disposed) return; disposed = true; clear(); subagents.release(); for (const off of subscriptions.splice(0)) off(); };
 }

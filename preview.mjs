@@ -36,6 +36,7 @@ export async function createPreview() {
   };
   try {
     await fs.mkdir(agentDir, { recursive: true }); await fs.mkdir(cwd);
+    setEnv('PI_PREVIEW_SUBAGENT_RENDERERS', pathToFileURL(path.join(runtimePath, 'node_modules/pi-subagents/src/tui/subagent-messages.js')).href);
     setEnv('HOME', temporary); setEnv('PI_CODING_AGENT_DIR', agentDir); setEnv('PI_OFFLINE', '1');
     for (const key of Object.keys(process.env)) if (/(?:API_KEY|ACCESS_TOKEN|AUTH_TOKEN)$/.test(key)) setEnv(key, undefined);
     globalThis.fetch = async () => { throw new Error('Network disabled in renderer preview'); };
@@ -145,6 +146,19 @@ export async function createPreview() {
     assistant([{ type: 'text', text: 'Preview controls: /inspect selects a compact block. Left/Right selects an action or thinking round; Enter expands it; Up/Down scrolls. Esc or typing returns to the editor. Ctrl+O expands native codemode and [skill] cards. /fixture-question opens the existing question UI; /fixture-question text opens free text. /fixture-permission opens a harmless approval dialog. /compact-rendering switches display. Ctrl+D exits. All records and prices are invented; no script or model ran.' }]);
     if (!questionsPath) assistant([{ type: 'text', text: 'Native question UI is unavailable on this host. Recorded question cards still show schema-shaped examples. Set PI_QUESTIONS_PATH to an existing pi-questions/index.ts to enable /fixture-question.' }]);
     if (promptJump) assistant([{ type: 'text', text: 'Prompt navigation: /prompt-jump list selects one of the three invented user prompts; /prompt-jump back returns; /prompt-jump end follows the latest output.' }]);
+    assistant([{ type: 'text', text: 'Subagent display examples follow. These records are invented. No child or workflow was launched.' }]);
+    call('child-launch', 'subagent', { agent: 'worker', task: 'Review the synthetic sample', async: true }, 'Async: worker [fixture-worker]', { mode: 'single', asyncId: 'fixture-worker', runId: 'fixture-worker', results: [] });
+    call('child-scout-launch', 'subagent', { agent: 'scout', task: 'Check the synthetic field names', async: true }, 'Async: scout [fixture-scout]', { mode: 'single', asyncId: 'fixture-scout', runId: 'fixture-scout', results: [] });
+    call('child-status', 'subagent', { action: 'status', id: 'fixture-worker' }, 'Synthetic worker is running. This status does not establish completion.', { mode: 'management', agent: 'worker', results: [] });
+    call('child-steer-error', 'subagent', { action: 'steer', id: 'fixture-workflow', message: 'Retain the units.' }, "Workflow 'fixture-workflow' has no live foreground child. Choose an exact child ID.", { mode: 'management', results: [] }, true);
+    call('child-steer', 'subagent', { action: 'steer', id: 'fixture-worker', message: 'Retain the units.' }, 'Steering queued for async run fixture-worker. Queued does not mean consumed.', { mode: 'management', results: [], steering: { requestId: 'fixture-steer', state: 'pending', deliveryStatus: 'queued', sourceRunId: 'fixture-worker', targets: [{ index: 0, state: 'pending' }] } });
+    manager.appendCustomMessageEntry('subagent_supervisor_request', 'Should the synthetic report retain records with missing units?\n\nKeep the warning visible. No business data is involved.', true, { id: 'fixture-request', requestId: 'fixture-request', reason: 'need_decision', expectsReply: true, runId: 'fixture-worker', agent: 'worker', childIndex: 0, requestBody: 'Should the synthetic report retain records with missing units?', replyHint: 'Reply to fixture-request.' });
+    call('child-reply', 'subagent_supervisor', { action: 'reply', replyTo: 'fixture-request', message: 'Retain the record and its missing-unit warning.' }, 'Replied to supervisor request fixture-request.', { replyTo: 'fixture-request', runId: 'fixture-worker', agent: 'worker' });
+    manager.appendCustomEntry('subagent_supervisor_reply', { requestId: 'fixture-request', runId: 'fixture-worker', agent: 'worker', childIndex: 0, message: 'Retain the record and its missing-unit warning.' });
+    manager.appendCustomMessageEntry('subagent-notify', 'Synthetic worker completed. The report retains the missing-unit warning. Nothing was executed.', true, { runs: [{ agent: 'worker', status: 'completed' }] });
+    manager.appendCustomMessageEntry('subagent-notify', 'Synthetic researcher failed because the fixture input is unavailable. No external source was accessed.', true, { runs: [{ agent: 'researcher', status: 'failed' }] });
+    assistant([{ type: 'text', text: 'This visible reply separates the next activity. The decision below has no recorded reply and must stay pending.' }]);
+    manager.appendCustomMessageEntry('subagent_supervisor_request', 'Which synthetic sample should the scout inspect next?', true, { id: 'fixture-pending', requestId: 'fixture-pending', reason: 'need_decision', expectsReply: true, runId: 'fixture-scout', agent: 'scout', childIndex: 1, requestBody: 'Which synthetic sample should the scout inspect next?', replyHint: 'Reply to fixture-pending.' });
     manager.appendSessionInfo('compact-renderer-preview');
     const eventBus = core.createEventBus();
     const factory = async ({ sessionManager, sessionStartEvent }) => {

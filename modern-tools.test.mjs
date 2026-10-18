@@ -136,7 +136,7 @@ for (let iteration = 0; iteration < 8; iteration++) {
 toggle(false);
 const actualNow = Date.now; Date.now = () => 100000;
 try {
-  for (const outputPad of [0, 1, 3]) for (const name of ['bash', 'read', 'native-generic']) {
+  for (const outputPad of [0, 1, 3]) for (const name of ['bash', 'read', 'native-generic', 'subagent', 'subagent_supervisor', 'contact_supervisor']) {
     const args = name === 'bash' ? { command: 'printf safe' } : { path: '/tmp/shell-fixture' };
     const originalDefinition = native.get(name) || {};
     const wrappedDefinition = resolver(name, () => originalDefinition);
@@ -189,13 +189,17 @@ assert.doesNotMatch(paint(fail), /1\. bash/, 'failed action opens without a numb
 capture('Single failed action opened directly', fail);
 input('\x1b');
 assert.equal(toolStatus('read', result('Error is a word in successful recorded output')).status, 'success', 'prose never determines failure status');
-// Visible transcript boundaries, question contracts and native subagent exemption.
+// Visible transcript boundaries and native Fleet control presentation.
 event('message_end', { message: { role: 'user', content: 'next task' } });
 const next = make('read', 'e', { path: '/tmp/next.txt' }); next.updateResult(result('next'));
 assert.match(paint(next), /read · \/tmp\/next\.txt/);
-for (const name of ['subagent', 'subagent_message', 'subagents', 'fleet_status', 'mcp__fleet_status']) {
+for (const name of ['fleet_status', 'mcp__fleet_status']) {
   assert.equal(isNativeSubagent(name), true);
   const stock = {}; assert.equal(resolver(name, () => stock), stock);
+}
+for (const name of ['subagent', 'subagent_message', 'subagents', 'subagent_supervisor']) {
+  assert.equal(isNativeSubagent(name), true);
+  const stock = {}; assert.notEqual(resolver(name, () => stock), stock, 'subagent TOOL transcripts use compact rows');
 }
 assert.equal(toolStatus('bash', result('error'), true, true).status, 'failed', 'partial errors remain failed');
 for (const status of ['started', 'running', 'unavailable', 'cancelled']) assert.notEqual(toolStatus('custom', result('notice', { status })).status, 'success');
@@ -726,6 +730,101 @@ event('session_compact'); assert.match(paint(retainedRows[0]), /2 actions/);
 // Old native rows are stale after rebuild; newly replayed rows use the retained projection again.
 const replayed = make('read', 'retained-1', recordedArgs[1]); replayed.updateResult(result('retained output 1'));
 assert.match(paint(replayed), /2 actions/);
+// Isolate redraw accounting for the separate subagent lifecycle fixture session.
+redraws = 0;
+// Native pi-subagents contracts: receipts describe the operation, not an inferred child outcome.
+event('message_end', { message: { role: 'user', content: 'subagent fixtures' } });
+const beforeLaunch = make('read', 'before-launch', { path: '/tmp/before-launch' }); beforeLaunch.updateResult(result('before'));
+const launchArgs = { agent: 'worker', task: 'Keep this exact task\nincluding its second line.', async: true };
+const launchDetails = { mode: 'single', runId: 'run-raw-uuid', results: [], asyncId: 'run-raw-uuid', asyncDir: '/tmp/native-run' };
+const launchRecorded = JSON.stringify({ args: launchArgs, details: launchDetails });
+const launchOutput = 'Async: worker [run-raw-uuid]\nExact recorded launch receipt.';
+const launch = make('subagent', 'sub-launch', launchArgs);
+assert.match(paint(launch), /Subagent · launch · worker · Preparing/);
+launch.markExecutionStarted(); assert.match(paint(launch), /worker · Running/);
+launch.updateResult(result(launchOutput, launchDetails));
+assert.match(paint(launch), /Subagent · launch · worker · Started asynchronously/);
+assert.doesNotMatch(paint(launch), /Completed|run-raw-uuid|Exact recorded/);
+assert.equal(launch.render(100).length, 2); assertNeutral(launch.render(100));
+capture('Subagent asynchronous launch compact receipt', launch);
+const afterLaunch = make('read', 'after-launch', { path: '/tmp/after-launch' }); afterLaunch.updateResult(result('after'));
+assert.doesNotMatch(paint(beforeLaunch), /2 actions/); assert.doesNotMatch(paint(afterLaunch), /2 actions/, 'subagent lifecycle rows separate action groups');
+launch.setExpanded(true);
+assert.match(paint(launch), /Async: worker \[run-raw-uuid\]/);
+assert.match(paint(launch), /Exact recorded launch receipt/);
+assert.doesNotMatch(paint(launch), /Arguments|asyncDir|1\. subagent/, 'subagent expansion starts with recorded content');
+const subInspection = []; pi.events.emit('compact-renderer:inspect:v1', { add: item => subInspection.push(item) });
+subInspection.find(item => item.label.includes('Started asynchronously')).focus();
+input('\t'); input('\r');
+assert.match(paint(launch), /Arguments/); assert.match(paint(launch), /Keep this exact task/);
+assert.match(paint(launch), /including its second line/);
+// Details can exceed the body viewport; navigation reaches the exact native detail fields.
+for (let i = 0; i < 30; i++) input('\x1b[B');
+assert.match(paint(launch), /asyncDir|native-run/);
+input('\x1b'); launch.setExpanded(false);
+assert.equal(JSON.stringify({ args: launchArgs, details: launchDetails }), launchRecorded, 'subagent rendering leaves native arguments and details intact');
+const steer = make('subagent', 'sub-steer', { action: 'steer', id: 'run-raw-uuid', message: 'Exact steering instruction.' });
+const queuedDetails = { mode: 'management', results: [], steering: { requestId: 'request-raw-uuid', state: 'pending', deliveryStatus: 'queued', sourceRunId: 'run-raw-uuid', targets: [{ index: 0, state: 'queued' }] } };
+steer.updateResult(result('Steering queued for async run run-raw-uuid.\nExact steering instruction.', queuedDetails));
+assert.match(paint(steer), /Subagent · steer · Queued/);
+assert.doesNotMatch(paint(steer), /Delivered|Completed|steered|raw-uuid/);
+steer.setExpanded(true); assert.match(paint(steer), /Exact steering instruction/); steer.setExpanded(false);
+steer.updateResult(result('Steering delivered.', { ...queuedDetails, steering: { ...queuedDetails.steering, state: 'delivered', deliveryStatus: 'delivered', targets: [{ index: 0, state: 'delivered' }] } }));
+assert.match(paint(steer), /steer · Delivered/); assert.doesNotMatch(paint(steer), /Completed|Consumed/);
+for (const [state, tone, expected] of [['failed', 'error', '✗ Failed · Steering failed'], ['partial', 'warning', 'Partial steering result']]) {
+  steer.updateResult(result('Exact structured steering outcome.', { ...queuedDetails, steering: { ...queuedDetails.steering, state } }));
+  assert.ok(paint(steer).includes(expected));
+  assert.ok(steer.render(100)[1].includes(themeModule.theme.getFgAnsi(tone)), 'structured failure and partial receipts remain conspicuous without isError');
+}
+steer.updateResult({ ...result('Steering not delivered or queued: answer supervisor request request-raw-uuid first.', { mode: 'management', results: [] }), isError: true });
+assert.match(paint(steer), /✗ Failed · Steering rejected/); assert.doesNotMatch(paint(steer), /raw-uuid|answer supervisor|Delivered/);
+assert.ok(steer.render(100)[1].includes(themeModule.theme.getFgAnsi('error')));
+steer.setExpanded(true); assert.match(paint(steer), /Steering not delivered or queued: answer supervisor request request-raw-uuid first/); steer.setExpanded(false);
+capture('Subagent rejected steering compact failure', steer);
+const rejected = make('subagent', 'sub-rejected', { agent: 'worker', async: true });
+rejected.updateResult({ ...result('Capacity policy denied launch; raw-uuid. Exact policy explanation.', { mode: 'single', results: [], activeAsyncCapacity: { limit: 3, active: 3 } }), isError: true });
+assert.match(paint(rejected), /✗ Failed · Capacity reached/); assert.doesNotMatch(paint(rejected), /Started|Completed|raw-uuid/);
+rejected.setExpanded(true); assert.match(paint(rejected), /Exact policy explanation/); rejected.setExpanded(false);
+const foreground = make('subagent', 'sub-foreground', { agent: 'worker' });
+foreground.updateResult(result('Exact unresolved child result.', { mode: 'single', results: [{ agent: 'worker' }] }));
+assert.match(paint(foreground), /worker · Result recorded/); assert.doesNotMatch(paint(foreground), /Completed/);
+foreground.updateResult(result('Exact child result.', { mode: 'single', results: [{ agent: 'worker', exitCode: 0 }] }));
+assert.match(paint(foreground), /worker · Completed/);
+foreground.updateResult(result('Detached for supervisor coordination.', { mode: 'single', results: [{ agent: 'worker', exitCode: 0, detached: true }] }));
+assert.match(paint(foreground), /worker · Detached/); assert.doesNotMatch(paint(foreground), /Completed/);
+for (const [field, state] of [['stopped', 'Stopped'], ['timedOut', 'Timed out']]) {
+  foreground.updateResult(result('Exact halted child output.', { mode: 'single', results: [{ exitCode: 0, [field]: true }] }));
+  assert.match(paint(foreground), new RegExp(`worker · ${state}`)); assert.doesNotMatch(paint(foreground), /Completed/);
+}
+const statusCard = make('subagent', 'sub-status', { action: 'status', id: 'raw-run-id' });
+statusCard.updateResult(result('Run: raw-run-id\nState: running', { mode: 'management', results: [] }));
+assert.match(paint(statusCard), /Subagent · status · Status recorded/); assert.doesNotMatch(paint(statusCard), /Completed|raw-run-id/);
+const enableCard = make('subagents_enable', 'sub-enable', {});
+enableCard.updateResult(result('Enabled the native subagent tools.', { enabled: true }));
+assert.match(paint(enableCard), /Subagent · enable · Result recorded/); assert.doesNotMatch(paint(enableCard), /launch|Started|Completed/);
+enableCard.setExpanded(true); assert.match(paint(enableCard), /Enabled the native subagent tools/); enableCard.setExpanded(false);
+const supervisor = make('subagent_supervisor', 'sub-reply', { action: 'reply', replyTo: 'request-raw-uuid', message: 'Exact supervisor answer.' });
+supervisor.updateResult(result('Replied to supervisor request request-raw-uuid.', { replyTo: 'request-raw-uuid', runId: 'run-raw-uuid', agent: 'worker' }));
+assert.match(paint(supervisor), /Supervisor · reply · worker · Reply recorded/); assert.doesNotMatch(paint(supervisor), /raw-uuid|Consumed|Completed/);
+supervisor.setExpanded(true); assert.match(paint(supervisor), /Replied to supervisor request request-raw-uuid/); supervisor.setExpanded(false);
+const decisionCard = make('contact_supervisor', 'sub-decision', { reason: 'need_decision', message: 'Which route should I use?' });
+assert.match(paint(decisionCard), /Supervisor decision · Pending/);
+assert.ok(decisionCard.render(100)[1].includes(themeModule.theme.getFgAnsi('accent')));
+decisionCard.updateResult(result('**Reply from supervisor:**\nUse route B.', { requestId: 'request-raw-uuid', reason: 'need_decision' }));
+assert.match(paint(decisionCard), /Supervisor decision · Reply recorded/);
+decisionCard.setExpanded(true); assert.match(paint(decisionCard), /Use route B/); decisionCard.setExpanded(false);
+const unknownSubagent = make('subagent', 'sub-unknown', { workflow: true });
+unknownSubagent.updateResult(result('Unknown future recorded payload.\nSecond exact line.', { mode: 'future-shape', results: { unexpected: true }, asyncId: 'raw-uuid', status: 'future-state' }));
+assert.match(paint(unknownSubagent), /Result recorded/); assert.doesNotMatch(paint(unknownSubagent), /Started|Completed/);
+unknownSubagent.setExpanded(true); assert.match(paint(unknownSubagent), /Unknown future recorded payload/); assert.match(paint(unknownSubagent), /Second exact line/);
+unknownSubagent.updateResult({ ...result('Exact unknown error with raw-uuid.', { unrecognized: { native: 'keep me' } }), isError: true });
+assert.match(paint(unknownSubagent), /✗ Failed · Launch failed/); assert.match(paint(unknownSubagent), /Exact unknown error with raw-uuid/);
+const unknownInspection = []; pi.events.emit('compact-renderer:inspect:v1', { add: item => unknownInspection.push(item) });
+unknownInspection.find(item => item.label === 'Subagent · launch · ✗ Failed · Launch failed').focus();
+input('\t'); input('\r');
+assert.match(paint(unknownSubagent), /Recorded details/); assert.match(paint(unknownSubagent), /keep me/, 'unknown native fields remain accessible in Details');
+input('\x1b');
+unknownSubagent.setExpanded(false);
 // Import only installed presentation functions; never initialize extension execution/watchers or launch an agent.
 const subagentRenderFile = path.join(runtime, 'node_modules/pi-subagents/src/tui/render.js');
 if (existsSync(subagentRenderFile)) {
@@ -733,16 +832,21 @@ if (existsSync(subagentRenderFile)) {
   const fixture = result('stock subagent fixture output', { mode: 'single', results: [] });
   for (const renderResult of [renderSubagentResult, renderSubagentSummary]) {
     const installedRenderer = { renderResult };
-    assert.equal(resolver('subagent', () => installedRenderer), installedRenderer, 'installed native renderer is returned by identity');
+    toggle(false);
     const original = new ToolExecutionComponent('subagent', 'native-original', { agent: 'fixture' }, { showImages: false }, installedRenderer, { requestRender() {} }, '/synthetic-tools');
-    const exempted = new ToolExecutionComponent('subagent', 'native-exempted', { agent: 'fixture' }, { showImages: false }, resolver('subagent', () => installedRenderer), { requestRender() {} }, '/synthetic-tools');
+    const exempted = new ToolExecutionComponent('subagent', `native-wrapped-${renderResult.name}`, { agent: 'fixture' }, { showImages: false }, resolver('subagent', () => installedRenderer), { requestRender() {} }, '/synthetic-tools');
     for (const expanded of [false, true]) {
       original.updateResult(fixture); original.setExpanded(expanded);
       exempted.updateResult(fixture); exempted.setExpanded(expanded);
       assert.deepEqual(exempted.render(120), original.render(120));
       assert.doesNotMatch(paint(exempted), /successful action/);
+      toggle(true);
+      assert.match(paint(exempted), /Subagent · launch · fixture · Result recorded/);
+      assertNeutral(exempted.render(120));
+      toggle(false);
     }
   }
+  toggle(true);
 } else console.log('installed pi-subagents presentation check skipped: package unavailable');
 disposeProjection();
 if (process.env.PI_CARD_EVIDENCE_PATH) writeFileSync(process.env.PI_CARD_EVIDENCE_PATH, JSON.stringify({ runtime, evidence }, null, 2) + '\n');

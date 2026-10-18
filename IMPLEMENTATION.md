@@ -112,3 +112,15 @@ Content-first inspection and bounded `codemode` shipped in renderer 2.1.0 with P
 This release keeps question descriptions and options close together. Recorded selections receive an inline green checkmark; custom answers remain explicit. A bold purple question heading distinguishes the card from ordinary prose. The user refined the design to remove the header background and vertical rail. Questions now use the same gutter and indentation as other actions; only keyboard focus receives a background. Ordinary action and `codemode` headings use a restrained native category color; thinking headings are muted; failure headings remain red. Focus retains its separate selection background. Native user prompts, skill cards, and subagent/Fleet rendering remain unchanged. The exact feature name is `codemode`.
 
 The change affects display only. It does not execute tools, change permissions, rewrite recorded answers, or add model calls. The combined preview was made available on both machines, and the user approved proceeding after the final alignment refinement. Automated native checks passed on both hosts. Publication, guarded activation, and final installed-session acceptance are complete as recorded above. Isolated previews do not activate a release or modify running sessions.
+
+
+## Subagent transcript unification — renderer 2.2.0
+
+The user requested compact subagent transcript cards after seeing the native Fleet roster in operation. This supersedes the earlier exemption for stock subagent transcript presentation. Fleet and all execution/control behavior remain native. Known tool results and asynchronous notices use the common unfilled, expandable layout with bounded content and exact details. A queued request does not imply delivery or completion. Decision requests remain distinct from ordinary activity.
+
+The custom-message adapter is isolated to Pi 1.3.0 renderer resolution and retains the original renderer for native mode and unsupported shapes. It does not mutate transcript entries or register replacement tools. The preview uses invented records and imports only native presentation helpers, without initializing the subagent runtime. The grouped preview passed terminal visual review on the Mac and CCC on 2026-10-18. Publication and guarded activation follow that approval.
+
+
+### Subagent grouping revision
+
+The first subagent preview still had one heading per bookkeeping event. The user approved grouping consecutive routine updates and combining a matched decision exchange. Failures and unresolved decisions remain visible separately. Correlation uses recorded identifiers and transcript order, never similar labels or component render order. Exact entries stay unchanged; acknowledgements and technical identifiers remain available under Details. The revised preview adds adjacent worker/scout launches, a status update, a matched exchange, and an unanswered request after a visible reply.

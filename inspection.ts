@@ -61,11 +61,11 @@ export function registerInspection(pi: ExtensionAPI, mode: { isEnabled(): boolea
       // Opening a pane changes the layout height. Reapply once after the native
       // render frame has measured it; do not poll or replace the layout root.
       revealTimer = setTimeout(() => { revealTimer = undefined; if (!disposed) revealInspection(tui, event.target); }, 30);
-      ui?.setStatus?.('compact-inspection', `Inspecting ${event.owner === 'tools' ? 'tools' : event.owner === 'thinking' ? 'thinking' : 'prompt'} · Esc or type to return`);
+      ui?.setStatus?.('compact-inspection', `Inspecting ${event.owner === 'tools' ? 'tools' : event.owner === 'thinking' ? 'thinking' : event.owner === 'subagents' ? 'subagents' : 'prompt'} · Esc or type to return`);
     }),
   ];
   pi.registerCommand('inspect', {
-    description: 'Select a tool group, thinking round group, or prompt to inspect',
+    description: 'Select tools, subagent activity, thinking, or a prompt to inspect',
     async handler(_args, ctx) {
       if (!ctx.hasUI || disposed) return;
       if (!mode.isEnabled()) { ctx.ui.notify('Turn on /compact-rendering to inspect grouped blocks.', 'info'); return; }

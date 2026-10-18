@@ -14,7 +14,13 @@ export const fixtureTextQuestion = {
   details: 'Free-text display example. The label is not saved to a report.',
 };
 
-export default function preview(pi: any) {
+export default async function preview(pi: any) {
+  // Import only native presentation helpers; never initialize the subagent runtime.
+  if (process.env.PI_PREVIEW_SUBAGENT_RENDERERS) {
+    const native = await import(process.env.PI_PREVIEW_SUBAGENT_RENDERERS);
+    for (const type of native.SUBAGENT_MESSAGE_TYPES) pi.registerMessageRenderer(type, native.renderSubagentMessage);
+    for (const type of native.SUBAGENT_ENTRY_TYPES) pi.registerEntryRenderer(type, native.renderSubagentEntry);
+  }
   // Keep Pi's exact native renderers and schema, but never retain its script executor.
   createCodemodeExtension()({
     ...pi,
