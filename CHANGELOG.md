@@ -1,27 +1,18 @@
 # Release notes
 
-## 2.0.0 — Grouped display for Pi 1.3.0
+## 2.0.0 — Compact activity for Pi 1.3.0
 
-- Replace filled activity cards with neutral single-line summaries and indented expansion.
-- Add consistent code-mode collapse while retaining native expanded content; show only readable question history in question cards.
-
-- Open single-action cards directly to output, align headings by moving status marks after the title, and distinguish questions from user prompts.
-- Add descriptive collapsed template labels and richer native code-mode, question, and skill examples to the isolated preview.
-
-- Add native `/inspect` selection, visible header/item focus, viewport reveal, and a short footer status; keep Option-generated characters as editor input.
-- Remove redundant count/control footers, strengthen output/argument hierarchy, and give independently expandable thinking rounds extractive titles.
-- Preserve native code mode rendering, nested-call statuses, JavaScript highlighting, and Ctrl+O expansion.
-
-- Match native block height and consistent expanded indentation; release inspection when editing and keep mouse expansion from taking editor focus.
-- Restore original shaded cards, native status colors and padding; distinguish questions and thinking, improve body contrast, and show detailed controls only for focused panes.
-- Group only successful completed actions; keep running actions, failures, questions, and background notices separate.
-- Expand action outputs independently within bounded scrollable panes; provide keyboard and mouse controls.
-- Preserve stock pi-subagents/Fleet rendering, native images, original messages, and model input.
-- Group recorded thinking with native visibility fallback; collapse recognized prompt templates with inline original text.
-- Add a permission presentation interface with concise summaries, exact lazy Details, one decision, and unchanged caller policies.
+- Group consecutive successful completed calls behind neutral one-line summaries. Running calls, failures, questions, and background notices remain separate.
+- Expand individual actions inline with bounded scrolling. Single actions open directly to their output; questions retain readable question, choices, answer, and status without raw object dumps.
+- Give code mode a separate collapsible summary with script outcome and nested-call status. Preserve native highlighted code, results, timing, and cost inside the expanded viewport.
+- Group recorded thinking into independently expandable rounds. Collapse recognized prompt templates with descriptions or excerpts; retain the original text on expansion.
+- Add `/inspect` with a native picker, visible focus, and viewport reveal. Typing or Escape returns control to the editor; mouse expansion does not capture prompt submission. Keep `/compact-rendering` and retire legacy `/blocks`.
+- Preserve stock pi-subagents/Fleet UI, native images, stored messages, model inputs, and execution policy.
+- Add a permission presentation interface with concise summaries, exact lazy Details, and a single approval decision. Caller approval policies remain unchanged.
 - Fix synchronous redraw loops, native component cache reuse, shell timer cleanup, and misleading completion labels.
-- Replace the Pi 1.1 adapters and local-only regression suite with Pi 1.3 native tests and an isolated terminal preview.
-- Keep `/compact-rendering`; retire legacy `/blocks` and custom subagent display.
+- Replace Pi 1.1 adapters with guarded Pi 1.3 integration, native regression suites, and an isolated preview with no model, shell, or database execution.
+
+Expanded code-mode content uses native formatting internally; its visible viewport is bounded. Native compatibility guards fall back to stock display on unsupported shapes.
 
 ## 1.19.3
 
