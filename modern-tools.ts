@@ -7,6 +7,7 @@ import { CodePane } from "./modern-code-pane.ts";
 import { cardContentWidth, activityRow } from "./display-card.ts";
 import { acquireSubagentProjection, hiddenSubagent } from "./modern-subagent-groups.ts";
 import { compactSubagent, subagentDecision, subagentTitle } from "./modern-subagents.ts";
+import { groupIntent } from "./action-intent.ts";
 
 type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
 type Context = Parameters<NonNullable<ToolRenderers["renderCall"]>>[2];
@@ -249,10 +250,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       if (!group) group = { members: [], signature: "", pane: new ToolPane([], "", height) };
       if (group.signature !== signature) { group.pane.actions = run.map(action); group.pane.selected = Math.min(group.pane.selected, run.length - 1); group.pane.reset(); group.signature = signature; }
       group.members = run;
-      const counts = new Map<string, number>();
-      for (const node of run) { const name = clean(shortName(node.name)); counts.set(name, (counts.get(name) || 0) + 1); }
-      const kinds = [...counts].slice(0, 3).map(([name, count]) => `${name}${count > 1 ? ` ×${count}` : ""}`).join(", ");
-      group.pane.title = run.length === 1 ? toolLabel(run[0].name, run[0].args) : `${run.length} actions · ${kinds}${counts.size > 3 ? ` +${counts.size - 3} types` : ""}`;
+      group.pane.title = run.length === 1 ? toolLabel(run[0].name, run[0].args) : `${run.length} actions · ${groupIntent(run)}`;
       if (run.some(node => node.result?.details?.truncation?.truncated || node.result?.details?.truncated)) group.pane.title += " · output truncated";
       if (run.some(node => node.result?.details?.fullOutputPath)) group.pane.title += " · full output saved";
       if (run.some(node => node.result?.details?.warning || node.result?.details?.warnings?.length)) group.pane.title += " · warning recorded";
@@ -421,7 +419,8 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       const calls = pane.content.calls;
       const { errors, cancelled, unresolved } = pane.content;
       const status = node.status === "failed" ? "✗ Failed" : context.isPartial ? context.executionStarted ? "… Running" : "Preparing" : "";
-      pane.title = `codemode${status ? ` · ${status}` : ""}${calls.length ? ` · ${calls.length} nested call${calls.length === 1 ? "" : "s"}` : ""}${errors ? ` · ${errors} nested error${errors === 1 ? "" : "s"}` : ""}${cancelled ? ` · ${cancelled} nested cancelled` : ""}${unresolved ? ` · ${unresolved} nested unresolved` : ""}${typeof context.durationMs === "number" ? ` · ${(context.durationMs / 1000).toFixed(2)}s` : ""}${indicators(node)}`;
+      pane.heading = `codemode${status ? ` · ${status}` : ""} · ${pane.content.intent}`;
+      pane.title = `${pane.heading}${calls.length ? ` · ${calls.length} nested call${calls.length === 1 ? "" : "s"}` : ""}${errors ? ` · ${errors} nested error${errors === 1 ? "" : "s"}` : ""}${cancelled ? ` · ${cancelled} nested cancelled` : ""}${unresolved ? ` · ${unresolved} nested unresolved` : ""}${typeof context.durationMs === "number" ? ` · ${(context.durationMs / 1000).toFixed(2)}s` : ""}${indicators(node)}`;
       pane.setTheme(theme); pane.tone = node.status === "failed" ? "error" : errors || cancelled || unresolved && !context.isPartial ? "warning" : "syntaxVariable";
       return true;
     };

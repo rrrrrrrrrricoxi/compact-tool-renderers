@@ -446,7 +446,7 @@ clickSingle(densityWriteA, 2);
 assert.match(paint(densityWriteA), /Content alpha/);
 assert.doesNotMatch(paint(densityWriteA), /Successfully wrote|Arguments|Output|content:/);
 const densityChoices = []; pi.events.emit('compact-renderer:inspect:v1', { add: choice => densityChoices.push(choice) });
-densityChoices.find(choice => choice.label.includes('write ×2, read ×2')).focus();
+densityChoices.find(choice => choice.label.includes('Edit files and read files')).focus();
 input('\t');
 let detailsRows = densityWriteA.render(120);
 assert.match(stripAnsi(detailsRows.at(-1)), /Enter expand Details · Tab action/);
@@ -509,7 +509,7 @@ const laterHeadingRow = earlierLarge.render(120).findIndex(row => stripAnsi(row)
 clickSingle(earlierLarge, laterHeadingRow);
 inlinePane.expanded.add('density-earlier-large'); inlinePane.reset(); // Simulate another independently open sibling before the clicked action.
 const laterChoices = []; pi.events.emit('compact-renderer:inspect:v1', { add: choice => laterChoices.push(choice) });
-laterChoices.find(choice => choice.label === '2 actions · read ×2' && choice.id === laterChoices.at(-1).id).focus();
+laterChoices.find(choice => choice.label === '2 actions · Read files' && choice.id === laterChoices.at(-1).id).focus();
 input('\t');
 assert.match(paint(earlierLarge), /later small output[\s\S]*▸ Details/);
 assert.doesNotMatch(paint(earlierLarge), /primary first line/, 'Tab anchors at the mouse-selected sibling');

@@ -5,6 +5,7 @@ import { CodeContent } from "./modern-code-content.ts";
 /** Native-style codemode with lazy bounded text/call formatting. Native-off stays stock. */
 export class CodePane {
   open = false; focused = false; offset = 0;
+  heading = "codemode · Preparing";
   title = "codemode · Preparing"; theme?: any; tone = "syntaxVariable";
   content = new CodeContent();
   private rows: string[] = []; private iterator?: Iterator<string>; private done = false; private width = 0;
@@ -49,7 +50,7 @@ export class CodePane {
     const contentWidth = cardContentWidth(width);
     const title = `${this.open ? "▾" : "▸"} ${this.title}${this.focused ? " · focused" : ""}`;
     // Keep category identity separate from secondary counts/timing. Failures override both.
-    const label = `${this.open ? "▾" : "▸"} codemode`;
+    const label = `${this.open ? "▾" : "▸"} ${this.heading}`;
     const metadata = title.slice(label.length);
     const styled = this.theme
       ? this.theme.fg(this.tone === "error" ? "error" : "syntaxVariable", this.theme.bold(label)) +

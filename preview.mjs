@@ -96,6 +96,10 @@ export async function createPreview() {
       { name: 'models.classify', args: 'fixture/synthetic-classifier · sample-a', status: 'ok', durationMs: 690, cost: 0.0012 },
       { name: 'models.classify', args: 'fixture/synthetic-classifier · sample-b', status: 'ok', durationMs: 880, cost: 0.0018 },
     ] }, false, '', 1480);
+    call('code-inspect', 'codemode', { code: 'text(await tools.bash({command: "jq .status /fixture/record.json"}));\ntext(await tools.bash({command: "gh pr checks 327"}));' }, 'Synthetic inspection only. No files or pull requests were accessed.', { calls: [
+      { name: 'bash', args: '{"command":"jq .status /fixture/record.json"}', status: 'ok', durationMs: 12 },
+      { name: 'bash', args: '{"command":"gh pr checks 327"}', status: 'ok', durationMs: 21 },
+    ] }, false, '', 33);
     assistant([{ type: 'text', text: 'The next card is an ordinary Bash fallback carrying a long Node script. It is separate from native codemode above. Expand it to inspect the exact recorded command and JavaScript colors.' }]);
     const shellScript = [
       "node - <<'NODE'",
@@ -150,6 +154,17 @@ export async function createPreview() {
     for (const topic of ['tool-reference/parameter-reference', 'tool-reference/execution-parameters', 'tool-reference/fork-context-details']) {
       call(`guide-${topic}`, 'subagent', { action: 'guide', options: { topic } }, `# ${topic}\n\nSynthetic guide content for inspection. No guide was fetched and no task was started.`, { mode: 'management', results: [] });
     }
+    const workflow = [
+      '// Review the synthetic sample records',
+      'const brief = `Read /fixture/AGENTS.md before inspecting the samples.',
+      ...Array.from({ length: 70 }, (_, i) => `Synthetic instruction ${i + 1}: retain recorded units and missing-field warnings.`),
+      '`;',
+      'return await runs.all([',
+      '  { agent: "scout", task: brief + " Inspect sample A." },',
+      '  { agent: "scout", task: brief + " Inspect sample B." },',
+      ']);',
+    ].join('\n');
+    assistant([{ type: 'text', text: 'The recorded workflow below is a display example. Nothing will execute.\n\n```js workflow\n' + workflow + '\n```\n\nThe following subagent records remain separate from this script.' }]);
     call('child-launch', 'subagent', { agent: 'worker', task: 'Review the synthetic sample', async: true }, 'Async: worker [fixture-worker]', { mode: 'single', asyncId: 'fixture-worker', runId: 'fixture-worker', results: [] });
     call('child-scout-launch', 'subagent', { agent: 'scout', task: 'Check the synthetic field names', async: true }, 'Async: scout [fixture-scout]', { mode: 'single', asyncId: 'fixture-scout', runId: 'fixture-scout', results: [] });
     call('child-status', 'subagent', { action: 'status', id: 'fixture-worker' }, 'Synthetic worker is running. This status does not establish completion.', { mode: 'management', agent: 'worker', results: [] });

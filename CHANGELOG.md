@@ -1,5 +1,11 @@
 # Release notes
 
+## 2.3.0 — Workflow folding and operation summaries
+
+- Collapse complete assistant workflow fences without changing their execution source or surrounding prose. Expand through the existing inspection controls.
+- Add short recorded-operation summaries to ordinary action groups and codemode; retain counts, error states, exact arguments, and output. No model calls are added.
+- Remove the duplicate codemode heading from expanded content.
+
 ## 2.2.1 — Guide lookup grouping
 
 - Collapse consecutive completed subagent guide calls into one guide-lookup group. Keep runtime updates in their own groups and preserve failures, running calls, and visible conversation boundaries.

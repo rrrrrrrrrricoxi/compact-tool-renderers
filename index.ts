@@ -3,6 +3,7 @@ import { createDisplayMode } from './display-mode.ts';
 import { registerModernTools } from './modern-tools.ts';
 import { registerModernThinking } from './modern-thinking.ts';
 import { registerModernPrompts } from './modern-prompts.ts';
+import { registerModernWorkflows } from './modern-workflows.ts';
 import { registerModernSubagentMessages } from './modern-subagent-messages.ts';
 import { registerInspection } from './inspection.ts';
 import { registerPermissionPresentation } from './permission-presentation.ts';
@@ -25,6 +26,7 @@ export default function compactRenderer(pi: ExtensionAPI): void {
     disposers.push(registerModernTools(pi, mode));
     disposers.push(registerModernThinking(pi, mode));
     disposers.push(registerModernPrompts(pi, mode));
+    disposers.push(registerModernWorkflows(pi, mode));
     disposers.push(registerPermissionPresentation(pi, mode));
     disposers.push(registerModernSubagentMessages(pi, mode));
     disposers.push(registerInspection(pi, mode));

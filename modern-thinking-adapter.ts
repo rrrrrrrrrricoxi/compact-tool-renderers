@@ -1,5 +1,6 @@
 import { AssistantMessageComponent, VERSION } from "@earendil-works/pi-coding-agent";
 import { MouseRegion, Spacer, Text } from "@earendil-works/pi-tui";
+import { chainNativeMethod } from "./native-method-chain.ts";
 
 /** Private Pi 1.3.0 seam: only pure hidden-thinking assistant containers qualify.
  * Native Ctrl+T/per-run expansion and unknown component shapes always win. */
@@ -25,21 +26,17 @@ export function installModernThinkingAdapter(hooks: {
   if (version !== "1.3.0" || !["updateContent", "render", "setHideThinkingBlock"].every(key => typeof proto[key] === "function")) return;
   const owner = Symbol.for("compact-renderer:thinking-adapter:v1");
   proto[owner]?.();
-  const update = proto.updateContent, render = proto.render, mouse = proto.handleMouse;
-  const mouseDescriptor = Object.getOwnPropertyDescriptor(proto, "handleMouse");
   let disposed = false;
-  const updateWrapper = function(this: any, ...args: any[]) { const value = update.apply(this, args); if (!disposed) hooks.associate(this, args[0]); return value; };
-  const renderWrapper = function(this: any, width: number) { return !disposed && hooks.render(this, width) || render.call(this, width); };
-  const mouseWrapper = function(this: any, event: any) { const result = !disposed && hooks.mouse(this, event); return result || mouse?.call(this, event); };
+  const detachUpdate = chainNativeMethod(proto, "updateContent", function(this: any, update, ...args: any[]) { const value = update.apply(this, args); if (!disposed) hooks.associate(this, args[0]); return value; });
+  const detachRender = chainNativeMethod(proto, "render", function(this: any, render, width: number) { return !disposed && hooks.render(this, width) || render.call(this, width); });
+  const detachMouse = chainNativeMethod(proto, "handleMouse", function(this: any, mouse, event: any) { const result = !disposed && hooks.mouse(this, event); return result || mouse?.call(this, event); });
   const dispose = () => {
     if (disposed) return;
     disposed = true;
-    if (proto.updateContent === updateWrapper) proto.updateContent = update;
-    if (proto.render === renderWrapper) proto.render = render;
-    if (proto.handleMouse === mouseWrapper) { if (mouseDescriptor) Object.defineProperty(proto, "handleMouse", mouseDescriptor); else delete proto.handleMouse; }
+    detachMouse(); detachRender(); detachUpdate();
     if (proto[owner] === dispose) delete proto[owner];
     hooks.clear();
   };
-  proto.updateContent = updateWrapper; proto.render = renderWrapper; proto.handleMouse = mouseWrapper; proto[owner] = dispose;
+  proto[owner] = dispose;
   return dispose;
 }

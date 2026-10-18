@@ -1,5 +1,6 @@
 import { wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { richTextRows } from "./modern-rich-text.ts";
+import { codeIntent } from "./action-intent.ts";
 
 const missing = Symbol("unsupported accessor");
 const data = (object: any, key: string): any => {
@@ -33,6 +34,7 @@ export class CodeContent {
   calls: any[] = [];
   content: any[] = [];
   code = "";
+  intent = "Run code";
   private details: any;
   errors = 0; cancelled = 0; unresolved = 0; priced = 0; totalCost = 0;
   private visibleContent: { block: any; index: number }[] = [];
@@ -64,6 +66,7 @@ export class CodeContent {
       if (status === "running") this.unresolved++;
       if (cost) { this.priced++; this.totalCost += cost; }
     }
+    this.intent = codeIntent(args, this.calls);
     return true;
   }
   private *text(text: string, width: number, theme: any, token?: string, code = false): Generator<string> {
@@ -83,7 +86,6 @@ export class CodeContent {
   }
   *rows(width: number, theme: any, isError: boolean, hasDuration = false): Generator<string> {
     const fg = (token: string, text: string) => theme ? theme.fg(token, text) : text;
-    yield fg("toolTitle", theme ? theme.bold("codemode") : "codemode");
     yield* this.text(this.code, width, theme, undefined, true);
     if (this.calls.length) yield "";
     for (let i = 0; i < this.calls.length; i++) {

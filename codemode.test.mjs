@@ -33,7 +33,7 @@ try {
   code.markExecutionStarted();
   code.updateResult({ ...result(''), details: { calls: [{ name: 'read', args: '/fixture', status: 'running' }] } }, true);
   assert.equal(intervals.size, 1, 'collapsed execution retains one native timer');
-  assert.match(paint(code), /▸ codemode · … Running · 1 nested call/);
+  assert.match(paint(code), /▸ codemode · … Running · Read files · 1 nested call/);
   assert.equal(code.render(100).length, 2, 'native spacer plus one compact summary');
   assert.ok(code.render(100)[1].includes(themeModule.theme.getFgAnsi('syntaxVariable')), 'running codemode label uses native teal');
   assert.ok(code.render(100)[1].includes(themeModule.theme.getFgAnsi('muted')), 'counts and timing are secondary');
@@ -47,7 +47,7 @@ try {
   const before = JSON.stringify(final);
   code.updateResult(final);
   assert.equal(intervals.size, 0, 'native completion stops its timer');
-  assert.match(paint(code), /▸ codemode · 2 nested calls · 1 nested error · 0.75s/);
+  assert.match(paint(code), /▸ codemode · .+ · 2 nested calls · 1 nested error · 0.75s/);
   assert.doesNotMatch(paint(code), /✓|Completed/, 'successful code-mode summary omits redundant status');
   assert.doesNotMatch(paint(code), /✗ Failed|Recorded script output|Recorded nested failure/);
   assert.equal(toolStatus('codemode', final).status, 'success', 'handled nested errors do not fail the script');
@@ -61,6 +61,7 @@ try {
   assert.equal(pane.content.supported, true);
   assert.ok(code.render(140).some(row => row.includes(themeModule.theme.getFgAnsi('syntaxKeyword'))), 'native keyword colors remain');
   let visible = paint(code);
+  assert.doesNotMatch(visible, /^\s*codemode\s*$/m, 'outer summary is the only codemode heading');
   for (let index = 0; index < 12; index++) { mouse(code, 'wheel', 2, 2); visible += '\n' + paint(code); }
   for (const pattern of [/const value/, /✓ read/, /250ms/, /✗ model/, /500ms/, /\$0\.02/, /Recorded nested failure/, /Recorded script output/, /Took 0\.8s/]) assert.match(visible, pattern);
   assert.doesNotMatch(visible, /arguments\.code|successful action/);
@@ -78,7 +79,7 @@ try {
   mode.setEnabled(false);
   assert.match(paint(code), /Recorded script output/); assert.equal(code.callRendererComponent.constructor.name, 'Box');
   mode.setEnabled(true); code.setExpanded(false); assert.equal(code.render(100).length, 2);
-  const failed = { ...final, isError: true }; code.updateResult(failed); assert.match(paint(code), /✗ Failed · 2 nested calls · 1 nested error/);
+  const failed = { ...final, isError: true }; code.updateResult(failed); assert.match(paint(code), /✗ Failed · .+ · 2 nested calls · 1 nested error/);
   assert.ok(code.render(100)[1].includes(themeModule.theme.getFgAnsi('error')), 'failed codemode summary uses native red');
   code.updateResult(final);
   code.updateArgs({ code: Array.from({ length: 100 }, (_, index) => `text(${index});`).join('\n') });

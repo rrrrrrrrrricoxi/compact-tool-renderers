@@ -23,6 +23,10 @@ This repository is the authoritative source. The npm manifest stays `private: tr
 
 Thinking groups require Pi's native `hideThinkingBlock: true` preference. Pi Config seeds this preference only when absent, then preserves native changes. **Ctrl+T** still switches to Pi's full thinking display. Unsupported Pi versions or component shapes show native content instead of hiding it.
 
+Completed action groups and `codemode` show short operation summaries derived from recorded tool names and bounded arguments. These phrases describe supported operations, such as reading files or checking Git changes; they do not infer an unrecorded business goal. Unknown scripts retain a generic label. No extra model call is made. Expanded codemode starts with its source instead of repeating the outer title.
+
+Complete assistant `js workflow` or `javascript workflow` fences collapse into a separate **Subagent workflow** row. Surrounding prose remains visible. `/inspect` or a header click opens bounded, syntax-highlighted source; Esc or typing returns to the editor. This changes display only: the subagent runtime still receives the exact original assistant message. Unsupported or incomplete shapes retain native display.
+
 ## Controls
 
 `/compact-rendering` opens a native selector. Typed `on`, `off`, `toggle`, and `status` remain available. This display mode is session-local and starts enabled.

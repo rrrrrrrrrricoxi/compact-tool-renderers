@@ -35,9 +35,24 @@ try {
   assert.notEqual(renderers, registered, 'compact mode adds collapse around the native definition');
 
   // Replay the saved transcript through the real InteractiveMode, including its native skill parser.
+  const runner = runtime.session.extensionRunner;
+  const rendererErrors = [];
+  runner.onError(error => rendererErrors.push(error));
+  runner.setUIContext({ onTerminalInput() { return () => {}; }, setHiddenThinkingLabel() {}, setStatus() {}, setWidget() {}, notify() {} }, 'tui');
+  await runner.emit({ type: 'session_start', reason: 'resume' });
   const ui = new core.InteractiveMode(runtime, { tuiMode: 'fullscreen' });
   ui.updateTerminalTitle = () => {};
   ui.renderSessionEntries(manager.getBranch());
+  const workflow = ui.chatContainer.children.find(item => item.lastMessage?.content?.some(block => block.type === 'text' && block.text.includes('```js workflow')));
+  assert.ok(workflow, 'preview includes an assistant workflow, not a tool result');
+  const workflowSource = JSON.stringify(workflow.lastMessage);
+  const workflowRows = paint(workflow);
+  assert.match(workflowRows, /Subagent workflow/);
+  assert.doesNotMatch(workflowRows, /Synthetic instruction 70|const brief/);
+  assert.match(workflowRows, /Nothing will execute/);
+  assert.match(workflowRows, /following subagent records remain separate/);
+  assert.equal(JSON.stringify(workflow.lastMessage), workflowSource, 'workflow display preserves the execution source');
+  assert.deepEqual(rendererErrors, []);
   const code = ui.chatContainer.children.find(item => item instanceof core.ToolExecutionComponent && item.toolName === 'codemode');
   assert.ok(code, 'actual transcript replay creates a native codemode component');
   const collapsed = paint(code);
@@ -74,10 +89,10 @@ try {
   scripts[1].handleMouse({ type: 'click', button: 'left', x: 3, y: exactErrorRow, width: 100, height: scripts[1].render(100).length });
   assert.match(paint(scripts[1]), /ENAMETOOLONG: name too long, lstat/);
   const fourGroup = ui.chatContainer.children.find(item => item instanceof core.ToolExecutionComponent && item.toolName === 'read' && item.args?.path === '/fixture/source.js');
-  assert.match(paint(fourGroup), /4 actions · read ×2, edit, bash/);
+  assert.match(paint(fourGroup), /4 actions · Read files and edit files; and other actions/);
   assert.doesNotMatch(paint(fourGroup), /successful|Completed|✓/);
   const densityGroup = ui.chatContainer.children.find(item => item instanceof core.ToolExecutionComponent && item.toolName === 'write' && item.args?.path === '/fixture/sample-a.txt');
-  assert.match(paint(densityGroup), /4 actions · write ×2, read ×2/);
+  assert.match(paint(densityGroup), /4 actions · Edit files and read files/);
   densityGroup.setExpanded(true);
   assert.equal(densityGroup.render(100).length, 6, 'four tight sibling headings plus header and native spacer');
   const densityPane = densityGroup.resultRendererComponent.owner.group.pane;
