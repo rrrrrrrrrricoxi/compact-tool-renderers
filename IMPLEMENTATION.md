@@ -14,9 +14,19 @@ Authoritative package: rrrrrrrrrricoxi/compact-tool-renderers. The approved scop
 - [x] Native /compact-rendering selector and typed controls; no model/history mutations.
 - [x] Native lifecycle regression coverage: redraw/re-registration, stock component ownership, running-shell timer disposal, toggles, refresh/reload/resume/switch/compaction.
 - [x] Unicode/narrow layouts, bounded painting, focus/scroll and native fullscreen input checks. Human terminal appearance acceptance remains below.
-- [ ] Publish standalone version and pin it in Pi Config; remove competing embedded implementation.
-- [ ] User visual acceptance in local Herdr and mosh/tmux CCC with harmless fixtures.
-- [ ] Publish config, stage both hosts, guarded activation and actual startup-label checks.
+- [x] Publish standalone version and pin it in Pi Config; remove competing embedded implementation.
+- [x] User accepted the final quiet preview after terminal review; harmless native mosh/tmux checks also passed. Normal installed-session acceptance is tracked separately below.
+- [x] Publish config, stage both hosts, guarded activation and actual startup-label checks.
+
+## Release outcome — 2026-10-18
+
+This section supersedes the historical candidate status below. The user accepted the final quiet preview with “Looks good for now.” Published `v2.0.0` at `a3deec933cad02c527ef5b18c70124ce04e95de6`; Pi Config `pi-config-v1.6.0` pins that exact commit and replaces its embedded renderer. Prompt Jump `v0.2.0` is pinned separately. Both hosts activated through their deployment guards without stopping sessions.
+
+Final installed-package checks pass on MacBook and CCC: all nine renderer suites, actual native startup-resource labels with one copy each, and mode selectors. The Pi Config selector test now compares visible status state, allowing an idempotent clear of the inspection footer when a native selector opens. Permission policy and renderer behavior did not change for that test correction.
+
+The user requested a separate post-publication acceptance test. Pi Config `docs/compact-acceptance.md` contains runnable workspace setup, prompts, and a pending host-results table. It covers real model/tool interactions, inspection/editor return, code mode, question history, prompt navigation, and resume. No live test transcript is available yet; automated and preview evidence must not be reported as live-session acceptance.
+
+Known limit: expanded code mode retains Pi's native renderer. Its viewport limits emitted rows, but native components still format full content internally. Ordinary grouped output, recorded thinking, and permission Details have their own bounded readers. Do not claim that native code-mode formatting is lazy.
 
 ## Ownership and interface
 
