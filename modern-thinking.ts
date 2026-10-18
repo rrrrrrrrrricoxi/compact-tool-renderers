@@ -1,12 +1,23 @@
 import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import { hiddenThinkingShape, installModernThinkingAdapter } from "./modern-thinking-adapter.ts";
-import { RecordedTextPane, recordedPaneHeight } from "./modern-recorded-pane.ts";
-import { cardBlock, cardContentWidth, cardRow } from "./display-card.ts";
+import { recordedPaneHeight } from "./modern-recorded-pane.ts";
+import { ToolPane, type PaneAction } from "./modern-tool-pane.ts";
 
 type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
-type Round = { message: any; component?: any; kind: "round" | "bridge" | "boundary"; group?: ThinkingGroup };
-type ThinkingGroup = { members: Round[]; pane: RecordedTextPane; activeEpoch?: number; activeResult?: boolean };
+type Round = { id: number; sources?: string[]; action?: PaneAction; message: any; component?: any; kind: "round" | "bridge" | "boundary"; group?: ThinkingGroup };
+type ThinkingGroup = { members: Round[]; pane: ToolPane; activeEpoch?: number; activeResult?: boolean };
+/** The label is an extract from recorded text, never a generated summary.
+ * Limit work even when the first line has millions of characters. */
+export function recordedThinkingLabel(sources: readonly string[]): string {
+  const sample = Array.from((sources[0] || "").slice(0, 1024).replace(/[\uD800-\uDBFF]$/, "")).slice(0, 512).join("");
+  const heading = sample.match(/^ {0,3}#{1,6}[ \t]+([^\r\n]+)/m)?.[1];
+  const first = sample.trimStart().match(/^[^\r\n]+/)?.[0] || "";
+  const sentence = first.match(/^.*?[.!?。！？](?:\s|$)/u)?.[0] || first;
+  const extract = (heading || sentence).replace(/[\p{Cc}\p{Cf}]/gu, char => `\\u${char.codePointAt(0)!.toString(16).padStart(4, "0")}`).trim();
+  return truncateToWidth(extract || "Recorded thinking", 80, "…");
+}
+
 const hasThinking = (message: any) => (message?.content || []).some((b: any) => b.type === "thinking" && typeof b.thinking === "string" && b.thinking.trim());
 const classify = (message: any): Round["kind"] => {
   if (["error", "aborted", "length"].includes(message?.stopReason) || (message?.content || []).some((b: any) => b.type === "text" && b.text?.trim() || b.type === "toolCall" && ["ask_user_question", "question"].includes(b.name))) return "boundary";
@@ -28,7 +39,7 @@ export class ModernThinkingGroups {
   private selected?: ThinkingGroup;
   private layouts = new WeakMap<object, { width: number; height: number }>();
   focused = false;
-  constructor(private enabled: () => boolean, private theme: () => any, private focus: () => void) {}
+  constructor(private enabled: () => boolean, private theme: () => any, private focus: (inspection?: { target: (component: any) => boolean; label: string }) => void, private inspectionEnded: () => void = () => {}) {}
   clear() { this.records = []; this.aliases = new WeakMap(); this.components = new WeakMap(); this.boundaries = new WeakSet(); this.layouts = new WeakMap(); this.live = undefined; this.groups = []; this.selected = undefined; this.focused = false; this.dirty = true; this.epoch++; }
   rebuild(entries: readonly any[]) {
     this.clear();
@@ -45,7 +56,7 @@ export class ModernThinkingGroups {
       return;
     }
     let record = this.aliases.get(message) || (phase === "start" ? undefined : this.live);
-    if (!record) { record = { message, kind: classify(message) }; this.records.push(record); this.dirty = true; }
+    if (!record) { record = { id: this.records.length, message, kind: classify(message) }; this.records.push(record); this.dirty = true; }
     record.message = message; this.aliases.set(message, record);
     const kind = classify(message);
     if (record.kind !== kind) { record.kind = kind; this.dirty = true; }
@@ -67,7 +78,7 @@ export class ModernThinkingGroups {
     let members: Round[] = [];
     const flush = () => {
       if (!members.length) return;
-      const group = previous.get(members[0]) || { members: [], pane: new RecordedTextPane() };
+      const group = previous.get(members[0]) || { members: [], pane: new ToolPane([], "", recordedPaneHeight) };
       group.members = members;
       for (const record of members) record.group = group;
       this.groups.push(group); members = [];
@@ -94,43 +105,59 @@ export class ModernThinkingGroups {
     if (record && !hiddenThinkingShape(component, record.message)) this.epoch++;
     return record && record.component === component && this.active(record.group) ? { record, group: record.group } : undefined;
   }
-  private choose(group: ThinkingGroup) { this.selected = group; this.focused = true; this.focus(); }
+  private choose(group: ThinkingGroup) {
+    this.selected = group; this.focused = true;
+    const component = group.members.at(-1)?.component;
+    this.focus({ target: candidate => candidate === component, label: `Thinking · ${group.members.length} round${group.members.length === 1 ? "" : "s"}` });
+  }
+  private release() { this.focused = false; this.inspectionEnded(); }
   private sources(group: ThinkingGroup) {
-    const refs: string[] = [];
-    group.members.forEach((record, i) => {
-      refs.push(`Round ${i + 1}/${group.members.length}`);
-      for (const block of record.message.content) if (block.type === "thinking" && typeof block.thinking === "string" && block.thinking.trim()) refs.push(block.thinking);
+    let changed = group.pane.actions.length !== group.members.length || group.pane.actions.some((action, index) => action.id !== String(group.members[index]?.id));
+    group.pane.actions = group.members.map(record => {
+      const sources = record.message.content.filter((block: any) => block.type === "thinking" && typeof block.thinking === "string" && block.thinking.trim()).map((block: any) => block.thinking);
+      if (!record.sources || sources.length !== record.sources.length || sources.some((source: string, index: number) => source !== record.sources![index])) {
+        record.sources = sources;
+        record.action = { id: String(record.id), label: recordedThinkingLabel(sources), sections: () => record.sources! };
+        changed = true;
+      }
+      return record.action!;
     });
-    group.pane.setSources(refs);
+    if (changed) group.pane.reset();
+  }
+  inspectionChoices() {
+    this.regroup();
+    return this.groups.filter(group => this.active(group)).map(group => {
+      this.sources(group);
+      return {
+        id: `thinking:${group.members[0].id}`, kind: "Thinking" as const,
+        label: `Thinking · ${group.members.length} round${group.members.length === 1 ? "" : "s"} · ${group.pane.actions[0]?.label || ""}`,
+        focus: () => { if (this.active(group)) { group.pane.open = true; this.choose(group); } },
+        target: () => group.members.at(-1)?.component,
+      };
+    });
   }
   render(component: any, width: number): string[] | undefined {
     const match = this.association(component);
     if (!match) return;
     const { record, group } = match;
     if (group.members.at(-1) !== record) return [];
-    const pane = group.pane, focused = this.focused && this.selected === group;
-    width = Math.max(1, width);
-    const theme = this.theme(), innerWidth = cardContentWidth(width);
-    const label = `${pane.open ? "▾" : "▸"} Thinking · ${group.members.length} round${group.members.length === 1 ? "" : "s"}${focused ? " · focused · Enter toggles · Esc releases" : ""}`;
-    const paint = (line: string, heading = false) => cardRow(theme.fg(heading ? "accent" : "text", heading ? theme.bold(truncateToWidth(line, innerWidth, "…")) : truncateToWidth(line, innerWidth, "…")), width, theme, "customMessageBg");
-    const content = [paint(label, true)];
-    if (pane.open) {
-      this.sources(group);
-      const indent = innerWidth >= 12 ? "  " : "";
-      content.push(...pane.view(Math.max(1, innerWidth - indent.length), recordedPaneHeight()).map(line => paint(indent + line)));
-      content.push(paint(focused ? `↑/↓ scroll · Home first · ${pane.more ? "more below" : "end"} · Ctrl+T native` : `${pane.more ? "More below · " : ""}Alt+T to inspect`));
-    }
-    const rows = ["", ...cardBlock(content, width, theme, "customMessageBg")];
+    const pane = group.pane, theme = this.theme();
+    this.sources(group);
+    pane.title = `Thinking · ${group.members.length} round${group.members.length === 1 ? "" : "s"}`;
+    pane.focused = this.focused && this.selected === group;
+    pane.theme = theme; pane.background = "customMessageBg"; pane.itemName = "round";
+    pane.styleHeader = text => theme.fg("accent", theme.bold(text));
+    const rows = ["", ...pane.render(Math.max(1, width))];
     this.layouts.set(component, { width, height: rows.length });
     return rows;
   }
   mouse(component: any, event: any) {
-    const match = this.association(component);
-    const layout = this.layouts.get(component);
+    const match = this.association(component), layout = this.layouts.get(component);
     if (!match || match.group.members.at(-1) !== match.record || !layout || event.x < 0 || event.x >= layout.width || event.y < 1 || event.y >= layout.height) return;
-    if (event.type === "click" && event.button === "left" && event.y === 2) { this.focused = false; this.focus(); match.group.pane.open = !match.group.pane.open; return { handled: true, render: true }; }
-    if (event.type === "wheel" && match.group.pane.open) { this.focused = false; this.focus(); match.group.pane.move(event.wheelDelta > 0 ? "down" : "up", recordedPaneHeight()); return { handled: true, render: true }; }
-    if (event.type === "click" && event.button === "left") return { handled: true, render: false };
+    // Mouse inspection never takes keyboard focus from the native editor.
+    const handled = match.group.pane.handleMouse({ ...event, y: event.y - 1 });
+    if (handled) { this.focused = false; match.group.pane.focused = false; this.focus(); }
+    return handled;
   }
   input(data: string): boolean {
     if (!this.enabled()) { this.focused = false; return false; }
@@ -143,11 +170,9 @@ export class ModernThinkingGroups {
       return true;
     }
     if (!this.focused || !this.active(this.selected)) { this.focused = false; return false; }
-    if (matchesKey(data, "escape")) { this.focused = false; return true; }
-    if (matchesKey(data, "enter")) { this.selected.pane.open = !this.selected.pane.open; return true; }
-    if (!this.selected.pane.open) { this.focused = false; return false; }
-    for (const direction of ["up", "down", "pageUp", "pageDown", "home"] as const) if (matchesKey(data, direction)) { this.selected.pane.move(direction, recordedPaneHeight()); return true; }
-    this.focused = false;
+    if (matchesKey(data, "escape")) { this.release(); return true; }
+    if (this.selected.pane.handle(data)) return true;
+    this.release();
     return false;
   }
 }
@@ -163,7 +188,10 @@ export function registerModernThinking(pi: ExtensionAPI, mode: Mode): () => void
     stop();
     if (ctx.mode !== "tui" || typeof ctx.ui.setHiddenThinkingLabel !== "function") return;
     const ui = ctx.ui, theme = ui.theme;
-    groups = new ModernThinkingGroups(() => mode.isEnabled(), () => theme, () => pi.events.emit("compact-renderer:focus:v1", { owner: "thinking" }));
+    groups = new ModernThinkingGroups(() => mode.isEnabled(), () => theme, inspection => {
+      redraw?.();
+      pi.events.emit("compact-renderer:focus:v1", { owner: inspection ? "thinking" : "editor", ...inspection });
+    }, () => pi.events.emit("compact-renderer:inspection-ended:v1", { owner: "thinking" }));
     // Match the native transcript sequence, including retained compaction entries.
     const sessions = ctx.sessionManager;
     groups.rebuild(typeof sessions.buildContextEntries === "function" ? sessions.buildContextEntries() : sessions.getBranch());
@@ -182,6 +210,7 @@ export function registerModernThinking(pi: ExtensionAPI, mode: Mode): () => void
   for (const [event, phase] of [["message_start", "start"], ["message_update", "update"], ["message_end", "end"]] as const) subscriptions.push(pi.on(event, (event: any) => groups?.observe(phase, event.message)));
   subscriptions.push(pi.on("ui_prompt_start", () => { if (groups) groups.focused = false; }));
   subscriptions.push(pi.on("session_shutdown", stop));
+  subscriptions.push(pi.events.on("compact-renderer:inspect:v1", (event: any) => { for (const choice of groups?.inspectionChoices() || []) event?.add?.(choice); }));
   subscriptions.push(pi.events.on("compact-renderer:focus:v1", (event: any) => { if (event?.owner !== "thinking" && groups) groups.focused = false; }));
   subscriptions.push(mode.onChange(() => { if (groups) groups.focused = false; redraw?.(); }));
   const dispose = () => { if (disposed) return; disposed = true; for (const unsub of subscriptions) unsub?.(); const repaint = redraw; stop(); if (shared[owner] === dispose) delete shared[owner]; repaint?.(); };

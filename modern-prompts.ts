@@ -48,7 +48,11 @@ export function registerModernPrompts(pi: ExtensionAPI, mode: Mode): () => void 
   let focused = false, active = false, disposed = false, revision = 0, redraw: (() => void) | undefined, input: (() => void) | undefined;
   const invalidate = () => { for (const card of cards.values()) invalidateModernPrompt(card.component); };
   const release = () => { if (focused) { focused = false; revision++; } };
-  const select = (card: PromptCard) => { selected = card; focused = true; pi.events.emit("compact-renderer:focus:v1", { owner: "prompts" }); };
+  const select = (card: PromptCard, open = false) => {
+    selected = card; focused = true; if (open) card.open = true;
+    revision++; redraw?.();
+    pi.events.emit("compact-renderer:focus:v1", { owner: "prompts", label: `Prompt /${card.name}`, target: (component: any) => component === card.component });
+  };
   const adapter = installModernPromptAdapter({
     render(component, markdown, original) {
       if (disposed || !active) return original();
@@ -75,7 +79,7 @@ export function registerModernPrompts(pi: ExtensionAPI, mode: Mode): () => void 
   pi.registerMarkdownTransformer((markdown, context) => {
     if (disposed || !active || !adapter || !mode.isEnabled() || context.messageType !== "user" || !rendering || markdown !== rendering.original) return markdown;
     const label = rendering.name.replace(/[\\`*_\[\]<>\p{Cc}\p{Cf}]/gu, "");
-    const heading = `**${rendering.open ? "▾" : "▸"} prompt · /${label}** · ${focused && selected === rendering ? "Esc releases · " : "Alt+I focuses · "}Enter ${rendering.open ? "collapses" : "expands"}`;
+    const heading = `**${rendering.open ? "▾" : "▸"} prompt · /${label}**${focused && selected === rendering ? ` · Enter ${rendering.open ? "collapses" : "expands"} · Esc returns` : ""}`;
     return rendering.open ? `${heading}\n\n${markdown}` : heading;
   });
   const reset = (_event: unknown, ctx: any) => {
@@ -98,14 +102,18 @@ export function registerModernPrompts(pi: ExtensionAPI, mode: Mode): () => void 
         revision++; redraw?.(); return { consume: true };
       }
       if (!focused || !selected || !cards.has(selected.component)) return;
-      if (matchesKey(data, "escape")) { release(); redraw?.(); return { consume: true }; }
+      if (matchesKey(data, "escape")) { release(); pi.events.emit("compact-renderer:inspection-ended:v1", {}); redraw?.(); return { consume: true }; }
       if (matchesKey(data, "enter")) { selected.open = !selected.open; revision++; redraw?.(); return { consume: true }; }
-      release(); redraw?.();
+      release(); pi.events.emit("compact-renderer:inspection-ended:v1", {}); redraw?.();
     });
     redraw?.();
   };
   const subscriptions: (() => void)[] = [];
   for (const event of ["session_start", "session_tree", "session_compact"] as const) subscriptions.push(pi.on(event, reset));
+  subscriptions.push(pi.events.on("compact-renderer:inspect:v1", (request: any) => {
+    if (disposed || !active || !mode.isEnabled()) return;
+    [...cards.values()].forEach((card, index) => request?.add?.({ id: `prompt-${index}`, kind: "Prompt", label: `/${card.name}`, focus: () => { if (!disposed && active && mode.isEnabled() && cards.get(card.component) === card) select(card, true); } }));
+  }));
   subscriptions.push(pi.on("ui_prompt_start", release));
   subscriptions.push(pi.on("session_shutdown", () => { active = false; invalidate(); input?.(); input = undefined; redraw = undefined; cards.clear(); selected = undefined; rendering = undefined; release(); }));
   subscriptions.push(pi.events.on("compact-renderer:focus:v1", (event: any) => { if (event?.owner !== "prompts") release(); }));

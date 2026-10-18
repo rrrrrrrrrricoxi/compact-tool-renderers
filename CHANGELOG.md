@@ -2,6 +2,10 @@
 
 ## 2.0.0 — Grouped display for Pi 1.3.0
 
+- Add native `/inspect` selection, visible header/item focus, viewport reveal, and a short footer status; keep Option-generated characters as editor input.
+- Remove redundant count/control footers, strengthen output/argument hierarchy, and give independently expandable thinking rounds extractive titles.
+- Preserve native code mode rendering, nested-call statuses, JavaScript highlighting, and Ctrl+O expansion.
+
 - Match native block height and consistent expanded indentation; release inspection when editing and keep mouse expansion from taking editor focus.
 - Restore original shaded cards, native status colors and padding; distinguish questions and thinking, improve body contrast, and show detailed controls only for focused panes.
 - Group only successful completed actions; keep running actions, failures, questions, and background notices separate.

@@ -33,9 +33,9 @@ const call = (id, name, args, output, details = {}, isError = false, thinking = 
   append({ role: 'toolResult', toolCallId: id, toolName: name, content: [{ type: 'text', text: output }], details, isError });
 };
 append({ role: 'user', content: template });
-call('read-1', 'read', { path: '/fixture/example.txt' }, 'Recorded first line\nRecorded second line', {}, false, 'Invented recorded thinking: inspect the sample file. This is fixture text, not model reasoning.');
+call('read-1', 'read', { path: '/fixture/example.txt' }, 'Recorded first line\nRecorded second line', {}, false, '# Inspect the sample fields\n\n' + Array.from({ length: 70 }, (_, i) => `Synthetic paragraph ${i + 1}: compare the sample identifier, recorded units, and required fields. This is invented preview text, not model reasoning.`).join('\n\n'));
 call('shell-1', 'bash', { command: 'printf sample' }, Array.from({ length: 250 }, (_, i) => `Example row ${i + 1} · 中文 · coating units kg/L`).join('\n'), {}, false,
-  'Invented recorded second round. The sample output is long enough to test bounded scrolling.');
+  '# Compare the recorded output\n\n' + Array.from({ length: 70 }, (_, i) => `Synthetic paragraph ${i + 1}: inspect the fixture output and retain missing-value warnings. This is invented preview text for scrolling tests.`).join('\n\n'));
 call('edit-1', 'edit', { path: '/fixture/example.txt', oldText: 'before', newText: 'after' }, 'Recorded edit completed.', { warning: 'Example warning retained in the group label.' });
 assistant([{ type: 'text', text: 'Visible reply: the three completed actions above form one group. This reply separates the next group.' }]);
 append({ role: 'user', content: 'Show the recorded question and failure examples.' });
@@ -44,7 +44,7 @@ call('failed-1', 'bash', { command: 'fixture-failure' }, 'Invented failure: samp
 call('question-2', 'ask_user_question', { question: 'Cancelled example' }, 'No answer recorded.', { status: 'cancelled', question: 'Cancelled example' });
 append({ role: 'user', content: 'Show one final successful action.' });
 call('read-2', 'read', { path: '/fixture/last.txt' }, 'Recorded final output.');
-assistant([{ type: 'text', text: 'Preview controls: Alt+G focuses tools; Left/Right selects an action; Enter expands its output; Up/Down scroll; Esc or typing returns to the editor. Alt+T focuses recorded thinking; Alt+I focuses the prompt. /fixture-permission opens a harmless approval dialog. /compact-rendering switches display. Ctrl+D exits.' }]);
+assistant([{ type: 'text', text: 'Preview controls: /inspect selects a block and brings it into view. Left/Right selects an action or thinking round; Enter expands it; Up/Down scrolls. Esc or typing returns to the editor. /fixture-permission opens a harmless approval dialog. /compact-rendering switches display. Ctrl+D exits.' }]);
 if (promptJump) assistant([{ type: 'text', text: 'Prompt navigation: /prompt-jump list selects one of the three invented user prompts; /prompt-jump back returns; /prompt-jump end follows the latest output.' }]);
 manager.appendSessionInfo('compact-renderer-preview');
 let runtime, ui;

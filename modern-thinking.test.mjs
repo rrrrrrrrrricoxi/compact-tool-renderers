@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { loadSource, core, tui, themeModule, stripAnsi, assertCardBackground } from './test-runtime.mjs';
-const { registerModernThinking } = await loadSource('./modern-thinking.ts');
+const { registerModernThinking, recordedThinkingLabel } = await loadSource('./modern-thinking.ts');
 const { installModernThinkingAdapter } = await loadSource('./modern-thinking-adapter.ts');
 const { RecordedTextPane } = await loadSource('./modern-recorded-pane.ts');
 const { createDisplayMode } = await loadSource('./display-mode.ts');
@@ -34,19 +35,26 @@ try {
   assertCardBackground(cards[2].render(100).slice(1), 100, 'customMessageBg');
   assert.doesNotMatch(plain(cards[2].render(100)), /Alt\+T/, 'collapsed thinking omits repeated key hints');
   assert.equal(key('\x1b[B'),false,'arrows stay with editor until focused');
-  assert.equal(key('\x1bt'),true);assert.equal(key('\r'),true);
+  const choices = []; pi.events.emit('compact-renderer:inspect:v1', {add: choice => choices.push(choice)});
+  assert.equal(choices.length, 1); assert.equal(choices[0].kind, 'Thinking');
+  let focusEvent; const unsubFocus = pi.events.on('compact-renderer:focus:v1', event => focusEvent = event);
+  choices[0].focus(); assert.ok(focusEvent.target(cards[2])); assert.ok(!focusEvent.target(cards[0])); unsubFocus();
+  const roundList = cards[2].render(100);
+  assert.match(plain(roundList), /1\. Round-1 original first/);
+  assert.match(plain(roundList), /2\. Round-2 original first/);
+  assert.match(plain(roundList), /3\. Round-3 original first/);
+  assert.doesNotMatch(plain(roundList), /second original/, 'opening a group shows excerpts with each round still collapsed');
+  assert.equal(key('\r'),true);
   const expandedThinking = cards[2].render(100);
-  assertCardBackground(expandedThinking.slice(1), 100, 'customMessageBg');
-  const thinkingBody = expandedThinking.find(row => stripAnsi(row).includes('Round-1 original first'));
+  for (const line of expandedThinking.slice(1)) assertCardBackground([line], 100, line.includes(themeModule.theme.bg('selectedBg', '').replace(/\x1b\[49m$/, '')) ? 'selectedBg' : 'customMessageBg');
+  const thinkingBody = expandedThinking.find(row => stripAnsi(row).includes('second original 1'));
   assert.ok(thinkingBody.includes(themeModule.theme.getFgAnsi('text')), 'recorded thinking uses readable native text');
   assert.ok(!thinkingBody.includes(themeModule.theme.getFgAnsi('thinkingText')), 'body does not inherit dim thinking foreground');
-  assert.match(stripAnsi(thinkingBody), /^   Round-1/, 'recorded thinking sits inside the heading');
-  assert.match(stripAnsi(expandedThinking.at(-2)), /^ ↑\/↓ scroll/, 'footer shares the header gutter');
+  assert.match(stripAnsi(thinkingBody), /^ +second original 1/, 'recorded thinking sits inside its round heading');
+  assert.match(stripAnsi(expandedThinking.at(-2)), /^ ←\/→ round/, 'footer describes round selection');
   assert.equal(stripAnsi(expandedThinking.at(-1)).trim(), '');
-  let text = '';
-  for(let n=0;n<14;n++){text+=plain(cards[2].render(70));key('\x1b[B');}
-  for(let n=1;n<=3;n++)assert.match(text,new RegExp(`Round-${n} original first`));
-  assert.ok(text.indexOf('Round-1')<text.indexOf('Round-2') && text.indexOf('Round-2')<text.indexOf('Round-3'));
+  for(let n=2;n<=3;n++){key('\x1b[C');key('\r');assert.match(plain(cards[2].render(100)),new RegExp(`second original ${n}`));}
+  key('\x1b[D'); assert.match(plain(cards[2].render(100)), /▾ 2\. Round-2/, 'round expansion survives selection changes');
   assert.equal(key('\x1b'),true);assert.equal(key('\x1b[B'),false);
   key('\x1bt');pi.events.emit('compact-renderer:focus:v1',{owner:'tools'});assert.equal(key('\r'),false);
   key('\x1bt');emit('ui_prompt_start');assert.equal(key('\r'),false);
@@ -58,7 +66,7 @@ try {
   assert.doesNotMatch(plain(cards[2].render(100)), /Round-1 original first/);
   assert.equal(key('\r'), false, 'mouse collapse leaves Enter with editor');
   mouseThinking(2);
-  assert.match(plain(cards[2].render(100)), /Round-1 original first/);
+  assert.match(plain(cards[2].render(100)), /Round-2 original first/);
   assert.doesNotMatch(plain(cards[2].render(100)), /focused/);
   assert.equal(key('\r'), false, 'mouse expansion leaves Enter with editor');
   for(const width of [1,2,3,8,24,70]) for(const row of cards[2].render(width))assert.ok(tui.visibleWidth(row)<=width);
@@ -85,14 +93,53 @@ try {
   const start=round(10);emit('message_start',{message:start});cards.push(new AssistantMessageComponent(start,true,themeModule.getMarkdownTheme()));
   const update={...start,content:[{type:'thinking',thinking:'Updated exact recorded text'},start.content[1]]};emit('message_update',{message:update});cards[0].updateContent(update);emit('message_end',{message:update});
   assert.match(plain(cards[0].render(70)),/Thinking · 1 round/);
-  key('\x1bt');key('\r');assert.match(plain(cards[0].render(70)),/Updated exact recorded text/);
+  key('\x1bt');key('\r');key('\r');assert.match(plain(cards[0].render(70)),/Updated exact recorded text/);
   // A very large recorded block still paints a bounded native assistant surface.
   const hugeRound={...round(11),content:[{type:'thinking',thinking:'Large exact recorded line 行🙂\n'.repeat(100000)},round(11).content[1]]};
   branch=[entry(hugeRound)];cards.length=0;emit('session_start',{type:'session_start',reason:'resume'});cards.push(new AssistantMessageComponent(hugeRound,true,themeModule.getMarkdownTheme()));
   const markdownRender=tui.Markdown.prototype.render;let markdownPaints=0;
   tui.Markdown.prototype.render=function(...args){markdownPaints++;return markdownRender.apply(this,args);};
-  try{assert.match(plain(cards[0].render(60)),/Thinking · 1 round/);key('\x1bt');key('\r');assert.ok(cards[0].render(60).length<=17);assert.match(plain(cards[0].render(60)),/Large exact recorded line/);assert.equal(markdownPaints,0,'bounded thinking never eagerly paints native full Markdown');}
+  try{assert.match(plain(cards[0].render(60)),/Thinking · 1 round/);key('\x1bt');key('\r');key('\r');assert.ok(cards[0].render(60).length<=17);assert.match(plain(cards[0].render(60)),/Large exact recorded line/);assert.equal(markdownPaints,0,'bounded thinking never eagerly paints native full Markdown');}
   finally{tui.Markdown.prototype.render=markdownRender;}
+  // Long recorded rounds remain a concise list until each is opened. Labels
+  // identify their source; the original thinking stays available without edits.
+  const longTexts = [
+    '# Compare the parser and native transcript paths\nI need to check whether the transcript projection keeps the recorded message identity.\n' + 'The parser returns recorded messages in order; I will inspect the native component association before changing membership. 行🙂\n'.repeat(20000) + 'First round final recorded line.',
+    'Check the adapter lifecycle before adding a focus hook. The previous registration must release its listener.\n' + 'I should exercise reload, resume, fork, compaction, and shutdown with the native component rather than infer cleanup from a mock.\n'.repeat(2000) + 'Second round final recorded line.',
+    '## Verify narrow terminal rendering\nThe excerpt is a display label taken from this recorded heading.\n' + '检查中英文、emoji 🙂 和很窄的终端；原始记录保留换行和标点。\n'.repeat(2000) + 'Third round final recorded line.',
+  ];
+  const longRounds = longTexts.map((thinking, index) => ({...round(index + 20), content: [{type:'thinking', thinking}, round(index + 20).content[1]]}));
+  const longOriginal = JSON.stringify(longRounds);
+  branch = longRounds.flatMap((message, index) => [entry(message), entry(result(index + 20))]); cards.length = 0;
+  emit('session_start', {type:'session_start', reason:'resume'});
+  cards.push(...longRounds.map(message => new AssistantMessageComponent(message,true,themeModule.getMarkdownTheme())));
+  const evidence = [{label:'Collapsed recorded thinking group · native dark theme · 100 columns', lines: cards[2].render(100)}];
+  const longChoices=[];pi.events.emit('compact-renderer:inspect:v1',{add: choice=>longChoices.push(choice)});longChoices[0].focus();
+  const concise = cards[2].render(100);evidence.push({label:'Inspection opens a concise round list · first round selected',lines:concise});
+  assert.match(plain(concise), /Compare the parser and native transcript paths/);
+  assert.match(plain(concise), /Check the adapter lifecycle before adding a focus hook\./);
+  assert.match(plain(concise), /Verify narrow terminal rendering/);
+  assert.doesNotMatch(plain(concise), /parser returns|previous registration|检查中英文/);
+  assert.doesNotMatch(plain(concise), /Alt\+T|Alt\+G/, 'inspection has no unreliable Option shortcut hints');
+  const headingRow = concise.find(line => stripAnsi(line).includes('Compare'));
+  const boldPrefix = themeModule.theme.bold('MARK').split('MARK')[0];
+  if (boldPrefix) assert.ok(headingRow.includes(boldPrefix), 'round heading uses native bold');
+  assertCardBackground([headingRow],100,'selectedBg');
+  key('\r');const longFirst=cards[2].render(100);assert.ok(longFirst.length<=14);assert.match(plain(longFirst), /I need to check whether/);
+  evidence.push({label:'First recorded round independently expanded · bounded text viewport',lines:longFirst});
+  key('\x1b[C');key('\r');const longSecond=cards[2].render(100);
+  assert.match(plain(longSecond),/previous registration|exercise reload/,'selection reaches a later round without scanning a long earlier body');
+  evidence.push({label:'Second recorded round independently expanded · later-round selection',lines:longSecond});
+  key('\x1b[H');assert.match(plain(cards[2].render(100)), /▾ 1\. Compare/, 'Home returns to the independently expanded first round');
+  let ended=0;const unsubEnded=pi.events.on('compact-renderer:inspection-ended:v1',()=>ended++);
+  assert.equal(key('typed input'),false);assert.equal(ended,1);assert.equal(key('\r'),false,'typing releases inspection to the editor');
+  longChoices[0].focus();assert.equal(key('\x14'),false,'Ctrl+T remains available to native Pi');assert.equal(ended,2);unsubEnded();
+  assert.equal(JSON.stringify(longRounds),longOriginal,'long raw recorded transcript remains exact');
+  assert.equal(recordedThinkingLabel(['# Existing recorded title\nLong body']), 'Existing recorded title');
+  assert.equal(recordedThinkingLabel(['First recorded sentence. Another thought.']), 'First recorded sentence.');
+  assert.ok(!recordedThinkingLabel(['\x1b]52;c;secret\x07\u202eunsafe']).includes('\x1b'),'labels cannot execute terminal controls');
+  for (const width of [1,2,3,8,24,70]) for (const line of cards[2].render(width)) assert.ok(tui.visibleWidth(line)<=width);
+  if (process.env.WRITE_THINKING_EVIDENCE) { fs.writeFileSync(process.env.WRITE_THINKING_EVIDENCE, JSON.stringify(evidence,null,2)+'\n'); }
   // Exercise the real SessionManager and native initial transcript projection.
   // bindExtensions emits session_start before InteractiveMode.renderInitialMessages.
   const recorded=core.SessionManager.inMemory('/synthetic');

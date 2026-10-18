@@ -44,6 +44,11 @@ try{
   key('\x1bi');emit('ui_prompt_start');assert.equal(key('\r'),false);
   mode.setEnabled(false);assert.match(plain(card),/original long template/);assert.ok(!plain(card).includes('prompt · /fixture'));
   mode.setEnabled(true);assert.ok(!plain(card).includes('original long template'));
+  const staleChoices=[];pi.events.emit('compact-renderer:inspect:v1',{add:choice=>staleChoices.push(choice)});
+  emit('session_tree');plain(card);staleChoices[0].focus();
+  assert.equal(key('\r'),false,'a stale picker choice cannot capture Enter after rebuilding the same component');
+  const freshChoices=[];pi.events.emit('compact-renderer:inspect:v1',{add:choice=>freshChoices.push(choice)});
+  freshChoices[0].focus();assert.match(plain(card),/Esc returns/);assert.equal(key('\x1b'),true);
   for(const event of ['session_tree','session_compact']){emit(event);assert.match(plain(card),/prompt · \/fixture/);assert.equal(terminal.size,1);}
   for(const reason of ['reload','new','resume','fork','startup']){
     emit('session_start',{type:'session_start',reason});assert.match(plain(card),/prompt · \/fixture/);assert.equal(terminal.size,1);

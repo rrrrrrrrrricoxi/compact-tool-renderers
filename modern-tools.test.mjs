@@ -9,7 +9,8 @@ const nested = cardRow('a\x1b[48;5;0mb\x1b[49mc', 12, themeModule.theme, 'toolSu
 assert.equal(backgroundCells(nested)[2], '48;5;0', 'an explicit nested surface stays intact');
 assert.equal(backgroundCells(nested)[3], backgroundCells(nested)[0], 'base surface resumes after a nested background reset');
 const { registerModernTools, toolStatus, isNativeSubagent } = await loadSource('./modern-tools.ts');
-const { ToolPane } = await loadSource('./modern-tool-pane.ts');
+const { ToolPane, textRows } = await loadSource('./modern-tool-pane.ts');
+const { recordedValues } = await loadSource('./modern-tool-content.ts');
 const { ToolExecutionComponent } = await loadAgent('modes/interactive/components/tool-execution.js');
 const { createShellRenderers } = await loadAgent('core/tools/renderers/bash.js');
 const { readRenderers } = await loadAgent('core/tools/renderers/read.js');
@@ -68,13 +69,16 @@ const focusedAction = read.render(100).find(row => stripAnsi(row).includes('1. r
 assertCardBackground([focusedAction], 100, 'selectedBg');
 assert.ok(focusedAction.includes(themeModule.theme.getFgAnsi('accent')), 'selection has a clear native foreground');
 input('\r');
-assert.match(paint(read), /Exact arguments/);
+assert.match(paint(read), /Arguments/);
 assert.match(paint(read), /first output/);
+assert.doesNotMatch(paint(read), /arguments \(object\)|arguments\.path|\(string\)/, 'recorded values use local field labels');
 const detailLayout = read.render(100).map(stripAnsi);
 assert.match(detailLayout[2], /^ ▾ /, 'header uses the native one-cell gutter');
 assert.match(detailLayout.find(row => row.includes('1. read')), /^   › ▾ /, 'actions sit inside the group heading');
 assert.equal(detailLayout.find(row => row.includes('first output')).indexOf('first output'), detailLayout.find(row => row.includes('1. read')).indexOf('read'), 'recorded output aligns with the expanded action label');
-assert.match(detailLayout.at(-2), /^ 1\//, 'footer shares the header gutter');
+assert.match(detailLayout.at(-2), /^ ←\/→ action/, 'focused hint shares the header gutter');
+assertCardBackground([read.render(100)[2]], 100, 'selectedBg');
+assert.ok(detailLayout.findIndex(row => row.trim() === 'Output') < detailLayout.findIndex(row => row.trim() === 'Arguments'), 'output appears before arguments');
 assert.doesNotMatch(detailLayout.join('\n'), /c collapse/);
 input('\x1b[C'); input('\r');
 assert.match(paint(read), /printf hello/);
@@ -83,7 +87,7 @@ input('\x1b[D');
 assert.match(paint(read), /first output/, 'first action remains expanded');
 input('\x1b'); assert.equal(input('\x1b[B'), undefined);
 assertCardBackground(read.render(100).filter(row => stripAnsi(row).trim()), 100, 'toolSuccessBg');
-assert.doesNotMatch(paint(read), /Enter details/, 'unfocused open cards show only the short inspection hint');
+assert.doesNotMatch(paint(read), /Enter details|Alt\+G|to inspect/, 'unfocused open cards omit keyboard hints');
 // Mode changes synchronously rerender the actual native component and preserve slot ownership.
 for (let iteration = 0; iteration < 8; iteration++) {
   toggle(false);
@@ -248,13 +252,34 @@ try {
   toggle(true); assert.match(paint(resumed), /1 successful action/);
   event('session_compact'); event('session_tree');
   toggle(false);
-  const shutdownRunning = make('codemode', 'clock-shutdown', { code: 'text(1)' });
+  const shutdownRunning = make('bash', 'clock-shutdown', { command: 'printf safe' });
   shutdownRunning.markExecutionStarted(); shutdownRunning.updateResult(result('partial', { calls: [] }), true);
-  assert.equal(intervals.size, 1, 'codemode uses the same native timer contract');
+  assert.equal(intervals.size, 1, 'wrapped tools retain the native timer contract');
   dispose(); dispose(); assert.equal(intervals.size, 0); assert.equal(input, undefined); assert.equal(modeChange, undefined);
 } finally { for (const handle of intervals) actualClearInterval(handle); globalThis.setInterval = actualSetInterval; globalThis.clearInterval = actualClearInterval; }
 // A 10 MB output is not eagerly split or painted. Stored source remains unchanged.
 const huge = '漢字🙂 exact\x1b[31m\n'.repeat(400000);
+const simplePane = new ToolPane([{ id: 'simple', label: 'read · exact.txt', sections: function* () { yield { text: 'Output', kind: 'section' }; yield 'exact output'; } }], '1 successful action', () => 20);
+simplePane.theme = themeModule.theme; simplePane.open = true; simplePane.expanded.add('simple');
+const simpleRows = simplePane.render(80);
+assert.equal(simpleRows.length, 6, 'an unfocused complete pane has no footer row');
+assert.doesNotMatch(stripAnsi(simpleRows.join('\n')), /to inspect|Alt\+G|more ↓/);
+const actionLine = '  › ▾ 1. read · exact.txt';
+assert.ok(simpleRows.find(row => stripAnsi(row).includes('1. read')).includes(themeModule.theme.fg('toolTitle', themeModule.theme.bold(actionLine))), 'unfocused action heading uses native bold toolTitle styling');
+assert.ok(simpleRows.find(row => stripAnsi(row).trim() === 'Output').includes(themeModule.theme.getFgAnsi('muted')), 'section headings use the native muted color');
+const exactValues = { command: 'printf "hello"\nnext exact line', options: { paths: ['a', 'b'], empty: '', nullable: null } };
+const valueRows = [...recordedValues(exactValues)];
+assert.ok(valueRows.some(row => row.text === exactValues.command), 'multiline string values remain exact');
+assert.ok(valueRows.some(row => row.text === '[1]:') && valueRows.some(row => row.text === 'b'), 'array positions and values remain accessible');
+assert.ok(valueRows.some(row => row.text === '""') && valueRows.some(row => row.text === 'nullable: null'), 'empty strings and null remain distinct');
+let laterFieldReads = 0;
+const largeArguments = { command: huge };
+Object.defineProperty(largeArguments, 'later', { enumerable: true, get() { laterFieldReads++; return 'later recorded value'; } });
+const argumentPane = new ToolPane([{ id: 'args', label: 'bash', sections: () => recordedValues(largeArguments) }], 'Arguments', () => 8);
+argumentPane.open = true; argumentPane.expanded.add('args'); argumentPane.render(30);
+assert.equal(laterFieldReads, 0, 'painting a large argument does not visit later fields');
+assert.equal(largeArguments.command, huge, 'argument formatting does not change stored source');
+assert.equal([...textRows('\x1b[31m\u202eexact\u{e0001}', 80)].join(''), '\\u001b[31m\\u202eexact\\u{e0001}', 'terminal and bidi controls are visible text');
 // Pi's real Box establishes the reference for default card spacing.
 const nativeBox = new tui.Box(1, 1, text => themeModule.theme.bg('toolSuccessBg', text));
 nativeBox.addChild(new tui.Text('▸ Ref', 0, 0));

@@ -43,6 +43,7 @@ try {
   for (const shortcut of ['\x1bg', '\x1bt', '\x1bi']) {
     for (const scenario of [
       { chunks: ['calculate'], expected: 'calculate' },
+      { chunks: ['©', '†'], expected: '©†' },
       { chunks: ['c', 'ostmade'], expected: 'costmade' },
       { chunks: [' ', 'status'], expected: ' status' },
       { chunks: ['\x1b[200~', 'pasted status', '\x1b[201~'], expected: 'pasted status' },
@@ -70,6 +71,13 @@ try {
   for (const shortcut of ['\x1bg', '\x1bt', '\x1bi']) {
     assert.equal(key(shortcut), true); assert.equal(key('\r'), true);
     assert.equal(key('\x1b'), true); assert.equal(key('\r'), false);
+  }
+  for (const shortcut of ['\x1bg', '\x1bt']) {
+    assert.equal(key(shortcut), true);
+    for (const enhanced of ['\x1b[13u', '\x1b[1;1C', '\x1b[1;1A', '\x1b[1;1H']) {
+      assert.equal(key(enhanced), true, 'native enhanced keyboard sequence remains inside inspection');
+    }
+    assert.equal(key('\x1b'), true);
   }
   emit('session_shutdown');
   console.log('input focus: native Editor typing, Space/c, paste, editing, submit, mouse and explicit inspection passed');

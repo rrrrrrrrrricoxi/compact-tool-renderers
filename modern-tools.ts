@@ -1,7 +1,8 @@
 import { Text, truncateToWidth, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ToolRenderers } from "@earendil-works/pi-coding-agent";
 import { NativeToolOwner, nativeToolsSupported, nativeToolContextSupported, nativeTextFallback } from "./modern-native-tools.ts";
-import { ToolPane, type PaneAction } from "./modern-tool-pane.ts";
+import { ToolPane, type PaneAction, type PaneContent } from "./modern-tool-pane.ts";
+import { recordedValues } from "./modern-tool-content.ts";
 import { cardContentWidth, cardRow } from "./display-card.ts";
 
 type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
@@ -10,8 +11,9 @@ type Status = "pending" | "running" | "success" | "failed" | "cancelled" | "unav
 type Node = { id: string; name: string; args: any; epoch: number; status: Status; result?: any; note?: string; pane?: ToolPane; group?: Group; native: NativeToolOwner; invalidate?: () => void; nativeExpanded?: boolean; rendererAttached?: boolean; revision: number };
 type Group = { members: Node[]; pane: ToolPane; signature: string };
 const shortName = (name: string) => name.split("__").at(-1) || name;
+const usesNativePresentation = (name: string) => name === 'codemode' || isNativeSubagent(name);
 export const isNativeSubagent = (name: string) => /^(?:subagents?(?:_|$)|fleet(?:_|$))/i.test(shortName(name));
-const clean = (value: unknown) => String(value ?? "").slice(0, 240).replace(/[\x00-\x1f\x7f-\x9f]/g, " ").trim();
+const clean = (value: unknown) => String(value ?? "").slice(0, 240).replace(/[\uD800-\uDBFF]$/, "").replace(/[\x00-\x1f\x7f-\x9f]|\p{Cf}/gu, " ").trim();
 const question = (name: string) => shortName(name) === "ask_user_question";
 const json = (value: any) => { try { return JSON.stringify(value, null, 2) ?? "null"; } catch { return "[value could not be serialized]"; } };
 export function toolStatus(name: string, result: any, partial = false, error = false): { status: Status; note?: string } {
@@ -42,34 +44,22 @@ export function toolLabel(name: string, args: any): string {
   if (["bash", "powershell"].includes(short)) return `${short} · ${clean(args?.command) || "Shell command"}`;
   return `${clean(short)}${target === undefined ? "" : ` · ${clean(target)}`}`;
 }
-// Walk recorded values lazily so large command/write arguments or nested output strings
-// do not require full serialization before the first visible rows can paint.
-function* values(value: any, label = "arguments", ancestors = new Set<object>()): Generator<string> {
-  if (typeof value === "string") { yield `${label} (string)`; yield value; return; }
-  if (value === null || typeof value !== "object") { yield `${label}: ${json(value)}`; return; }
-  if (ancestors.has(value)) { yield `${label}: [circular reference]`; return; }
-  ancestors.add(value);
-  yield `${label} (${Array.isArray(value) ? "array" : "object"})`;
-  let count = 0;
-  for (const key in value) if (Object.prototype.hasOwnProperty.call(value, key)) { count++; yield* values(value[key], `${label}.${key}`, ancestors); }
-  if (!count) yield Array.isArray(value) ? "[]" : "{}";
-  ancestors.delete(value);
-}
 function indicators(node: Node) {
   const details = node.result?.details;
   return `${details?.truncation?.truncated || details?.truncated ? " · output truncated" : ""}${details?.fullOutputPath ? " · full output saved" : ""}${details?.warning || details?.warnings?.length ? " · warning recorded" : ""}`;
 }
-function* sections(node: Node): Generator<string> {
-  yield "Exact arguments"; yield* values(node.args);
+function* sections(node: Node): Generator<PaneContent> {
   if (node.result) {
-    yield "Recorded output";
+    yield { text: "Output", kind: "section" };
     for (const block of node.result.content ?? []) {
       if (block.type === "text") yield String(block.text ?? "");
       else if (block.type === "image") yield `[Recorded image: ${clean(block.mimeType)}; native preview is retained outside groups]`;
-      else yield* values(block, "content block");
+      else yield* recordedValues(block);
     }
-    if (node.result.details !== undefined) { yield "Recorded details"; yield* values(node.result.details, "details"); }
   }
+  if (node.result) yield " ";
+  yield { text: "Arguments", kind: "section" }; yield* recordedValues(node.args);
+  if (node.result?.details !== undefined) { yield " "; yield { text: "Details", kind: "section" }; yield* recordedValues(node.result.details); }
 }
 function failureReason(node: Node): string {
   if (node.status !== "failed") return "";
@@ -92,7 +82,7 @@ function questionTitle(node: Node): string {
   return `Question · ${statuses[node.status] || "Unanswered"} · ${clean(node.result?.details?.question ?? node.args?.question)}${answer}`;
 }
 class DynamicComponent {
-  constructor(private draw: (width: number) => string[], private mouse?: (event: TuiMouseEvent) => TuiMouseEventResult | undefined) {}
+  constructor(private draw: (width: number) => string[], private mouse?: (event: TuiMouseEvent) => TuiMouseEventResult | undefined, readonly owner?: Node) {}
   render(width: number) { return this.draw(Math.max(1, width)); }
   handleMouse(event: TuiMouseEvent) { return this.mouse?.(event); }
   invalidate() {}
@@ -117,6 +107,13 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     for (const invalidate of [...new Set([...nodes.values()].map(node => node.invalidate).filter(Boolean))]) invalidate!();
   };
   const release = () => { if (focused) { focused.focused = false; focused = undefined; } };
+  const panes = () => [...nodes.values()].flatMap(node => node.group ? node.group.members[0] === node ? [node.group.pane] : [] : node.pane ? [node.pane] : []);
+  const focusPane = (pane: ToolPane) => {
+    if (disposed || !mode.isEnabled() || !panes().includes(pane)) return;
+    release(); focused = pane; pane.focused = true; pane.open = true; redraw();
+    pi.events.emit("compact-renderer:focus:v1", { owner: "tools", label: pane.title,
+      target: (component: any) => component instanceof DynamicComponent && (component.owner?.group?.pane || component.owner?.pane) === pane });
+  };
   const action = (node: Node): PaneAction => ({ id: node.id, label: toolLabel(node.name, node.args) + indicators(node), sections: () => sections(node) });
   const refreshGroups = () => {
     let run: Node[] = [];
@@ -166,13 +163,13 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     if (message?.role === "assistant") {
       if (message.errorMessage || message.content?.some((block: any) => block.type === "text" && block.text?.trim())) epoch++;
       for (const call of message.content ?? []) if (call.type === "toolCall") {
-        if (isNativeSubagent(call.name)) { epoch++; continue; }
+        if (usesNativePresentation(call.name)) { epoch++; continue; }
         if (question(call.name)) epoch++;
         ensure(call.id, call.name, call.arguments);
         if (question(call.name)) epoch++;
       }
     } else if (message?.role === "toolResult") {
-      if (isNativeSubagent(message.toolName || "")) { epoch++; return; }
+      if (usesNativePresentation(message.toolName || "")) { epoch++; return; }
       const node = ensure(message.toolCallId, message.toolName || "tool");
       record(node, message, false, !!message.isError);
       if (node.status !== "success") epoch++;
@@ -194,18 +191,16 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     if (ctx.hasUI && typeof ctx.ui?.onTerminalInput === "function") inputOff = ctx.ui.onTerminalInput((data: string) => {
       if (disposed || !mode.isEnabled()) return;
       if (data === "\u001bg") {
-        const panes = [...nodes.values()].flatMap(node => node.group ? node.group.members[0] === node ? [node.group.pane] : [] : node.pane ? [node.pane] : []);
-        if (!panes.length) return;
-        const next = (panes.indexOf(focused!) + 1) % panes.length;
-        release(); focused = panes[next]; focused.focused = true; focused.open = true;
-        pi.events.emit("compact-renderer:focus:v1", { owner: "tools" }); redraw(); return { consume: true };
+        const choices = panes();
+        if (!choices.length) return;
+        focusPane(choices[(choices.indexOf(focused!) + 1) % choices.length]); return { consume: true };
       }
       if (!focused) return;
-      if (data === "\u001b") { release(); redraw(); return { consume: true }; }
+      if (data === "\u001b") { release(); pi.events.emit("compact-renderer:inspection-ended:v1", {}); redraw(); return { consume: true }; }
       if (focused.handle(data)) { redraw(); return { consume: true }; }
       // Editing belongs to the native editor. Release inspection before forwarding
       // the first typed character, paste, or editor key so Enter submits normally.
-      release(); redraw();
+      release(); pi.events.emit("compact-renderer:inspection-ended:v1", {}); redraw();
     });
   };
   const on = (event: string, callback: any) => { const off = (pi.on as any)(event, callback); if (typeof off === "function") subscriptions.push(off); };
@@ -216,25 +211,29 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
   on("message_end", (event: any) => { if (!disposed && !rebuilding) { observeMessage(event.message); refreshGroups(); redraw(); } });
   on("tool_execution_start", (event: any) => {
     if (event.parentToolCallId) return;
-    if (isNativeSubagent(event.toolName)) { epoch++; return; }
+    if (usesNativePresentation(event.toolName)) { epoch++; return; }
     if (question(event.toolName)) epoch++;
     const node = ensure(event.toolCallId, event.toolName, event.args); node.status = "running";
     if (question(event.toolName)) epoch++;
     refreshGroups();
   });
   on("tool_execution_end", (event: any) => {
-    if (event.parentToolCallId || isNativeSubagent(event.toolName)) return;
+    if (event.parentToolCallId || usesNativePresentation(event.toolName)) return;
     const node = ensure(event.toolCallId, event.toolName);
     record(node, event.result, false, !!event.isError); node.native.suspend();
     if (node.status !== "success") epoch++;
     redraw();
   });
+  subscriptions.push(pi.events.on("compact-renderer:inspect:v1", (request: any) => {
+    if (disposed || !mode.isEnabled()) return;
+    panes().forEach((pane, index) => request?.add?.({ id: `tool-${index}`, kind: "Tools", label: pane.title, focus: () => focusPane(pane) }));
+  }));
   const focusOff = pi.events.on("compact-renderer:focus:v1", (event: any) => { if (event?.owner !== "tools") { release(); redraw(); } });
   if (typeof focusOff === "function") subscriptions.push(focusOff);
   subscriptions.push(mode.onChange(() => { release(); for (const node of nodes.values()) node.native.suspend(); redraw(); }));
   pi.registerToolRenderer((name, next) => {
     const stock = next();
-    if (isNativeSubagent(name)) return stock;
+    if (usesNativePresentation(name)) return stock;
     const stale = (context: Context) => {
       if (!context.state || typeof context.state !== "object") return false;
       const previous = rowGenerations.get(context.state);
@@ -287,7 +286,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
           if (node.group) return [];
           if (singleCard(node)) return individual(node, theme).render(width);
           return [cardRow(truncateToWidth(theme.fg("toolTitle", theme.bold(`${node.result ? "" : "… "}${toolLabel(name, node.args)}${node.result ? "" : ` · ${context.executionStarted ? "running" : "preparing"}`}`)), cardContentWidth(width)), width, theme, node.result && node.status === "success" ? "toolSuccessBg" : "toolPendingBg")];
-        }, event => mouse(!node.group && singleCard(node) ? individual(node, theme) : undefined, event));
+        }, event => mouse(!node.group && singleCard(node) ? individual(node, theme) : undefined, event), node);
       },
       renderResult(result, options, theme, context) {
         if (disposed || !nativeToolContextSupported(context) || stale(context)) return stock?.renderResult?.(result, options, theme, { ...context, executionStarted: false, state: {}, lastComponent: undefined }) ?? nativeTextFallback(result, theme);
@@ -298,7 +297,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
           if (node.group) { const group = node.group; if (group.members[0] !== node) return []; group.pane.theme = theme; group.pane.styleHeader = text => theme.fg("success", theme.bold(text)); return group.pane.render(width); }
           if (singleCard(node)) return [];
           return individual(node, theme).render(width);
-        }, event => mouse(node.group ? node.group.members[0] === node ? node.group.pane : undefined : !singleCard(node) ? individual(node, theme) : undefined, event));
+        }, event => mouse(node.group ? node.group.members[0] === node ? node.group.pane : undefined : !singleCard(node) ? individual(node, theme) : undefined, event), node);
       },
     };
   });

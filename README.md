@@ -14,8 +14,8 @@ This repository is the authoritative source. The npm manifest stays `private: tr
 - Running actions remain separate. Only successful completed actions join a group, within visible conversation boundaries.
 - Open a group to see its actions. Expand several action outputs independently in the same scrollable pane. Exact arguments, recorded output, and recorded details remain available.
 - Errors, cancellations, unanswered questions, and background notices stay separate. Question cards combine the question and its recorded answer or actual status.
-- Stock `pi-subagents` renderers and Fleet UI remain unchanged. Images retain their native display behavior.
-- Recorded thinking rounds can group across tools. Replies, questions, errors, and other visible boundaries separate groups. The pane shows the recorded text in order; it does not generate a reasoning summary.
+- Stock `pi-subagents`, Fleet UI, and code mode renderers remain unchanged. Code mode keeps native JavaScript highlighting, nested calls, timing, cost, and Ctrl+O expansion. Images retain their native display behavior.
+- Recorded thinking rounds can group across tools. Replies, questions, errors, and other visible boundaries separate groups. Each round has a short title taken from its recorded heading or first sentence and expands independently. The pane shows the full recorded text on demand; it does not generate summaries or make model calls.
 - Recognized prompt templates show a short label. Expansion reveals the original text inline. Ordinary user messages and native skill blocks retain their normal rendering.
 
 Thinking groups require Pi's native `hideThinkingBlock: true` preference. Pi Config seeds this preference only when absent, then preserves native changes. **Ctrl+T** still switches to Pi's full thinking display. Unsupported Pi versions or component shapes show native content instead of hiding it.
@@ -24,14 +24,18 @@ Thinking groups require Pi's native `hideThinkingBlock: true` preference. Pi Con
 
 `/compact-rendering` opens a native selector. Typed `on`, `off`, `toggle`, and `status` remain available. This display mode is session-local and starts enabled.
 
-| Surface | Controls |
+`/inspect` opens a native picker for tool groups, thinking groups, and prompt cards. Selection brings the block into view, highlights its header and selected item, and shows an inspection status in the footer.
+
+| Surface | Controls after selection |
 | --- | --- |
-| Tool groups | Alt+G focuses/cycles panes; Left/Right selects an action; Enter opens its output; Up/Down scroll; Esc returns to the editor. |
-| Thinking | Alt+T focuses/cycles groups; Enter opens/closes; Up/Down and Home scroll; Esc releases focus; Ctrl+T retains native visibility control. |
-| Prompt cards | Alt+I focuses/cycles; Enter opens/closes; Esc releases focus. |
+| Tool groups | Left/Right selects an action; Enter opens/closes its output; Up/Down scroll; Home returns to the first action. |
+| Thinking | Left/Right selects a round; Enter opens/closes its recorded text; Up/Down scroll; Home returns to the first round. Ctrl+T retains native visibility control. |
+| Prompt cards | Enter opens/closes the original text. |
 | Permission | Up/Down chooses Allow once, Deny, or Details; Enter selects; `d` toggles Details; Esc denies. Deny is selected initially. With Details open, Left/Right pages and Home/End jumps. |
 
-Only an explicit inspection shortcut captures Enter or arrow keys. Typing, pasting, or using an editor key returns control to the native editor; the next Enter submits normally. Clicking or scrolling a card changes its display without taking keyboard focus. Cards keep Pi’s native one-cell gutter and top/bottom padding.
+Esc returns to the editor. Typing, pasting, or using an editor key also releases inspection; the next Enter submits normally. Clicking or scrolling a card changes its display without taking keyboard focus. Cards keep Pi’s native one-cell gutter and top/bottom padding. Expanded actions show output first, followed by exact arguments and details; unfocused cards omit repeated control/count footers.
+
+Alt+G, Alt+T, and Alt+I remain optional shortcuts for tools, thinking, and prompts when the terminal sends Alt key sequences. On macOS, Option may instead type characters. Those characters remain ordinary input; use `/inspect` without changing terminal settings.
 
 Mouse controls support tool and thinking headers, individual action expansion, wheel scrolling inside open panes, and prompt headers. Terminal mouse support depends on the terminal and transport. Keyboard controls remain available over mosh/tmux. Detailed keyboard hints appear on the focused pane. Arrows are captured only while a pane has focus. In fullscreen Pi, PageUp/PageDown scroll the transcript before extension controls receive them; use the arrows shown above for pane content. Opening a native question or approval releases transcript focus.
 
@@ -54,7 +58,7 @@ The runtime directory contains `node_modules/@earendil-works/pi-coding-agent` an
 
 The preview runs the actual Pi TUI with invented recorded messages in a temporary home. It blocks model, shell, tool, and network requests. `/fixture-permission` opens an inert approval example. The preview does not load host credentials or change active Pi deployments. Use Ctrl+D to exit. Set `PI_PROMPT_JUMP_PATH=/path/to/pi-prompt-jump` to include the separate navigation package and inspect its behavior with the three invented user prompts.
 
-The adapters for thinking, prompt component identity, and native shell timers are isolated and gated to Pi 1.3.0. Future versions require review; passing these tests does not certify a different runtime or every terminal. Legacy 1.x implementation and development history remain in Git rather than as a second shipped renderer.
+The adapters for thinking, prompt component identity, viewport positioning, and native shell timers are isolated and gated to Pi 1.3.0. Future versions require review; passing these tests does not certify a different runtime or every terminal. Legacy 1.x implementation and development history remain in Git rather than as a second shipped renderer.
 
 ## License
 

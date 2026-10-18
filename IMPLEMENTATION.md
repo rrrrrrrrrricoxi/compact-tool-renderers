@@ -52,3 +52,9 @@ The next user screenshot showed one-line colored strips, inconsistent expanded a
 The input defect came from terminal listeners retaining inspection focus after forwarding typing to the editor; mouse expansion also acquired keyboard focus. Only explicit inspection shortcuts now acquire keyboard focus. Unhandled editing input releases inspection before reaching the native editor; mouse expansion releases keyboard inspection. Ordinary `c` and Space are no longer inspector commands. The new input-focus suite exercises real native Editor typing, paste, Backspace and submission through all three extension listeners. No model/tool/history behavior changes.
 
 Visual acceptance remains pending for this correction. Prior rejected candidates are not release approval.
+
+## Inspection and hierarchy correction
+
+The user reported unclear focus and Option shortcuts typing characters on macOS. `/inspect` now selects through Pi's native picker, highlights the header and selected item, reveals the chosen block, and sets a short native footer status. The viewport adapter is version/shape guarded to Pi 1.3.0; it reads the mounted layout and scrolls the existing primary ScrollView without replacing Prompt Jump's root. Escape or editing releases focus. No Option characters are intercepted.
+
+Expanded actions show output before exact arguments/details, with distinct headings and no repeated unfocused count footer. Thinking groups use independently expandable rounds with bounded titles extracted from recorded text. Code mode retains the original native renderer and nested-call display. Native picker/viewport and native code-mode suites join the six existing suites. Actual local PTY checks cover offscreen selection, visible focus, output expansion and editor restoration. Visual acceptance and publication remain pending.

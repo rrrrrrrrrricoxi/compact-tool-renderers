@@ -1,7 +1,8 @@
-import { truncateToWidth, wrapTextWithAnsi, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
+import { matchesKey, truncateToWidth, wrapTextWithAnsi, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
 import { cardBlock, cardContentWidth, cardRow } from "./display-card.ts";
 
-export type PaneAction = { id: string; label: string; sections: () => Iterable<string> };
+export type PaneContent = string | { text: string; kind?: "section" | "field"; indent?: number };
+export type PaneAction = { id: string; label: string; sections: () => Iterable<PaneContent> };
 // Render only visited text chunks. Never split/highlight an entire result to paint a viewport.
 export function* textRows(text: string, width: number): Generator<string> {
   let offset = 0;
@@ -11,7 +12,10 @@ export function* textRows(text: string, width: number): Generator<string> {
     if (newline >= 0) end = offset + newline;
     // Keep surrogate pairs intact at chunk boundaries.
     if (end < text.length && end > offset && /[\uD800-\uDBFF]/.test(text[end - 1])) end--;
-    const chunk = text.slice(offset, end).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`).replace(/\t/g, "    ");
+    const chunk = text.slice(offset, end).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]|\p{Cf}/gu, c => {
+      const code = c.codePointAt(0)!;
+      return code > 0xffff ? `\\u{${code.toString(16)}}` : `\\u${code.toString(16).padStart(4, "0")}`;
+    }).replace(/\t/g, "    ");
     yield* wrapTextWithAnsi(chunk, Math.max(1, width));
     offset = end + (text[end] === "\n" ? 1 : 0);
   }
@@ -25,6 +29,7 @@ export class ToolPane {
   styleHeader = (text: string) => text;
   theme?: any;
   background = "toolSuccessBg";
+  itemName = "action";
   selected = 0;
   private anchor = 0;
   offset = 0;
@@ -34,26 +39,29 @@ export class ToolPane {
   private key = "";
   private done = false;
   private actionRows = new Map<number, number>();
+  private rowKinds = new Map<number, "section" | "field">();
   private lastWidth = 0;
   private lastHeight = 0;
+  private lastBodyHeight = 0;
   // Instrumentation also makes the large-output contract testable without wall-clock assertions.
   paintedRows = 0;
   constructor(public actions: PaneAction[], public title: string, private height = () => 12) {}
-  reset() { this.anchor = Math.min(this.anchor, Math.max(0, this.actions.length - 1)); this.key = ""; this.rows = []; this.iterator = undefined; this.done = false; this.actionRows.clear(); }
+  reset() { this.anchor = Math.min(this.anchor, Math.max(0, this.actions.length - 1)); this.key = ""; this.rows = []; this.iterator = undefined; this.done = false; this.actionRows.clear(); this.rowKinds.clear(); }
   handle(data: string): boolean {
-    if (data === "\r" || data === "\n") {
+    if (matchesKey(data, "home")) { this.open = true; this.selected = 0; this.anchor = 0; this.offset = 0; this.reset(); return true; }
+    if (matchesKey(data, "enter")) {
       if (!this.open) this.open = true;
       else { const id = this.actions[this.selected]?.id; if (id) this.expanded.has(id) ? this.expanded.delete(id) : this.expanded.add(id); }
       this.offset = 0; this.reset(); return true;
     }
-    if (data === "\u001b[C" || data === "\t" || data === "\u001b[D" || data === "\u001b[Z") {
-      const direction = data === "\u001b[D" || data === "\u001b[Z" ? -1 : 1;
+    if (matchesKey(data, "right") || matchesKey(data, "tab") || matchesKey(data, "left") || matchesKey(data, "shift+tab")) {
+      const direction = matchesKey(data, "left") || matchesKey(data, "shift+tab") ? -1 : 1;
       this.selected = (this.selected + direction + this.actions.length) % Math.max(1, this.actions.length);
       this.anchor = this.selected; this.open = true; this.offset = 0; this.reset(); return true;
     }
-    if (["\u001b[A", "\u001b[B", "\u001b[5~", "\u001b[6~"].includes(data)) {
-      const distance = data.includes("5") || data.includes("6") ? Math.max(1, this.height() - 4) : 1;
-      const down = data === "\u001b[B" || data === "\u001b[6~";
+    if (["up", "down", "pageUp", "pageDown"].some(key => matchesKey(data, key as any))) {
+      const distance = matchesKey(data, "pageUp") || matchesKey(data, "pageDown") ? Math.max(1, this.height() - 4) : 1;
+      const down = matchesKey(data, "down") || matchesKey(data, "pageDown");
       this.open = true; this.offset = Math.max(0, this.offset + (down ? distance : -distance)); return true;
     }
     return false;
@@ -63,12 +71,18 @@ export class ToolPane {
     // Selection anchors the viewport at an action, avoiding scans through an earlier huge output.
     for (let index = this.anchor; index < this.actions.length; index++) {
       const action = this.actions[index];
+      if (index > this.anchor) yield "";
       this.actionRows.set(this.rows.length, index);
       const prefix = `${indent}${index === this.selected ? "›" : " "} ${this.expanded.has(action.id) ? "▾" : "▸"} ${index + 1}. `;
       yield prefix + action.label;
       const detailsIndent = width >= 12 ? " ".repeat(Math.min(prefix.length, width - 1)) : "";
       if (this.expanded.has(action.id)) for (const section of action.sections()) {
-        for (const row of textRows(section, Math.max(1, width - detailsIndent.length))) yield detailsIndent + row;
+        const content = typeof section === "string" ? { text: section } : section;
+        const indent = detailsIndent + " ".repeat(Math.min(content.indent || 0, Math.max(0, width - detailsIndent.length - 1)));
+        for (const row of textRows(content.text, Math.max(1, width - indent.length))) {
+          if (content.kind) this.rowKinds.set(this.rows.length, content.kind);
+          yield indent + row;
+        }
       }
     }
   }
@@ -79,11 +93,11 @@ export class ToolPane {
     width = cardContentWidth(width);
     const paint = (line: string, selected = false) => cardRow(this.theme ? this.theme.fg("text", line) : line, outerWidth, this.theme, selected ? "selectedBg" : this.background);
     const header = this.styleHeader(`${this.open ? "▾" : "▸"} ${this.title}${this.focused ? " · focused" : ""}`);
-    if (!this.open) { this.lastHeight = 3; return cardBlock([paint(truncateToWidth(header, width))], outerWidth, this.theme, this.background); }
+    if (!this.open) { this.lastHeight = 3; this.lastBodyHeight = 0; return cardBlock([paint(truncateToWidth(header, width), this.focused)], outerWidth, this.theme, this.background); }
     const height = Math.max(5, Math.min(20, this.height()));
     const key = `${width}:${this.anchor}:${this.selected}:${[...this.expanded].join("|")}`;
     if (key !== this.key) { this.reset(); this.key = key; this.iterator = this.body(width); }
-    const bodyHeight = height - 4;
+    let bodyHeight = height - (this.focused ? 4 : 3);
     // Clamp a seek to one viewport beyond visited content; a key press cannot scan unbounded data.
     this.offset = Math.min(this.offset, this.rows.length);
     while (!this.done && this.rows.length < this.offset + bodyHeight + 1) {
@@ -92,15 +106,18 @@ export class ToolPane {
       else { this.rows.push(truncateToWidth(next.value, width)); this.paintedRows++; }
     }
     if (this.done) this.offset = Math.min(this.offset, Math.max(0, this.rows.length - bodyHeight));
-    const more = !this.done || this.offset + bodyHeight < this.rows.length;
-    const footer = this.focused ? `${this.selected + 1}/${this.actions.length} · ←/→ action · Enter details · ↑/↓ scroll · Esc release${more ? " · more ↓" : ""}` : `${this.actions.length} action${this.actions.length === 1 ? "" : "s"}${more ? " · more ↓" : ""} · Alt+G to inspect`;
+    let more = !this.done || this.offset + bodyHeight < this.rows.length;
+    if (!this.focused && more) { bodyHeight--; more = !this.done || this.offset + bodyHeight < this.rows.length; }
+    const footer = this.focused ? `←/→ ${this.itemName} · Enter details · ↑/↓ scroll · Esc release${more ? " · more ↓" : ""}` : more ? "more ↓" : "";
     const body = this.rows.slice(this.offset, this.offset + bodyHeight).map((line, index) => {
       const action = this.actionRows.get(this.offset + index);
       const selected = this.focused && action === this.selected;
       if (this.theme && action !== undefined) line = this.theme.fg(selected ? "accent" : "toolTitle", this.theme.bold(line));
+      else if (this.theme && this.rowKinds.has(this.offset + index)) line = this.theme.fg("muted", this.rowKinds.get(this.offset + index) === "section" ? this.theme.bold(line) : line);
       return paint(line, selected);
     });
-    const visible = cardBlock([paint(truncateToWidth(header, width)), ...body, paint(truncateToWidth(footer, width))], outerWidth, this.theme, this.background);
+    const visible = cardBlock([paint(truncateToWidth(header, width), this.focused), ...body, ...(footer ? [paint(truncateToWidth(this.theme ? this.theme.fg("dim", footer) : footer, width))] : [])], outerWidth, this.theme, this.background);
+    this.lastBodyHeight = body.length;
     this.lastHeight = visible.length;
     return visible;
   }
@@ -116,7 +133,7 @@ export class ToolPane {
     if (event.shift || event.alt || event.ctrl) return { handled: true, render: false };
     if (event.y === 1) { this.open = !this.open; return { handled: true }; }
     const selected = this.actionRows.get(this.offset + event.y - 2);
-    if (this.open && event.y >= 2 && event.y < this.lastHeight - 2 && selected !== undefined) {
+    if (this.open && event.y >= 2 && event.y < 2 + this.lastBodyHeight && selected !== undefined) {
       const id = this.actions[selected]?.id;
       if (id) {
         this.selected = selected;
