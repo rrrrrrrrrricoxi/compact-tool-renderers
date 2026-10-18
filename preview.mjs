@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const source = path.dirname(fileURLToPath(import.meta.url));
 const runtimePath = path.resolve(process.env.PI_RUNTIME || path.join(os.homedir(), '.local/state/pi-config/current/runtime'));
+const promptJump = process.env.PI_PROMPT_JUMP_PATH ? path.resolve(process.env.PI_PROMPT_JUMP_PATH) : undefined;
 const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-renderer-preview-'));
 const agentDir = path.join(temporary, '.pi/agent'), cwd = path.join(temporary, 'fixture');
 await fs.mkdir(agentDir, { recursive: true }); await fs.mkdir(cwd);
@@ -18,7 +19,7 @@ const template = 'This is an invented long prompt template used only to inspect 
 await fs.mkdir(path.join(agentDir, 'prompts'));
 await fs.writeFile(path.join(agentDir, 'prompts/fixture.md'), template);
 await fs.writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({
-  packages: [source], extensions: [path.join(source, 'preview-fixture.ts')],
+  packages: [source, ...(promptJump ? [promptJump] : [])], extensions: [path.join(source, 'preview-fixture.ts')],
   hideThinkingBlock: true, theme: 'dark', compaction: { enabled: false },
   terminal: { showImages: false },
 }));
@@ -37,11 +38,14 @@ call('shell-1', 'bash', { command: 'printf sample' }, Array.from({ length: 250 }
   'Invented recorded second round. The sample output is long enough to test bounded scrolling.');
 call('edit-1', 'edit', { path: '/fixture/example.txt', oldText: 'before', newText: 'after' }, 'Recorded edit completed.', { warning: 'Example warning retained in the group label.' });
 assistant([{ type: 'text', text: 'Visible reply: the three completed actions above form one group. This reply separates the next group.' }]);
+append({ role: 'user', content: 'Show the recorded question and failure examples.' });
 call('question-1', 'ask_user_question', { question: 'Which sample should be shown?', options: ['One', 'Two'] }, 'One', { status: 'answered', question: 'Which sample should be shown?', answers: [{ label: 'One', value: 'one' }] });
 call('failed-1', 'bash', { command: 'fixture-failure' }, 'Invented failure: sample file not found. No command ran.', { exitCode: 1 }, true);
 call('question-2', 'ask_user_question', { question: 'Cancelled example' }, 'No answer recorded.', { status: 'cancelled', question: 'Cancelled example' });
+append({ role: 'user', content: 'Show one final successful action.' });
 call('read-2', 'read', { path: '/fixture/last.txt' }, 'Recorded final output.');
 assistant([{ type: 'text', text: 'Preview controls: Alt+G focuses tools; Left/Right selects an action; Enter expands its output; Up/Down scroll; Esc releases focus. Alt+T focuses recorded thinking; Alt+I focuses the prompt. /fixture-permission opens a harmless approval dialog. /compact-rendering switches display. Ctrl+D exits.' }]);
+if (promptJump) assistant([{ type: 'text', text: 'Prompt navigation: /prompt-jump list selects one of the three invented user prompts; /prompt-jump back returns; /prompt-jump end follows the latest output.' }]);
 manager.appendSessionInfo('compact-renderer-preview');
 let runtime, ui;
 try {

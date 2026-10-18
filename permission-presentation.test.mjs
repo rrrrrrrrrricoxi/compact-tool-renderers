@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { assertCardBackground, themeModule as nativeTheme, stripAnsi } from './test-runtime.mjs';
 
 const runtime = process.env.PI_RUNTIME || path.join(homedir(), '.local/state/pi-config/current/runtime');
 const root = process.env.PI_INSTALL_ROOT || path.join(runtime, 'node_modules/@earendil-works/pi-coding-agent');
@@ -16,6 +17,17 @@ const { PermissionDialog, PermissionDetailsViewport, registerPermissionPresentat
 const theme = { fg: (_color, value) => value };
 const description = { version: 1, mode: 'tui', action: 'Run MCP operation', target: 'fixture/query',
   reason: 'Fixture policy requires approval.', details: JSON.stringify({ query: "SELECT '完整 SQL'", text: 'full exact input' }, null, 2) };
+const styled = new PermissionDialog(description, nativeTheme.theme, () => {}, () => {});
+for (const details of [false, true]) {
+  if (details) styled.handleInput('d');
+  for (const width of [1, 2, 20, 100]) {
+    const rows = styled.render(width);
+    const selected = rows.findIndex(row => stripAnsi(row).includes('→'));
+    assert.ok(selected >= 0, 'native permission selection stays visible at narrow widths');
+    assertCardBackground([rows[selected]], width, 'selectedBg');
+    assertCardBackground(rows.filter((_, index) => index !== selected), width, 'toolPendingBg');
+  }
+}
 
 // Native keybindings, safe default, single resolution and bounded Details.
 let resolutions = [];

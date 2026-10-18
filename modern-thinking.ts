@@ -2,6 +2,7 @@ import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import { hiddenThinkingShape, installModernThinkingAdapter } from "./modern-thinking-adapter.ts";
 import { RecordedTextPane, recordedPaneHeight } from "./modern-recorded-pane.ts";
+import { cardContentWidth, cardRow } from "./display-card.ts";
 
 type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
 type Round = { message: any; component?: any; kind: "round" | "bridge" | "boundary"; group?: ThinkingGroup };
@@ -25,9 +26,10 @@ export class ModernThinkingGroups {
   private epoch = 0;
   private groups: ThinkingGroup[] = [];
   private selected?: ThinkingGroup;
+  private layouts = new WeakMap<object, { width: number; height: number }>();
   focused = false;
   constructor(private enabled: () => boolean, private theme: () => any, private focus: () => void) {}
-  clear() { this.records = []; this.aliases = new WeakMap(); this.components = new WeakMap(); this.boundaries = new WeakSet(); this.live = undefined; this.groups = []; this.selected = undefined; this.focused = false; this.dirty = true; this.epoch++; }
+  clear() { this.records = []; this.aliases = new WeakMap(); this.components = new WeakMap(); this.boundaries = new WeakSet(); this.layouts = new WeakMap(); this.live = undefined; this.groups = []; this.selected = undefined; this.focused = false; this.dirty = true; this.epoch++; }
   rebuild(entries: readonly any[]) {
     this.clear();
     for (const entry of entries) {
@@ -107,19 +109,23 @@ export class ModernThinkingGroups {
     const { record, group } = match;
     if (group.members.at(-1) !== record) return [];
     const pane = group.pane, focused = this.focused && this.selected === group;
-    const label = `${pane.open ? "▾" : "▸"} Thinking · ${group.members.length} round${group.members.length === 1 ? "" : "s"} · ${focused ? "Enter toggles · Esc releases" : "Alt+T focuses"}`;
-    const paint = (line: string) => this.theme().fg("thinkingText", truncateToWidth(line, Math.max(1, width), "…"));
-    const rows = ["", paint(label)];
+    width = Math.max(1, width);
+    const theme = this.theme(), innerWidth = cardContentWidth(width);
+    const label = `${pane.open ? "▾" : "▸"} Thinking · ${group.members.length} round${group.members.length === 1 ? "" : "s"}${focused ? " · focused · Enter toggles · Esc releases" : ""}`;
+    const paint = (line: string, heading = false) => cardRow(theme.fg(heading ? "accent" : "text", heading ? theme.bold(truncateToWidth(line, innerWidth, "…")) : truncateToWidth(line, innerWidth, "…")), width, theme, "customMessageBg");
+    const rows = ["", paint(label, true)];
     if (pane.open) {
       this.sources(group);
-      rows.push(...pane.view(width, recordedPaneHeight()).map(paint));
-      rows.push(paint(`↑/↓ scroll · Home first · ${pane.more ? "more below" : "end"} · Ctrl+T native`));
+      rows.push(...pane.view(innerWidth, recordedPaneHeight()).map(line => paint(line)));
+      rows.push(paint(focused ? `↑/↓ scroll · Home first · ${pane.more ? "more below" : "end"} · Ctrl+T native` : `${pane.more ? "More below · " : ""}Alt+T to inspect`));
     }
+    this.layouts.set(component, { width, height: rows.length });
     return rows;
   }
   mouse(component: any, event: any) {
     const match = this.association(component);
-    if (!match || match.group.members.at(-1) !== match.record || event.y < 1) return;
+    const layout = this.layouts.get(component);
+    if (!match || match.group.members.at(-1) !== match.record || !layout || event.x < 0 || event.x >= layout.width || event.y < 1 || event.y >= layout.height) return;
     if (event.type === "click" && event.button === "left" && event.y === 1) { this.choose(match.group); match.group.pane.open = !match.group.pane.open; return { handled: true, render: true }; }
     if (event.type === "wheel" && match.group.pane.open) { this.choose(match.group); match.group.pane.move(event.wheelDelta > 0 ? "down" : "up", recordedPaneHeight()); return { handled: true, render: true }; }
   }

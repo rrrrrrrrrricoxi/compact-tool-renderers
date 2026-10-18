@@ -10,6 +10,7 @@ This repository is the authoritative source. The npm manifest stays `private: tr
 
 ## Display
 
+- Cards restore the original renderer’s native backgrounds and horizontal padding: successful tools, running actions, and failures use their native status colors. Questions use the user-message surface; recorded thinking uses the custom-message surface with readable body text.
 - Running actions remain separate. Only successful completed actions join a group, within visible conversation boundaries.
 - Open a group to see its actions. Expand several action outputs independently in the same scrollable pane. Exact arguments, recorded output, and recorded details remain available.
 - Errors, cancellations, unanswered questions, and background notices stay separate. Question cards combine the question and its recorded answer or actual status.
@@ -30,7 +31,7 @@ Thinking groups require Pi's native `hideThinkingBlock: true` preference. Pi Con
 | Prompt cards | Alt+I focuses/cycles; Enter opens/closes; Esc releases focus. |
 | Permission | Up/Down chooses Allow once, Deny, or Details; Enter selects; `d` toggles Details; Esc denies. Deny is selected initially. With Details open, Left/Right pages and Home/End jumps. |
 
-Mouse controls support tool and thinking headers, individual action expansion, wheel scrolling inside open panes, and prompt headers. Terminal mouse support depends on the terminal and transport. Keyboard controls remain available over mosh/tmux. Arrows are captured only while a pane has focus. In fullscreen Pi, PageUp/PageDown scroll the transcript before extension controls receive them; use the arrows shown above for pane content. Opening a native question or approval releases transcript focus.
+Mouse controls support tool and thinking headers, individual action expansion, wheel scrolling inside open panes, and prompt headers. Terminal mouse support depends on the terminal and transport. Keyboard controls remain available over mosh/tmux. Detailed keyboard hints appear on the focused pane. Arrows are captured only while a pane has focus. In fullscreen Pi, PageUp/PageDown scroll the transcript before extension controls receive them; use the arrows shown above for pane content. Opening a native question or approval releases transcript focus.
 
 ## Permission presentation seam
 
@@ -49,7 +50,7 @@ PI_RUNTIME=/path/to/runtime node preview.mjs
 
 The runtime directory contains `node_modules/@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui`. The default is `~/.local/state/pi-config/current/runtime`. Tests use actual native components and isolated fixtures. Coverage includes repeated synchronous redraw, separate native component caches, shell timer cleanup, status transitions, lifecycle changes, stock subagent rendering, Unicode, narrow widths, and bounded work on large outputs. No model or database calls are needed.
 
-The preview runs the actual Pi TUI with invented recorded messages in a temporary home. It blocks model, shell, tool, and network requests. `/fixture-permission` opens an inert approval example. The preview does not load host credentials or change active Pi deployments. Use Ctrl+D to exit.
+The preview runs the actual Pi TUI with invented recorded messages in a temporary home. It blocks model, shell, tool, and network requests. `/fixture-permission` opens an inert approval example. The preview does not load host credentials or change active Pi deployments. Use Ctrl+D to exit. Set `PI_PROMPT_JUMP_PATH=/path/to/pi-prompt-jump` to include the separate navigation package and inspect its behavior with the three invented user prompts.
 
 The adapters for thinking, prompt component identity, and native shell timers are isolated and gated to Pi 1.3.0. Future versions require review; passing these tests does not certify a different runtime or every terminal. Legacy 1.x implementation and development history remain in Git rather than as a second shipped renderer.
 

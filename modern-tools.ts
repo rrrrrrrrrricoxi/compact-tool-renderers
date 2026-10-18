@@ -2,6 +2,7 @@ import { Text, truncateToWidth, type TuiMouseEvent, type TuiMouseEventResult } f
 import type { ExtensionAPI, ToolRenderers } from "@earendil-works/pi-coding-agent";
 import { NativeToolOwner, nativeToolsSupported, nativeToolContextSupported, nativeTextFallback } from "./modern-native-tools.ts";
 import { ToolPane, type PaneAction } from "./modern-tool-pane.ts";
+import { cardContentWidth, cardRow } from "./display-card.ts";
 
 type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
 type Context = Parameters<NonNullable<ToolRenderers["renderCall"]>>[2];
@@ -250,7 +251,11 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       node.pane.title = question(name) ? questionTitle(node) : `${node.status === "failed" ? "✗" : node.status === "success" ? "✓" : "…"} ${toolLabel(name, node.args)} · ${node.note || node.status}${indicators(node)}`;
       const reason = failureReason(node);
       if (reason) node.pane.title += ` · ${reason}`;
-      if (theme) node.pane.styleHeader = node.status === "failed" ? text => theme.fg("error", text) : text => text;
+      if (theme) {
+        node.pane.theme = theme;
+        node.pane.background = node.status === "failed" ? "toolErrorBg" : question(name) ? "userMessageBg" : node.status === "success" ? "toolSuccessBg" : "toolPendingBg";
+        node.pane.styleHeader = text => theme.fg(node.status === "failed" ? "error" : question(name) ? "accent" : node.status === "success" ? "success" : "warning", theme.bold(text));
+      }
       return node.pane;
     };
     const mouse = (pane: ToolPane | undefined, event: TuiMouseEvent) => {
@@ -278,7 +283,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
         return new DynamicComponent(width => {
           if (node.group) return [];
           if (singleCard(node)) return individual(node, theme).render(width);
-          return [truncateToWidth(theme.fg("toolTitle", `${node.result ? "" : "… "}${toolLabel(name, node.args)}${node.result ? "" : ` · ${context.executionStarted ? "running" : "preparing"}`}`), width)];
+          return [cardRow(truncateToWidth(theme.fg("toolTitle", theme.bold(`${node.result ? "" : "… "}${toolLabel(name, node.args)}${node.result ? "" : ` · ${context.executionStarted ? "running" : "preparing"}`}`)), cardContentWidth(width)), width, theme, node.result && node.status === "success" ? "toolSuccessBg" : "toolPendingBg")];
         }, event => mouse(!node.group && singleCard(node) ? individual(node, theme) : undefined, event));
       },
       renderResult(result, options, theme, context) {
@@ -287,7 +292,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
         if (disposed || !mode.isEnabled()) return node.native.renderResult(result, options, theme, context);
         node.native.suspend(); syncExpansion(node, context.expanded);
         return new DynamicComponent(width => {
-          if (node.group) { const group = node.group; if (group.members[0] !== node) return []; return group.pane.render(width); }
+          if (node.group) { const group = node.group; if (group.members[0] !== node) return []; group.pane.theme = theme; group.pane.styleHeader = text => theme.fg("success", theme.bold(text)); return group.pane.render(width); }
           if (singleCard(node)) return [];
           return individual(node, theme).render(width);
         }, event => mouse(node.group ? node.group.members[0] === node ? node.group.pane : undefined : !singleCard(node) ? individual(node, theme) : undefined, event));

@@ -1,4 +1,5 @@
 import { truncateToWidth, wrapTextWithAnsi, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
+import { cardContentWidth, cardRow } from "./display-card.ts";
 
 export type PaneAction = { id: string; label: string; sections: () => Iterable<string> };
 // Render only visited text chunks. Never split/highlight an entire result to paint a viewport.
@@ -22,6 +23,8 @@ export class ToolPane {
   open = false;
   focused = false;
   styleHeader = (text: string) => text;
+  theme?: any;
+  background = "toolSuccessBg";
   selected = 0;
   private anchor = 0;
   offset = 0;
@@ -68,8 +71,11 @@ export class ToolPane {
   render(width: number): string[] {
     width = Math.max(1, width);
     this.lastWidth = width;
+    const outerWidth = width;
+    width = cardContentWidth(width);
+    const paint = (line: string, selected = false) => cardRow(this.theme ? this.theme.fg("text", line) : line, outerWidth, this.theme, selected ? "selectedBg" : this.background);
     const header = this.styleHeader(`${this.open ? "▾" : "▸"} ${this.title}${this.focused ? " · focused" : ""}`);
-    if (!this.open) { this.lastHeight = 1; return [truncateToWidth(`${header} · Alt+G to inspect`, width)]; }
+    if (!this.open) { this.lastHeight = 1; return [paint(truncateToWidth(header, width))]; }
     const height = Math.max(4, Math.min(20, this.height()));
     const key = `${width}:${this.anchor}:${this.selected}:${[...this.expanded].join("|")}`;
     if (key !== this.key) { this.reset(); this.key = key; this.iterator = this.body(width); }
@@ -82,8 +88,15 @@ export class ToolPane {
       else { this.rows.push(truncateToWidth(next.value, width)); this.paintedRows++; }
     }
     if (this.done) this.offset = Math.min(this.offset, Math.max(0, this.rows.length - bodyHeight));
-    const footer = `${this.selected + 1}/${this.actions.length} · ←/→ action · Enter details · ↑/↓ scroll · c collapse · Esc release${!this.done || this.offset + bodyHeight < this.rows.length ? " · more ↓" : ""}`;
-    const visible = [truncateToWidth(header, width), ...this.rows.slice(this.offset, this.offset + bodyHeight), truncateToWidth(footer, width)];
+    const more = !this.done || this.offset + bodyHeight < this.rows.length;
+    const footer = this.focused ? `${this.selected + 1}/${this.actions.length} · ←/→ action · Enter details · ↑/↓ scroll · c collapse · Esc release${more ? " · more ↓" : ""}` : `${this.actions.length} action${this.actions.length === 1 ? "" : "s"}${more ? " · more ↓" : ""} · Alt+G to inspect`;
+    const body = this.rows.slice(this.offset, this.offset + bodyHeight).map((line, index) => {
+      const action = this.actionRows.get(this.offset + index);
+      const selected = this.focused && action === this.selected;
+      if (this.theme && action !== undefined) line = this.theme.fg(selected ? "accent" : "toolTitle", this.theme.bold(line));
+      return paint(line, selected);
+    });
+    const visible = [paint(truncateToWidth(header, width)), ...body, paint(truncateToWidth(footer, width))];
     this.lastHeight = visible.length;
     return visible;
   }

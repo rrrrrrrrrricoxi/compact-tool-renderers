@@ -2,6 +2,7 @@
 
 ## 2.0.0 — Grouped display for Pi 1.3.0
 
+- Restore original shaded cards, native status colors and padding; distinguish questions and thinking, improve body contrast, and show detailed controls only for focused panes.
 - Group only successful completed actions; keep running actions, failures, questions, and background notices separate.
 - Expand action outputs independently within bounded scrollable panes; provide keyboard and mouse controls.
 - Preserve stock pi-subagents/Fleet rendering, native images, original messages, and model input.

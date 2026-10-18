@@ -40,3 +40,7 @@ No child edits another child's or parent's files without coordination. No live d
 No renderer release is published or activated yet. Package metadata targets 2.0.0; Pi Config release integration remains pending after visual acceptance.
 
 Final source review also verified native-off ANSI/background/padding parity and bounded preceding-page navigation after End in permission Details. A subsequent real mosh/tmux check exposed Pi fullscreen capturing PageUp/PageDown before extension input. Permission Details now advertises Left/Right paging; a native TuiAltScreen/InteractiveMode input regression verifies paging, unchanged background position, option selection, denial, and editor restoration. Transcript pane hints use their working Up/Down controls.
+
+## Visual correction after user preview
+
+The user’s Herdr screenshot rejected the unshaded tool groups and low-contrast thinking. Visual acceptance has not passed. Restore the original renderer’s full-width native backgrounds and padding, distinguish question/thinking cards, and reduce unfocused control clutter. Verify actual ANSI color coverage, narrow widths, focus and mouse coordinates before preparing a fresh immutable preview. Include the separately tracked Prompt Jump package after Pi 1.3 compatibility checks.

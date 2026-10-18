@@ -1,5 +1,6 @@
 import { getKeybindings, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component } from '@earendil-works/pi-tui';
 import type { DisplayMode } from './display-mode.ts';
+import { cardContentWidth, cardRow } from './display-card.ts';
 
 /** Shared with approval owners. This channel carries presentation, never policy. */
 export const PERMISSION_PRESENTATION_EVENT = 'pi:permission-presentation:v1';
@@ -178,6 +179,8 @@ export class PermissionDialog implements Component {
   invalidate() {}
   render(width: number) {
     width = Math.max(1, Math.floor(width));
+    const outerWidth = width;
+    width = cardContentWidth(width);
     this.width = width;
     const fg = (color: string, value: string) => this.theme.fg(color, value);
     const lines = (value: string) => wrapTextWithAnsi(safe(value), width).map(row => truncateToWidth(row, width, ''));
@@ -193,9 +196,12 @@ export class PermissionDialog implements Component {
     };
     const rows = [fg('accent', truncateToWidth('Approval required', width)),
       ...field('Action', this.request.action), ...field('Target', this.request.target), ...field('Reason', this.request.reason)];
+    let selectedRow = -1;
     if (shortened) rows.push(...lines('Summary shortened; full text in Details.'));
     for (const [index, title] of ['Allow once', 'Deny', `${this.detailsOpen ? 'Hide' : 'Show'} Details`].entries()) {
-      rows.push(fg(index === this.selected ? 'accent' : 'text', truncateToWidth(`${index === this.selected ? '→' : ' '} ${title}`, width)));
+      if (index === this.selected) selectedRow = rows.length;
+      const label = truncateToWidth(`${index === this.selected ? '→' : ' '} ${title}`, width, '');
+      rows.push(fg(index === this.selected ? 'accent' : 'text', index === this.selected && this.theme.bold ? this.theme.bold(label) : label));
     }
     const hints = lines('↑↓ choose · Enter select · Esc deny · d Details');
     if (this.detailsOpen) hints.push(...lines('←/→ page Details · Home/End'));
@@ -206,7 +212,7 @@ export class PermissionDialog implements Component {
       rows.push(fg('muted', truncateToWidth(`Details · text offset ${range.start}–${range.end}/${range.total}`, width)), ...body);
     }
     rows.push(...hints);
-    return rows;
+    return rows.map((row, index) => cardRow(fg('text', row), outerWidth, this.theme, index === selectedRow ? 'selectedBg' : 'toolPendingBg'));
   }
   handleInput(data: string) {
     if (this.settled) return;

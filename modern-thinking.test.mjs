@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { loadSource, core, tui, themeModule, stripAnsi } from './test-runtime.mjs';
+import { loadSource, core, tui, themeModule, stripAnsi, assertCardBackground } from './test-runtime.mjs';
 const { registerModernThinking } = await loadSource('./modern-thinking.ts');
 const { installModernThinkingAdapter } = await loadSource('./modern-thinking-adapter.ts');
 const { RecordedTextPane } = await loadSource('./modern-recorded-pane.ts');
@@ -26,8 +26,15 @@ try {
   cards.push(...rounds.map(m => new AssistantMessageComponent(m,true,themeModule.getMarkdownTheme())));
   assert.deepEqual(cards.slice(0,2).map(c=>c.render(70)),[[],[]]);
   assert.match(plain(cards[2].render(70)),/Thinking · 3 rounds/);
+  assertCardBackground(cards[2].render(100).slice(1), 100, 'customMessageBg');
+  assert.doesNotMatch(plain(cards[2].render(100)), /Alt\+T/, 'collapsed thinking omits repeated key hints');
   assert.equal(key('\x1b[B'),false,'arrows stay with editor until focused');
   assert.equal(key('\x1bt'),true);assert.equal(key('\r'),true);
+  const expandedThinking = cards[2].render(100);
+  assertCardBackground(expandedThinking.slice(1), 100, 'customMessageBg');
+  const thinkingBody = expandedThinking.find(row => stripAnsi(row).includes('Round-1 original first'));
+  assert.ok(thinkingBody.includes(themeModule.theme.getFgAnsi('text')), 'recorded thinking uses readable native text');
+  assert.ok(!thinkingBody.includes(themeModule.theme.getFgAnsi('thinkingText')), 'body does not inherit dim thinking foreground');
   let text = '';
   for(let n=0;n<14;n++){text+=plain(cards[2].render(70));key('\x1b[B');}
   for(let n=1;n<=3;n++)assert.match(text,new RegExp(`Round-${n} original first`));
