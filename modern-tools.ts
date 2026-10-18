@@ -408,7 +408,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       const { errors, cancelled, unresolved } = pane.content;
       const status = node.status === "failed" ? "✗ Failed" : context.isPartial ? context.executionStarted ? "… Running" : "Preparing" : "";
       pane.title = `codemode${status ? ` · ${status}` : ""}${calls.length ? ` · ${calls.length} nested call${calls.length === 1 ? "" : "s"}` : ""}${errors ? ` · ${errors} nested error${errors === 1 ? "" : "s"}` : ""}${cancelled ? ` · ${cancelled} nested cancelled` : ""}${unresolved ? ` · ${unresolved} nested unresolved` : ""}${typeof context.durationMs === "number" ? ` · ${(context.durationMs / 1000).toFixed(2)}s` : ""}${indicators(node)}`;
-      pane.setTheme(theme); pane.tone = node.status === "failed" ? "error" : errors || cancelled || unresolved && !context.isPartial ? "warning" : "mdLink";
+      pane.setTheme(theme); pane.tone = node.status === "failed" ? "error" : errors || cancelled || unresolved && !context.isPartial ? "warning" : "syntaxVariable";
       return true;
     };
     return {

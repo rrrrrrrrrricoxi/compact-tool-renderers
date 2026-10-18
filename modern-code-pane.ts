@@ -5,7 +5,7 @@ import { CodeContent } from "./modern-code-content.ts";
 /** Native-style codemode with lazy bounded text/call formatting. Native-off stays stock. */
 export class CodePane {
   open = false; focused = false; offset = 0;
-  title = "codemode · Preparing"; theme?: any; tone = "mdLink";
+  title = "codemode · Preparing"; theme?: any; tone = "syntaxVariable";
   content = new CodeContent();
   private rows: string[] = []; private iterator?: Iterator<string>; private done = false; private width = 0;
   private lastWidth = 0; private lastHeight = 0;
@@ -48,7 +48,15 @@ export class CodePane {
     this.lastWidth = width;
     const contentWidth = cardContentWidth(width);
     const title = `${this.open ? "▾" : "▸"} ${this.title}${this.focused ? " · focused" : ""}`;
-    const header = activityRow(this.theme ? this.theme.fg(this.tone, this.theme.bold(title)) : title, width, this.theme, this.focused);
+    // Keep category identity separate from secondary counts/timing. Failures override both.
+    const label = `${this.open ? "▾" : "▸"} codemode`;
+    const metadata = title.slice(label.length);
+    const styled = this.theme
+      ? this.theme.fg(this.tone === "error" ? "error" : "syntaxVariable", this.theme.bold(label)) +
+        metadata.split(/( · \d+ nested (?:errors?|cancelled|unresolved))/).map(part =>
+          this.theme.fg(this.tone === "error" ? "error" : this.tone === "warning" && /^ · \d+ nested (?:errors?|cancelled|unresolved)$/.test(part) ? "warning" : "muted", part)).join("")
+      : title;
+    const header = activityRow(styled, width, this.theme, this.focused);
     if (!this.open) { this.lastHeight = 1; return [header]; }
     const indent = contentWidth >= 4 ? "  " : "";
     const nativeWidth = Math.max(1, contentWidth - indent.length);

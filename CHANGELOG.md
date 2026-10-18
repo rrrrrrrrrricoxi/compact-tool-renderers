@@ -1,5 +1,11 @@
 # Release notes
 
+## 2.1.2 — Distinct codemode labels
+
+- Use native teal for the `codemode` label, with muted nested-call counts and timing. Keep ordinary action headings blue.
+- Keep failed scripts red and handled nested problems in warning color. Preserve expansion, focus, native syntax colors, and exact records.
+- Retain factual count-based summaries when the recorded call has no intention metadata. No extra model calls or inferred script descriptions.
+
 ## 2.1.1 — Clear question history and output categories
 
 - Highlight recorded answers inline with their options and tighten question spacing. Preserve custom answers and meaningful diagnostics without duplicate Answer sections.

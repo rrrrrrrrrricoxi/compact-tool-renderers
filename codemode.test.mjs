@@ -35,7 +35,8 @@ try {
   assert.equal(intervals.size, 1, 'collapsed execution retains one native timer');
   assert.match(paint(code), /▸ codemode · … Running · 1 nested call/);
   assert.equal(code.render(100).length, 2, 'native spacer plus one compact summary');
-  assert.ok(code.render(100)[1].includes(themeModule.theme.getFgAnsi('mdLink')), 'running codemode heading uses restrained native blue');
+  assert.ok(code.render(100)[1].includes(themeModule.theme.getFgAnsi('syntaxVariable')), 'running codemode label uses native teal');
+  assert.ok(code.render(100)[1].includes(themeModule.theme.getFgAnsi('muted')), 'counts and timing are secondary');
   assert.ok(backgroundCells(code.render(100)[1]).every(value => value === ''), 'running codemode leaves the terminal surface clear');
   assert.doesNotMatch(paint(code), /const value|… read/);
   mouse(code, 'click', 1);
@@ -51,6 +52,8 @@ try {
   assert.doesNotMatch(paint(code), /✗ Failed|Recorded script output|Recorded nested failure/);
   assert.equal(toolStatus('codemode', final).status, 'success', 'handled nested errors do not fail the script');
   const header = code.render(140).find(row => stripAnsi(row).includes('nested error'));
+  assert.ok(header.includes(themeModule.theme.getFgAnsi('syntaxVariable')), 'handled nested failure retains codemode category');
+  assert.ok(header.includes(themeModule.theme.getFgAnsi('muted')), 'normal counts stay muted beside warning');
   assert.ok(header.includes(themeModule.theme.getFgAnsi('warning')), 'nested failure warns on a completed script');
   assert.ok(backgroundCells(header).every(value => value === ''), 'collapsed summary uses neutral terminal surface');
   code.setExpanded(true);

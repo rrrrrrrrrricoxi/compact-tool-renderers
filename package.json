@@ -1,6 +1,6 @@
 {
   "name": "pi-compact-renderer",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "type": "module",
   "description": "Display-only successful action groups, recorded thinking, prompt cards, and permission presentation for Pi",
