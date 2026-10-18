@@ -458,5 +458,5 @@ if (existsSync(subagentRenderFile)) {
   }
 } else console.log('installed pi-subagents presentation check skipped: package unavailable');
 disposeProjection();
-writeFileSync('/Users/notrico/Documents/Codex/2026-10-15/walk/work/single-card-evidence.json', JSON.stringify({ runtime, evidence }, null, 2) + '\n');
+if (process.env.PI_CARD_EVIDENCE_PATH) writeFileSync(process.env.PI_CARD_EVIDENCE_PATH, JSON.stringify({ runtime, evidence }, null, 2) + '\n');
 console.log('modern tools: native lifecycle, grouping, questions, focus and bounded output passed');
