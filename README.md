@@ -26,10 +26,12 @@ Thinking groups require Pi's native `hideThinkingBlock: true` preference. Pi Con
 
 | Surface | Controls |
 | --- | --- |
-| Tool groups | Alt+G focuses/cycles panes; Left/Right selects an action; Enter opens its output; Up/Down scroll; `c` collapses; Esc releases focus. |
+| Tool groups | Alt+G focuses/cycles panes; Left/Right selects an action; Enter opens its output; Up/Down scroll; Esc returns to the editor. |
 | Thinking | Alt+T focuses/cycles groups; Enter opens/closes; Up/Down and Home scroll; Esc releases focus; Ctrl+T retains native visibility control. |
 | Prompt cards | Alt+I focuses/cycles; Enter opens/closes; Esc releases focus. |
 | Permission | Up/Down chooses Allow once, Deny, or Details; Enter selects; `d` toggles Details; Esc denies. Deny is selected initially. With Details open, Left/Right pages and Home/End jumps. |
+
+Only an explicit inspection shortcut captures Enter or arrow keys. Typing, pasting, or using an editor key returns control to the native editor; the next Enter submits normally. Clicking or scrolling a card changes its display without taking keyboard focus. Cards keep Pi’s native one-cell gutter and top/bottom padding.
 
 Mouse controls support tool and thinking headers, individual action expansion, wheel scrolling inside open panes, and prompt headers. Terminal mouse support depends on the terminal and transport. Keyboard controls remain available over mosh/tmux. Detailed keyboard hints appear on the focused pane. Arrows are captured only while a pane has focus. In fullscreen Pi, PageUp/PageDown scroll the transcript before extension controls receive them; use the arrows shown above for pane content. Opening a native question or approval releases transcript focus.
 

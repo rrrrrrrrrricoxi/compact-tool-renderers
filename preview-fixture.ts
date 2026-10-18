@@ -1,6 +1,9 @@
 // Harmless controls for the isolated native preview. Never loaded by the package entry point.
 export default function preview(pi: any) {
-  pi.on('input', () => ({ action: 'handled' }));
+  pi.on('input', (_event: any, ctx: any) => {
+    ctx.ui.notify('Fixture prompt received. No model or tool was called.', 'info');
+    return { action: 'handled' };
+  });
   pi.on('tool_call', () => ({ block: true, reason: 'This preview never executes tools.' }));
   pi.on('user_bash', () => ({ result: { output: 'Shell execution is disabled in this preview.', exitCode: 1, cancelled: false, truncated: false } }));
   pi.on('session_start', (_event: any, ctx: any) => ctx.ui.setStatus('preview', 'FIXTURE · no model, shell, or database calls'));

@@ -34,7 +34,7 @@ try{
   assert.match(plain(card),/original long template instructions/);assert.match(plain(card),/sample 行🙂/);
   assert.equal(card.text,original,'native recorded source stays exact');
   assert.equal(key('\x1b[B'),false,'native arrows remain available for expanded prompt scrolling');
-  assert.equal(key('\x1b'),true);assert.equal(key('\r'),false);
+  assert.equal(key('\x1b'),false,'forwarded arrow releases prompt inspection');assert.equal(key('\r'),false);
   card.handleMouse({type:'click',button:'left',y:1,x:2,width:100,height:20});assert.ok(!plain(card).includes('original long template'));
   // Identical expanded templates remain independent cards.
   const second=new UserMessageComponent(original,themeModule.getMarkdownTheme(),1,transformers);plain(second);

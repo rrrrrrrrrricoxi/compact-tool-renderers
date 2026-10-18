@@ -66,7 +66,8 @@ export function registerModernPrompts(pi: ExtensionAPI, mode: Mode): () => void 
     mouse(component, event) {
       const card = cards.get(component);
       if (!disposed && active && mode.isEnabled() && card && event.type === "click" && event.button === "left" && event.y === 1) {
-        select(card); card.open = !card.open; revision++; return { handled: true, render: true };
+        release(); pi.events.emit("compact-renderer:focus:v1", { owner: "editor" });
+        card.open = !card.open; revision++; return { handled: true, render: true };
       }
     },
   });
@@ -99,6 +100,7 @@ export function registerModernPrompts(pi: ExtensionAPI, mode: Mode): () => void 
       if (!focused || !selected || !cards.has(selected.component)) return;
       if (matchesKey(data, "escape")) { release(); redraw?.(); return { consume: true }; }
       if (matchesKey(data, "enter")) { selected.open = !selected.open; revision++; redraw?.(); return { consume: true }; }
+      release(); redraw?.();
     });
     redraw?.();
   };

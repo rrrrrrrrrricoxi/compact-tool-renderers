@@ -26,6 +26,11 @@ try {
   cards.push(...rounds.map(m => new AssistantMessageComponent(m,true,themeModule.getMarkdownTheme())));
   assert.deepEqual(cards.slice(0,2).map(c=>c.render(70)),[[],[]]);
   assert.match(plain(cards[2].render(70)),/Thinking · 3 rounds/);
+  const collapsedThinking = cards[2].render(100);
+  assert.equal(collapsedThinking.length, 4, 'native spacer and padded three-row collapsed card');
+  assert.equal(stripAnsi(collapsedThinking[1]).trim(), '', 'top padding keeps the card surface');
+  assert.match(stripAnsi(collapsedThinking[2]), /^ ▸ Thinking/);
+  assert.equal(stripAnsi(collapsedThinking.at(-1)).trim(), '', 'bottom padding keeps the card surface');
   assertCardBackground(cards[2].render(100).slice(1), 100, 'customMessageBg');
   assert.doesNotMatch(plain(cards[2].render(100)), /Alt\+T/, 'collapsed thinking omits repeated key hints');
   assert.equal(key('\x1b[B'),false,'arrows stay with editor until focused');
@@ -35,6 +40,9 @@ try {
   const thinkingBody = expandedThinking.find(row => stripAnsi(row).includes('Round-1 original first'));
   assert.ok(thinkingBody.includes(themeModule.theme.getFgAnsi('text')), 'recorded thinking uses readable native text');
   assert.ok(!thinkingBody.includes(themeModule.theme.getFgAnsi('thinkingText')), 'body does not inherit dim thinking foreground');
+  assert.match(stripAnsi(thinkingBody), /^   Round-1/, 'recorded thinking sits inside the heading');
+  assert.match(stripAnsi(expandedThinking.at(-2)), /^ ↑\/↓ scroll/, 'footer shares the header gutter');
+  assert.equal(stripAnsi(expandedThinking.at(-1)).trim(), '');
   let text = '';
   for(let n=0;n<14;n++){text+=plain(cards[2].render(70));key('\x1b[B');}
   for(let n=1;n<=3;n++)assert.match(text,new RegExp(`Round-${n} original first`));
@@ -42,6 +50,17 @@ try {
   assert.equal(key('\x1b'),true);assert.equal(key('\x1b[B'),false);
   key('\x1bt');pi.events.emit('compact-renderer:focus:v1',{owner:'tools'});assert.equal(key('\r'),false);
   key('\x1bt');emit('ui_prompt_start');assert.equal(key('\r'),false);
+  const mouseThinking = (y, type = 'click') => cards[2].handleMouse({ type, button: type === 'click' ? 'left' : 'none', x: 2, y, screenX: 2, screenY: y, width: 100, height: cards[2].render(100).length, wheelDelta: 1, shift: false, alt: false, ctrl: false });
+  const beforePaddingClick = plain(cards[2].render(100));
+  assert.equal(mouseThinking(1).handled, true);
+  assert.equal(plain(cards[2].render(100)), beforePaddingClick, 'padding click cannot invoke native thinking expansion');
+  assert.equal(mouseThinking(2).handled, true);
+  assert.doesNotMatch(plain(cards[2].render(100)), /Round-1 original first/);
+  assert.equal(key('\r'), false, 'mouse collapse leaves Enter with editor');
+  mouseThinking(2);
+  assert.match(plain(cards[2].render(100)), /Round-1 original first/);
+  assert.doesNotMatch(plain(cards[2].render(100)), /focused/);
+  assert.equal(key('\r'), false, 'mouse expansion leaves Enter with editor');
   for(const width of [1,2,3,8,24,70]) for(const row of cards[2].render(width))assert.ok(tui.visibleWidth(row)<=width);
   for(const c of cards)c.setHideThinkingBlock(false);
   for(let i=0;i<3;i++)assert.match(plain(cards[i].render(70)),new RegExp(`Round-${i+1} original first`));
@@ -72,7 +91,7 @@ try {
   branch=[entry(hugeRound)];cards.length=0;emit('session_start',{type:'session_start',reason:'resume'});cards.push(new AssistantMessageComponent(hugeRound,true,themeModule.getMarkdownTheme()));
   const markdownRender=tui.Markdown.prototype.render;let markdownPaints=0;
   tui.Markdown.prototype.render=function(...args){markdownPaints++;return markdownRender.apply(this,args);};
-  try{assert.match(plain(cards[0].render(60)),/Thinking · 1 round/);key('\x1bt');key('\r');assert.ok(cards[0].render(60).length<=15);assert.match(plain(cards[0].render(60)),/Large exact recorded line/);assert.equal(markdownPaints,0,'bounded thinking never eagerly paints native full Markdown');}
+  try{assert.match(plain(cards[0].render(60)),/Thinking · 1 round/);key('\x1bt');key('\r');assert.ok(cards[0].render(60).length<=17);assert.match(plain(cards[0].render(60)),/Large exact recorded line/);assert.equal(markdownPaints,0,'bounded thinking never eagerly paints native full Markdown');}
   finally{tui.Markdown.prototype.render=markdownRender;}
   // Exercise the real SessionManager and native initial transcript projection.
   // bindExtensions emits session_start before InteractiveMode.renderInitialMessages.

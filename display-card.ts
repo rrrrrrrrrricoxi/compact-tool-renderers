@@ -3,6 +3,12 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 export const cardPadding = (width: number) => width >= 4 ? 1 : 0;
 export const cardContentWidth = (width: number) => Math.max(1, width - cardPadding(width) * 2);
 
+/** Match Pi's default Box(1, 1): one filled row above and below the content. */
+export function cardBlock(rows: string[], width: number, theme: any, background: string): string[] {
+  const blank = fillBackground("", width, theme, background);
+  return [blank, ...rows, blank];
+}
+
 /** The legacy card fill: keep the base surface after nested ANSI resets.
  * Extended color payloads are data, not SGR reset codes. */
 export function fillBackground(line: string, width: number, theme: any, background: string): string {

@@ -1,5 +1,5 @@
 import { truncateToWidth, wrapTextWithAnsi, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
-import { cardContentWidth, cardRow } from "./display-card.ts";
+import { cardBlock, cardContentWidth, cardRow } from "./display-card.ts";
 
 export type PaneAction = { id: string; label: string; sections: () => Iterable<string> };
 // Render only visited text chunks. Never split/highlight an entire result to paint a viewport.
@@ -41,8 +41,7 @@ export class ToolPane {
   constructor(public actions: PaneAction[], public title: string, private height = () => 12) {}
   reset() { this.anchor = Math.min(this.anchor, Math.max(0, this.actions.length - 1)); this.key = ""; this.rows = []; this.iterator = undefined; this.done = false; this.actionRows.clear(); }
   handle(data: string): boolean {
-    if (data === "c") { this.open = false; return true; }
-    if (data === "\r" || data === "\n" || data === " ") {
+    if (data === "\r" || data === "\n") {
       if (!this.open) this.open = true;
       else { const id = this.actions[this.selected]?.id; if (id) this.expanded.has(id) ? this.expanded.delete(id) : this.expanded.add(id); }
       this.offset = 0; this.reset(); return true;
@@ -60,12 +59,17 @@ export class ToolPane {
     return false;
   }
   private *body(width: number): Generator<string> {
+    const indent = width >= 12 ? "  " : "";
     // Selection anchors the viewport at an action, avoiding scans through an earlier huge output.
     for (let index = this.anchor; index < this.actions.length; index++) {
       const action = this.actions[index];
       this.actionRows.set(this.rows.length, index);
-      yield `${index === this.selected ? "›" : " "} ${this.expanded.has(action.id) ? "▾" : "▸"} ${index + 1}. ${action.label}`;
-      if (this.expanded.has(action.id)) for (const section of action.sections()) yield* textRows(section, width);
+      const prefix = `${indent}${index === this.selected ? "›" : " "} ${this.expanded.has(action.id) ? "▾" : "▸"} ${index + 1}. `;
+      yield prefix + action.label;
+      const detailsIndent = width >= 12 ? " ".repeat(Math.min(prefix.length, width - 1)) : "";
+      if (this.expanded.has(action.id)) for (const section of action.sections()) {
+        for (const row of textRows(section, Math.max(1, width - detailsIndent.length))) yield detailsIndent + row;
+      }
     }
   }
   render(width: number): string[] {
@@ -75,11 +79,11 @@ export class ToolPane {
     width = cardContentWidth(width);
     const paint = (line: string, selected = false) => cardRow(this.theme ? this.theme.fg("text", line) : line, outerWidth, this.theme, selected ? "selectedBg" : this.background);
     const header = this.styleHeader(`${this.open ? "▾" : "▸"} ${this.title}${this.focused ? " · focused" : ""}`);
-    if (!this.open) { this.lastHeight = 1; return [paint(truncateToWidth(header, width))]; }
-    const height = Math.max(4, Math.min(20, this.height()));
+    if (!this.open) { this.lastHeight = 3; return cardBlock([paint(truncateToWidth(header, width))], outerWidth, this.theme, this.background); }
+    const height = Math.max(5, Math.min(20, this.height()));
     const key = `${width}:${this.anchor}:${this.selected}:${[...this.expanded].join("|")}`;
     if (key !== this.key) { this.reset(); this.key = key; this.iterator = this.body(width); }
-    const bodyHeight = height - 2;
+    const bodyHeight = height - 4;
     // Clamp a seek to one viewport beyond visited content; a key press cannot scan unbounded data.
     this.offset = Math.min(this.offset, this.rows.length);
     while (!this.done && this.rows.length < this.offset + bodyHeight + 1) {
@@ -89,14 +93,14 @@ export class ToolPane {
     }
     if (this.done) this.offset = Math.min(this.offset, Math.max(0, this.rows.length - bodyHeight));
     const more = !this.done || this.offset + bodyHeight < this.rows.length;
-    const footer = this.focused ? `${this.selected + 1}/${this.actions.length} · ←/→ action · Enter details · ↑/↓ scroll · c collapse · Esc release${more ? " · more ↓" : ""}` : `${this.actions.length} action${this.actions.length === 1 ? "" : "s"}${more ? " · more ↓" : ""} · Alt+G to inspect`;
+    const footer = this.focused ? `${this.selected + 1}/${this.actions.length} · ←/→ action · Enter details · ↑/↓ scroll · Esc release${more ? " · more ↓" : ""}` : `${this.actions.length} action${this.actions.length === 1 ? "" : "s"}${more ? " · more ↓" : ""} · Alt+G to inspect`;
     const body = this.rows.slice(this.offset, this.offset + bodyHeight).map((line, index) => {
       const action = this.actionRows.get(this.offset + index);
       const selected = this.focused && action === this.selected;
       if (this.theme && action !== undefined) line = this.theme.fg(selected ? "accent" : "toolTitle", this.theme.bold(line));
       return paint(line, selected);
     });
-    const visible = [paint(truncateToWidth(header, width)), ...body, paint(truncateToWidth(footer, width))];
+    const visible = cardBlock([paint(truncateToWidth(header, width)), ...body, paint(truncateToWidth(footer, width))], outerWidth, this.theme, this.background);
     this.lastHeight = visible.length;
     return visible;
   }
@@ -110,9 +114,9 @@ export class ToolPane {
     if (event.type !== "click" || event.button !== "left") return undefined;
     // Keep text selection gestures and output clicks from falling through to native whole-row expansion.
     if (event.shift || event.alt || event.ctrl) return { handled: true, render: false };
-    if (event.y === 0) { this.open = !this.open; return { handled: true }; }
-    const selected = this.actionRows.get(this.offset + event.y - 1);
-    if (this.open && event.y < this.lastHeight - 1 && selected !== undefined) {
+    if (event.y === 1) { this.open = !this.open; return { handled: true }; }
+    const selected = this.actionRows.get(this.offset + event.y - 2);
+    if (this.open && event.y >= 2 && event.y < this.lastHeight - 2 && selected !== undefined) {
       const id = this.actions[selected]?.id;
       if (id) {
         this.selected = selected;

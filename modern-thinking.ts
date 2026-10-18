@@ -2,7 +2,7 @@ import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import { hiddenThinkingShape, installModernThinkingAdapter } from "./modern-thinking-adapter.ts";
 import { RecordedTextPane, recordedPaneHeight } from "./modern-recorded-pane.ts";
-import { cardContentWidth, cardRow } from "./display-card.ts";
+import { cardBlock, cardContentWidth, cardRow } from "./display-card.ts";
 
 type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
 type Round = { message: any; component?: any; kind: "round" | "bridge" | "boundary"; group?: ThinkingGroup };
@@ -113,12 +113,14 @@ export class ModernThinkingGroups {
     const theme = this.theme(), innerWidth = cardContentWidth(width);
     const label = `${pane.open ? "▾" : "▸"} Thinking · ${group.members.length} round${group.members.length === 1 ? "" : "s"}${focused ? " · focused · Enter toggles · Esc releases" : ""}`;
     const paint = (line: string, heading = false) => cardRow(theme.fg(heading ? "accent" : "text", heading ? theme.bold(truncateToWidth(line, innerWidth, "…")) : truncateToWidth(line, innerWidth, "…")), width, theme, "customMessageBg");
-    const rows = ["", paint(label, true)];
+    const content = [paint(label, true)];
     if (pane.open) {
       this.sources(group);
-      rows.push(...pane.view(innerWidth, recordedPaneHeight()).map(line => paint(line)));
-      rows.push(paint(focused ? `↑/↓ scroll · Home first · ${pane.more ? "more below" : "end"} · Ctrl+T native` : `${pane.more ? "More below · " : ""}Alt+T to inspect`));
+      const indent = innerWidth >= 12 ? "  " : "";
+      content.push(...pane.view(Math.max(1, innerWidth - indent.length), recordedPaneHeight()).map(line => paint(indent + line)));
+      content.push(paint(focused ? `↑/↓ scroll · Home first · ${pane.more ? "more below" : "end"} · Ctrl+T native` : `${pane.more ? "More below · " : ""}Alt+T to inspect`));
     }
+    const rows = ["", ...cardBlock(content, width, theme, "customMessageBg")];
     this.layouts.set(component, { width, height: rows.length });
     return rows;
   }
@@ -126,8 +128,9 @@ export class ModernThinkingGroups {
     const match = this.association(component);
     const layout = this.layouts.get(component);
     if (!match || match.group.members.at(-1) !== match.record || !layout || event.x < 0 || event.x >= layout.width || event.y < 1 || event.y >= layout.height) return;
-    if (event.type === "click" && event.button === "left" && event.y === 1) { this.choose(match.group); match.group.pane.open = !match.group.pane.open; return { handled: true, render: true }; }
-    if (event.type === "wheel" && match.group.pane.open) { this.choose(match.group); match.group.pane.move(event.wheelDelta > 0 ? "down" : "up", recordedPaneHeight()); return { handled: true, render: true }; }
+    if (event.type === "click" && event.button === "left" && event.y === 2) { this.focused = false; this.focus(); match.group.pane.open = !match.group.pane.open; return { handled: true, render: true }; }
+    if (event.type === "wheel" && match.group.pane.open) { this.focused = false; this.focus(); match.group.pane.move(event.wheelDelta > 0 ? "down" : "up", recordedPaneHeight()); return { handled: true, render: true }; }
+    if (event.type === "click" && event.button === "left") return { handled: true, render: false };
   }
   input(data: string): boolean {
     if (!this.enabled()) { this.focused = false; return false; }
@@ -142,8 +145,9 @@ export class ModernThinkingGroups {
     if (!this.focused || !this.active(this.selected)) { this.focused = false; return false; }
     if (matchesKey(data, "escape")) { this.focused = false; return true; }
     if (matchesKey(data, "enter")) { this.selected.pane.open = !this.selected.pane.open; return true; }
-    if (!this.selected.pane.open) return false;
+    if (!this.selected.pane.open) { this.focused = false; return false; }
     for (const direction of ["up", "down", "pageUp", "pageDown", "home"] as const) if (matchesKey(data, direction)) { this.selected.pane.move(direction, recordedPaneHeight()); return true; }
+    this.focused = false;
     return false;
   }
 }
@@ -166,7 +170,11 @@ export function registerModernThinking(pi: ExtensionAPI, mode: Mode): () => void
     adapter = installModernThinkingAdapter({ associate: (c, m) => groups?.associate(c, m), render: (c, w) => groups?.render(c, w), mouse: (c, e) => groups?.mouse(c, e), clear: () => groups?.clear() });
     if (!adapter) { groups.clear(); groups = undefined; return; }
     redraw = () => ui.setHiddenThinkingLabel();
-    input = ui.onTerminalInput?.((data: string) => { if (groups?.input(data)) { redraw?.(); return { consume: true }; } });
+    input = ui.onTerminalInput?.((data: string) => {
+      const wasFocused = groups?.focused;
+      if (groups?.input(data)) { redraw?.(); return { consume: true }; }
+      if (wasFocused && !groups?.focused) redraw?.();
+    });
     redraw();
   };
   const subscriptions: (() => void)[] = [];

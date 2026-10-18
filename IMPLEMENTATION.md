@@ -44,3 +44,11 @@ Final source review also verified native-off ANSI/background/padding parity and 
 ## Visual correction after user preview
 
 The user’s Herdr screenshot rejected the unshaded tool groups and low-contrast thinking. Visual acceptance has not passed. Restore the original renderer’s full-width native backgrounds and padding, distinguish question/thinking cards, and reduce unfocused control clutter. Verify actual ANSI color coverage, narrow widths, focus and mouse coordinates before preparing a fresh immutable preview. Include the separately tracked Prompt Jump package after Pi 1.3 compatibility checks.
+
+## Native spacing and editor-focus correction
+
+The next user screenshot showed one-line colored strips, inconsistent expanded alignment, and Enter blocking prompt submission. Native Pi uses `Box(1, 1)` for tool blocks. Compact tool/thinking surfaces now preserve that top/bottom padding and native horizontal gutter; nested action/output indentation is explicit and wrapping uses the remaining width. Mouse hit coordinates include the padding.
+
+The input defect came from terminal listeners retaining inspection focus after forwarding typing to the editor; mouse expansion also acquired keyboard focus. Only explicit inspection shortcuts now acquire keyboard focus. Unhandled editing input releases inspection before reaching the native editor; mouse expansion releases keyboard inspection. Ordinary `c` and Space are no longer inspector commands. The new input-focus suite exercises real native Editor typing, paste, Backspace and submission through all three extension listeners. No model/tool/history behavior changes.
+
+Visual acceptance remains pending for this correction. Prior rejected candidates are not release approval.

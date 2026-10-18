@@ -48,6 +48,13 @@ read.markExecutionStarted(); read.updateResult(result('first output'));
 const shell = make('bash', 'b', { command: 'printf hello' }); shell.markExecutionStarted(); shell.updateResult(result('streaming'), true);
 assert.match(paint(read), /1 successful action/);
 assert.match(paint(shell), /running/);
+for (const component of [read]) {
+  const rows = component.render(100);
+  assert.equal(rows.length, 4, 'collapsed card retains the native spacer plus Box(1,1) height');
+  assert.equal(stripAnsi(rows[1]).trim(), '', 'native top background row');
+  assert.equal(stripAnsi(rows.at(-1)).trim(), '', 'native bottom background row');
+}
+assertCardBackground(read.render(100).slice(1), 100, 'toolSuccessBg');
 assertCardBackground(read.render(100).filter(row => stripAnsi(row).trim()), 100, 'toolSuccessBg');
 assertCardBackground(shell.render(100).filter(row => stripAnsi(row).trim()), 100, 'toolPendingBg');
 assert.doesNotMatch(paint(read), /Alt\+G/, 'unfocused collapsed cards omit repeated key hints');
@@ -63,6 +70,12 @@ assert.ok(focusedAction.includes(themeModule.theme.getFgAnsi('accent')), 'select
 input('\r');
 assert.match(paint(read), /Exact arguments/);
 assert.match(paint(read), /first output/);
+const detailLayout = read.render(100).map(stripAnsi);
+assert.match(detailLayout[2], /^ ▾ /, 'header uses the native one-cell gutter');
+assert.match(detailLayout.find(row => row.includes('1. read')), /^   › ▾ /, 'actions sit inside the group heading');
+assert.equal(detailLayout.find(row => row.includes('first output')).indexOf('first output'), detailLayout.find(row => row.includes('1. read')).indexOf('read'), 'recorded output aligns with the expanded action label');
+assert.match(detailLayout.at(-2), /^ 1\//, 'footer shares the header gutter');
+assert.doesNotMatch(detailLayout.join('\n'), /c collapse/);
 input('\x1b[C'); input('\r');
 assert.match(paint(read), /printf hello/);
 assert.match(paint(read), /hello/);
@@ -131,9 +144,9 @@ const partialFailureOutput = 'partial failure output\nexact second failure line'
 fail.updateResult({ ...result(partialFailureOutput, { error: 'Recorded denial: ' + 'x'.repeat(5000) }), isError: true }, true);
 assert.match(paint(fail), /failed · Recorded denial:/, 'partial errors remain visible as exceptional cards');
 assert.equal(paint(fail).split('\n').filter(line => line.includes('bash · false')).length, 1);
-assert.ok(paint(fail, 500).trimEnd().length < 400, 'collapsed failure reason has a bounded length before the full-width card gutter');
+assert.ok(paint(fail, 500).split('\n').map(row => row.trim()).join('').length < 400, 'collapsed failure reason has a bounded length before the full-width card gutter');
 const failureMouse = (y) => fail.handleMouse({ type: 'click', button: 'left', x: 2, y, screenX: 2, screenY: y, width: 120, height: fail.render(120).length, shift: false, alt: false, ctrl: false });
-failureMouse(1); failureMouse(2);
+failureMouse(2); failureMouse(3);
 assert.match(paint(fail), /partial failure output/);
 assert.match(paint(fail), /exact second failure line/, 'full recorded failure output remains inline');
 input('\x1b');
@@ -179,19 +192,23 @@ const mouseAt = (component, type, y, extra = {}) => {
 const rowAt = (component, fragment) => component.render(120).findIndex(line => stripAnsi(line).includes(fragment));
 assert.equal(mouseAt(mouseFirst, 'click', 0), undefined, 'native spacer cannot focus a pane');
 assert.equal(input('\x1b[A'), undefined);
-assert.equal(mouseAt(mouseFirst, 'wheel', 1, { wheelDelta: 3 }), undefined, 'closed pane preserves transcript wheel scrolling');
-assert.equal(mouseAt(mouseFirst, 'click', 1, { x: -1 }).handled, true);
+assert.equal(mouseAt(mouseFirst, 'wheel', 2, { wheelDelta: 3 }), undefined, 'closed pane preserves transcript wheel scrolling');
+assert.equal(mouseAt(mouseFirst, 'click', 2, { x: -1 }).handled, true);
 assert.equal(input('\x1b[A'), undefined, 'outside x suppresses native toggle without focus');
-assert.equal(mouseAt(mouseFirst, 'click', 1).handled, true);
-assert.match(paint(mouseFirst), /focused/);
+assert.equal(mouseAt(mouseFirst, 'click', 1).handled, true, 'top padding contains clicks without toggling');
+assert.doesNotMatch(paint(mouseFirst), /1\. read/);
+assert.equal(mouseAt(mouseFirst, 'click', 2).handled, true);
+assert.doesNotMatch(paint(mouseFirst), /focused/);
+assert.equal(input('\r'), undefined, 'mouse expansion leaves Enter with the editor');
 assert.match(paint(mouseFirst), /1\. read/);
 mouseAt(mouseFirst, 'click', rowAt(mouseFirst, '1. read'));
 assert.match(paint(mouseFirst), /mouse first output/);
+mouseAt(mouseFirst, 'wheel', 3, { wheelDelta: 2 });
 const secondActionRow = rowAt(mouseFirst, '2. read'); assert.ok(secondActionRow > 0);
 mouseAt(mouseFirst, 'click', secondActionRow);
 assert.match(paint(mouseFirst), /mouse first output/, 'clicking second action preserves the earlier inline output');
-assert.match(paint(mouseFirst), /▾ 2\. read/, 'second action expands independently');
 mouseAt(mouseFirst, 'wheel', 3, { wheelDelta: 9 });
+assert.match(paint(mouseFirst), /▾ 2\. read/, 'second action expands independently');
 assert.match(paint(mouseFirst), /mouse second output/);
 input('\x1b');
 const outputRow = rowAt(mouseFirst, 'mouse second output');
@@ -200,7 +217,7 @@ assert.equal(input('\x1b[A'), undefined, 'output text click does not take keyboa
 assert.match(paint(mouseFirst), /mouse second output/, 'output click cannot trigger native whole-row collapse');
 mouseAt(mouseFirst, 'wheel', 3, { wheelDelta: -20 });
 assert.match(paint(mouseFirst), /mouse first output/);
-mouseAt(mouseFirst, 'click', 1);
+mouseAt(mouseFirst, 'click', 2);
 assert.doesNotMatch(paint(mouseFirst), /1\. read/, 'group header closes the inline pane');
 input('\x1b');
 assert.equal(input('\x1b[A'), undefined);
@@ -238,6 +255,21 @@ try {
 } finally { for (const handle of intervals) actualClearInterval(handle); globalThis.setInterval = actualSetInterval; globalThis.clearInterval = actualClearInterval; }
 // A 10 MB output is not eagerly split or painted. Stored source remains unchanged.
 const huge = '漢字🙂 exact\x1b[31m\n'.repeat(400000);
+// Pi's real Box establishes the reference for default card spacing.
+const nativeBox = new tui.Box(1, 1, text => themeModule.theme.bg('toolSuccessBg', text));
+nativeBox.addChild(new tui.Text('▸ Ref', 0, 0));
+const referencePane = new ToolPane([], 'Ref');
+referencePane.theme = themeModule.theme;
+for (const width of [8, 30, 80]) {
+  assert.deepEqual(referencePane.render(width).map(stripAnsi), nativeBox.render(width).map(stripAnsi));
+  assertCardBackground(referencePane.render(width), width, 'toolSuccessBg');
+}
+const multiDigit = new ToolPane(Array.from({ length: 10 }, (_, index) => ({ id: String(index), label: 'read', sections: function* () { yield 'tenth output'; } })), 'Ten actions');
+multiDigit.open = true;
+for (let index = 0; index < 9; index++) multiDigit.handle('\x1b[C');
+multiDigit.expanded.add('9');
+const tenthRows = multiDigit.render(80).map(stripAnsi);
+assert.equal(tenthRows.find(row => row.includes('tenth output')).indexOf('tenth output'), tenthRows.find(row => row.includes('10. read')).indexOf('read'), 'detail alignment includes the full multi-digit action prefix');
 const pane = new ToolPane([{ id: 'large', label: 'large', sections: function* () { yield huge; } }], 'Large', () => 10);
 pane.open = true; pane.expanded.add('large');
 for (const width of [1, 8, 20, 80]) {

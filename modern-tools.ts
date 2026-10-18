@@ -203,6 +203,9 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       if (!focused) return;
       if (data === "\u001b") { release(); redraw(); return { consume: true }; }
       if (focused.handle(data)) { redraw(); return { consume: true }; }
+      // Editing belongs to the native editor. Release inspection before forwarding
+      // the first typed character, paste, or editor key so Enter submits normally.
+      release(); redraw();
     });
   };
   const on = (event: string, callback: any) => { const off = (pi.on as any)(event, callback); if (typeof off === "function") subscriptions.push(off); };
@@ -262,8 +265,8 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       if (!pane || disposed || !mode.isEnabled()) return undefined;
       const result = pane.handleMouse(event);
       if (result?.handled && result.render !== false) {
-        release(); focused = pane; pane.focused = true;
-        pi.events.emit("compact-renderer:focus:v1", { owner: "tools" }); redraw();
+        release();
+        pi.events.emit("compact-renderer:focus:v1", { owner: "editor" }); redraw();
       }
       // Native MouseRegion otherwise toggles the entire row for an out-of-bounds left click.
       if (!result && event.type === "click" && event.button === "left") return { handled: true, render: false };

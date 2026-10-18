@@ -44,7 +44,7 @@ call('failed-1', 'bash', { command: 'fixture-failure' }, 'Invented failure: samp
 call('question-2', 'ask_user_question', { question: 'Cancelled example' }, 'No answer recorded.', { status: 'cancelled', question: 'Cancelled example' });
 append({ role: 'user', content: 'Show one final successful action.' });
 call('read-2', 'read', { path: '/fixture/last.txt' }, 'Recorded final output.');
-assistant([{ type: 'text', text: 'Preview controls: Alt+G focuses tools; Left/Right selects an action; Enter expands its output; Up/Down scroll; Esc releases focus. Alt+T focuses recorded thinking; Alt+I focuses the prompt. /fixture-permission opens a harmless approval dialog. /compact-rendering switches display. Ctrl+D exits.' }]);
+assistant([{ type: 'text', text: 'Preview controls: Alt+G focuses tools; Left/Right selects an action; Enter expands its output; Up/Down scroll; Esc or typing returns to the editor. Alt+T focuses recorded thinking; Alt+I focuses the prompt. /fixture-permission opens a harmless approval dialog. /compact-rendering switches display. Ctrl+D exits.' }]);
 if (promptJump) assistant([{ type: 'text', text: 'Prompt navigation: /prompt-jump list selects one of the three invented user prompts; /prompt-jump back returns; /prompt-jump end follows the latest output.' }]);
 manager.appendSessionInfo('compact-renderer-preview');
 let runtime, ui;
