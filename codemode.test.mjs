@@ -53,9 +53,8 @@ try {
   assert.ok(backgroundCells(header).every(value => value === ''), 'collapsed summary uses neutral terminal surface');
   code.setExpanded(true);
   const pane = code.callRendererComponent.owner.code;
-  const nativeExpanded = stripAnsi([...pane.nativeCall.render(136), ...pane.nativeResult.render(136)].join('\n'));
-  for (const pattern of [/const value/, /✓ read/, /250ms/, /✗ model/, /500ms/, /\$0\.02/, /Recorded nested failure/, /Recorded script output/, /Took 0\.8s/]) assert.match(nativeExpanded, pattern);
-  assert.ok(pane.nativeCall.render(136).some(row => row.includes('\x1b[')), 'native syntax highlighting remains');
+  assert.equal(pane.content.supported, true);
+  assert.ok(code.render(140).some(row => row.includes(themeModule.theme.getFgAnsi('syntaxKeyword'))), 'native keyword colors remain');
   let visible = paint(code);
   for (let index = 0; index < 12; index++) { mouse(code, 'wheel', 2, 2); visible += '\n' + paint(code); }
   for (const pattern of [/const value/, /✓ read/, /250ms/, /✗ model/, /500ms/, /\$0\.02/, /Recorded nested failure/, /Recorded script output/, /Took 0\.8s/]) assert.match(visible, pattern);
@@ -90,6 +89,85 @@ try {
   assert.equal(intervals.size, 1); event('session_before_switch'); assert.equal(intervals.size, 0, 'session switch clears native owned timer');
   running.invalidate(); assert.equal(intervals.size, 0, 'stale renderer cannot restart owned timer'); event('session_start');
  } finally { for (const handle of intervals) originalClearInterval(handle); globalThis.setInterval = originalSetInterval; globalThis.clearInterval = originalClearInterval; }
+ // Giant fixtures count actual formatted characters/calls, separately from revision aggregation.
+ const hugeScript = 'const paths = ["/fixture/a", "/fixture/b"];\n'.repeat(250000);
+ const hugeOutput = 'stdout value 中文🙂 '.repeat(400000);
+ const hugeCalls = Array.from({length: 20000}, (_, index) => ({name:'read',args:`/fixture/${index}`,status:'ok',durationMs:1}));
+ Object.defineProperty(hugeCalls[19999], 'irrelevant', {get(){throw new Error('unused metadata getter must not be visited');}});
+ const huge = create('codemode', 'bounded-giant', {code:hugeScript}, codemodeRenderers);
+ const hugeResult = {content:[{type:'text',text:hugeOutput}],details:{calls:hugeCalls},durationMs:81234};
+ huge.updateResult(hugeResult);
+ const giantPane = huge.callRendererComponent.owner.code;
+ assert.equal(giantPane.content.sourceCharacters,0,'collapsed construction/update formats zero source characters');
+ assert.equal(giantPane.content.paintedCalls,0,'collapsed construction/update formats zero nested calls');
+ assert.equal(giantPane.content.aggregateEntries,20000,'one aggregate pass for the result revision');
+ for(let i=0;i<3;i++){huge.invalidate();huge.render(100);}
+ assert.equal(giantPane.content.aggregateEntries,20000,'redraw/invalidation does not rescan nested-call aggregate');
+ huge.setExpanded(true);huge.render(100);
+ assert.ok(giantPane.content.sourceCharacters<=2048,'first viewport formats only bounded source chunks, not the 10 MB script');
+ assert.equal(giantPane.content.paintedCalls,0,'viewport does not visit later nested calls');
+ const initialCharacters=giantPane.content.sourceCharacters;
+ huge.render(100);huge.render(100);assert.equal(giantPane.content.sourceCharacters,initialCharacters,'repeated paint uses visited row cache');
+ huge.invalidate();huge.render(100);assert.equal(giantPane.content.sourceCharacters,initialCharacters,'unchanged native invalidation preserves body cache');
+ const beforeAggregate=giantPane.content.aggregateEntries;
+ hugeCalls[0].status='error';hugeCalls[0].error='in-place recorded error';
+ event('tool_execution_update',{toolCallId:'bounded-giant',toolName:'codemode',args:{code:hugeScript},partialResult:hugeResult});
+ huge.updateResult(hugeResult,true);
+ assert.equal(giantPane.content.errors,1,'explicit update revision detects in-place status mutation');
+ assert.equal(giantPane.content.aggregateEntries-beforeAggregate,20000,'in-place update aggregates once, not once per renderer slot');
+ hugeCalls.push({name:'read',args:'/fixture/new',status:'cancelled'});
+ event('tool_execution_update',{toolCallId:'bounded-giant',toolName:'codemode',args:{code:hugeScript},partialResult:hugeResult});huge.updateResult(hugeResult,true);
+ assert.equal(giantPane.content.calls.length,20001);assert.equal(giantPane.content.cancelled,1,'same array identity can gain a cancelled call');
+ huge.updateResult(hugeResult); // No execution start, so this synthetic partial replay owns no clock.
+ const stdoutOnly=create('codemode','bounded-stdout',{code:''},codemodeRenderers);stdoutOnly.updateResult({content:[{type:'text',text:hugeOutput}],details:{calls:[]}});stdoutOnly.setExpanded(true);stdoutOnly.render(100);
+ assert.ok(stdoutOnly.callRendererComponent.owner.code.content.sourceCharacters<=2048,'giant stdout has bounded formatting');
+ const hugeError=create('codemode','bounded-nested-error',{code:'text(1);'},codemodeRenderers);
+ hugeError.updateResult({content:[],details:{calls:[{name:'read',args:'/fixture',status:'error',error:'recorded error '.repeat(500000)}]}});hugeError.setExpanded(true);hugeError.render(100);
+ assert.ok(hugeError.callRendererComponent.owner.code.content.sourceCharacters<=4096,'giant nested errors are chunked too');
+ const tailCalls=Array.from({length:80},(_,index)=>({name:'read',args:`tail-call-${index}`,status:'ok'}));
+ const tailRecord={content:[{type:'text',text:'tail-output-start\n'+('recorded output row\n'.repeat(70))+'LAST-OUTPUT🙂'}],details:{calls:tailCalls,fullOutputPath:'/fixture/exact-full-output.log'}};
+ const tailBefore=JSON.stringify(tailRecord);
+ const tail=create('codemode','bounded-tail',{code:('const value = 1;\n'.repeat(80))+'// LAST-SOURCE🙂'},codemodeRenderers);tail.updateResult(tailRecord);tail.setExpanded(true);
+ const tailPane=tail.callRendererComponent.owner.code;let visited=paint(tail);
+ for(let i=0;i<100;i++){tailPane.offset+=10;visited+='\n'+paint(tail);}
+ for(const text of ['LAST-SOURCE🙂','tail-call-79','LAST-OUTPUT🙂','/fixture/exact-full-output.log'])assert.ok(visited.includes(text),`all recorded sections remain reachable: ${text}`);
+ assert.equal(JSON.stringify(tailRecord),tailBefore,'full traversal leaves original record unchanged');
+ const safe=create('codemode','bounded-unicode',{code:'const 中文 = "🙂";\n// \u202e'},codemodeRenderers);safe.updateResult(result('exact\x1b[31m\u202e\u0000end'));safe.setExpanded(true);
+ const safeText=paint(safe);assert.match(safeText,/\\u001b\[31m\\u202e\\u0000end/);assert.doesNotMatch(safeText,/\u202e/);
+ for(const width of [1,2,8,40])for(const line of safe.render(width))assert.ok(tui.visibleWidth(line)<=width);
+ const replay=create('codemode','bounded-duration-replay',{code:''},codemodeRenderers);replay.updateResult({content:[{type:'text',text:'Script completed\nWall time 73.25 seconds\nOutput:\n'},{type:'text',text:'replay output'}],details:{calls:[]}});replay.setExpanded(true);
+ assert.match(paint(replay),/Wall time 73.25 seconds/,'replay without duration keeps its recorded envelope');
+ replay.updateResult({...result('replay output'),durationMs:73250});assert.match(paint(replay),/Took 1m 13s/,'duration retains seconds above one minute');
+ const themeFixture=create('codemode','bounded-theme',{code:'const themeValue = 1;'},codemodeRenderers);themeFixture.updateResult(result('theme output'));themeFixture.setExpanded(true);themeFixture.render(140);
+ const themePane=themeFixture.callRendererComponent.owner.code, themed=themePane.content.sourceCharacters;
+ const activeTheme=globalThis[Symbol.for("@earendil-works/pi-coding-agent:theme")], originalFg=activeTheme.fg;
+ try{
+  activeTheme.fg=function(token,text){return ['toolOutput','syntaxKeyword'].includes(token)?'\x1b[38;5;201m'+text+'\x1b[39m':originalFg.call(this,token,text);};
+  themeFixture.invalidate();assert.ok(themeFixture.render(140).some(row=>row.includes('\x1b[38;5;201m')),'theme mutation invalidates cached ANSI');
+  assert.ok(themePane.content.sourceCharacters>themed);
+ }finally{activeTheme.fg=originalFg;themeFixture.invalidate();}
+ const emptyBlocks=Array.from({length:100000},()=>({type:'text',text:''}));emptyBlocks.push({type:'text',text:'nonempty tail output'});
+ const empties=create('codemode','bounded-empty-blocks',{code:''},codemodeRenderers);empties.updateResult({content:emptyBlocks,details:{calls:[]}});
+ const emptyPane=empties.callRendererComponent.owner.code;
+ assert.equal(emptyPane.content.aggregateBlocks,100001,'empty block indexing is once-per-update work');
+ empties.setExpanded(true);assert.match(paint(empties),/nonempty tail output/);
+ assert.equal(emptyPane.content.aggregateBlocks,100001,'paint does not rescan empty output blocks');
+ assert.ok(emptyPane.content.sourceCharacters<100,'only the visible nonempty output is formatted');
+ // Nontext/new native shapes use stock rendering, including both native slots.
+ const preFallbackChoices=[];pi.events.emit('compact-renderer:inspect:v1',{add:choice=>preFallbackChoices.push(choice)});
+ const image=create('codemode','bounded-image-fallback',{code:'text("image");'},codemodeRenderers);image.updateResult({content:[{type:'image',mimeType:'image/png',data:''}],details:{calls:[]}});
+ assert.doesNotMatch(paint(image),/▸ codemode/,'unsupported nontext result retains native fallback');
+ assert.match(paint(image),/image\/png|image/);
+ const fallbackChoices=[];pi.events.emit('compact-renderer:inspect:v1',{add:choice=>fallbackChoices.push(choice)});
+ assert.equal(fallbackChoices.length,preFallbackChoices.length,'unsupported native fallback is absent from compact inspector');
+ image.updateResult(result('supported again'));image.setExpanded(true);
+ assert.match(paint(image),/supported again/,'fallback to supported is visible immediately');assert.doesNotMatch(paint(image),/image\/png/);
+ image.updateResult({content:[{type:'image',mimeType:'image/png',data:''}],details:{calls:[]}});assert.match(paint(image),/image/,'supported to native fallback is visible immediately');
+ image.updateResult(result('supported again'));
+ const restoredChoices=[];pi.events.emit('compact-renderer:inspect:v1',{add:choice=>restoredChoices.push(choice)});
+ assert.ok(restoredChoices.length>fallbackChoices.length,'supported result restores compact inspection');
+
+ const unsupported=create('codemode','bounded-invalid-fallback',{code:42},codemodeRenderers);assert.match(paint(unsupported),/invalid arg/);
  // Replay preserves script boundaries between adjacent successes.
  const replayFirst = create('read', 'replay-before', { path: '/fixture/replay-before' }, readRenderers); replayFirst.updateResult(result('first'));
  event('message_end', { message: { role: 'assistant', content: [{ type: 'toolCall', id: 'replay-code', name: 'codemode', arguments: { code: 'text(1)' } }] } });
@@ -98,5 +176,5 @@ try {
  assert.match(paint(last), /read · \/fixture\/after/); assert.doesNotMatch(paint(last), /2 actions/);
  assert.doesNotMatch(paint(replayCode), /successful action/);
  assert.match(paint(replayFirst), /read · \/fixture\/replay-before/); assert.doesNotMatch(paint(replayFirst), /2 actions/);
- console.log('codemode: collapsed summary, native detail components, nested outcome, timer, mouse/inspection/editor/Ctrl+O, viewport and transcript checks passed');
+ console.log('codemode: collapsed summary, bounded native-style details, nested outcome, timer, mouse/inspection/editor/Ctrl+O, viewport and transcript checks passed');
 } finally { dispose(); }

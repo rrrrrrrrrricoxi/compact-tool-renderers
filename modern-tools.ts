@@ -9,7 +9,7 @@ import { cardContentWidth, activityRow } from "./display-card.ts";
 type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
 type Context = Parameters<NonNullable<ToolRenderers["renderCall"]>>[2];
 type Status = "pending" | "running" | "success" | "failed" | "cancelled" | "unavailable" | "unanswered" | "answered" | "notice";
-type Node = { id: string; name: string; args: any; epoch: number; status: Status; result?: any; note?: string; pane?: ToolPane; code?: CodePane; group?: Group; native: NativeToolOwner; invalidate?: () => void; nativeExpanded?: boolean; rendererAttached?: boolean; revision: number };
+type Node = { id: string; name: string; args: any; epoch: number; status: Status; result?: any; note?: string; pane?: ToolPane; code?: CodePane; group?: Group; native: NativeToolOwner; invalidate?: () => void; nativeExpanded?: boolean; rendererAttached?: boolean; revision: number; lastPartial?: boolean; lastError?: boolean };
 type Group = { members: Node[]; pane: ToolPane; signature: string };
 const shortName = (name: string) => name.split("__").at(-1) || name;
 export const isNativeSubagent = (name: string) => /^(?:subagents?(?:_|$)|fleet(?:_|$))/i.test(shortName(name));
@@ -102,27 +102,51 @@ function* sections(node: Node): Generator<PaneContent> {
     }
     return;
   }
-  if (node.result) {
-    yield { text: "Output", kind: "section" };
-    for (const block of node.result.content ?? []) {
-      if (block.type === "text") {
-        const path = node.args?.path ?? node.args?.file_path;
-        const language = shortName(node.name) === "read" && typeof path === "string" ? getLanguageFromPath(path) : undefined;
-        const markdown = language === "markdown" || block.mimeType === "text/markdown";
-        yield { text: String(block.text ?? ""), ...(markdown ? { format: "markdown" as const } : language ? { format: "code" as const, language } : {}) };
-      }
-      else if (block.type === "image") yield `[Recorded image: ${clean(block.mimeType)}; native preview is retained outside groups]`;
-      else yield* recordedValues(block);
-    }
+  if (node.name === "write" && node.status === "success" && typeof node.args?.content === "string" && typeof node.args?.path === "string") {
+    const text = node.args.content, language = getLanguageFromPath(node.args.path);
+    if (text.length <= 120 && !/[\r\n\p{Cc}\p{Cf}]/u.test(text)) yield { text, label: "Content", ...(language ? { format: "code" as const, language } : {}) };
+    else { yield { text: "Content", kind: "section" }; yield { text, ...(language ? { format: "code" as const, language } : {}) }; }
   }
-  if (node.result) yield " ";
+  const failure = compactFailure(node);
+  if (failure) yield `${failure.code} · ${failure.label}`;
+  else if (!standardWrite(node)) yield* outputSections(node);
+}
+function standardWrite(node: Node): boolean {
+  const path = node.args?.path;
+  return node.name === "write" && node.status === "success" && typeof path === "string" && path.length <= 512 &&
+    typeof node.args?.content === "string" && node.result?.content?.length === 1 && node.result.content[0].type === "text" &&
+    node.result.content[0].text === `Successfully wrote to ${path}`;
+}
+function compactFailure(node: Node) {
+  if (!["read", "write", "edit", "bash", "powershell"].includes(node.name)) return;
+  const category = knownFailure(node);
+  const content = node.result?.content;
+  if (!category || content?.length !== 1 || content[0].type !== "text" || typeof content[0].text !== "string") return;
+  // Only an explicit diagnostic prefix is collapsed; mixed/unknown output stays visible.
+  if (content[0].text.slice(0, 128).trimStart().startsWith(`${category.code}:`) || content[0].text.slice(0, 128).trimStart().startsWith(`Error: ${category.code}:`)) return category;
+}
+function* outputSections(node: Node): Generator<PaneContent> {
+  for (const block of node.result?.content ?? []) {
+    if (block.type === "text") {
+      const path = node.args?.path ?? node.args?.file_path;
+      const language = node.name === "read" && node.status !== "failed" && typeof path === "string" ? getLanguageFromPath(path) : undefined;
+      const markdown = language === "markdown" || block.mimeType === "text/markdown";
+      yield { text: String(block.text ?? ""), ...(markdown ? { format: "markdown" as const } : language ? { format: "code" as const, language } : {}) };
+    }
+    else if (block.type === "image") yield `[Recorded image: ${clean(block.mimeType)}; native preview is retained outside groups]`;
+    else yield* recordedValues(block);
+  }
+}
+function* actionDetails(node: Node): Generator<PaneContent> {
+  if (standardWrite(node) || compactFailure(node)) { yield { text: "Output", kind: "section" }; yield* outputSections(node); }
   yield { text: "Arguments", kind: "section" }; yield* recordedValues(node.args, 0, new Set(), argumentLanguages(node));
   const details = node.result?.details;
   const emptyDetails = details !== null && typeof details === "object" && !Array.isArray(details) && Object.keys(details).length === 0;
-  if (details !== undefined && !emptyDetails) { yield " "; yield { text: "Details", kind: "section" }; yield* recordedValues(details, 0, new Set(), { diff: "diff", code: "javascript" }); }
+  if (details !== undefined && !emptyDetails) { yield { text: "Recorded details", kind: "section" }; yield* recordedValues(details, 0, new Set(), { diff: "diff", code: "javascript" }); }
 }
-function failureReason(node: Node): string {
-  if (node.status !== "failed") return "";
+
+function knownFailure(node: Node): { code: string; label: string } | undefined {
+  if (node.status !== "failed") return;
   const details = node.result?.details;
   let reason = typeof details?.error === "string" ? details.error : typeof details?.errorMessage === "string" ? details.errorMessage : "";
   if (!reason) for (const block of node.result?.content ?? []) {
@@ -137,8 +161,14 @@ function failureReason(node: Node): string {
   const code = sample.match(/\b(ENAMETOOLONG|ENOENT|EACCES|EPERM|EISDIR|ENOTDIR|ETIMEDOUT|ECONNREFUSED|ENOSPC|ENOMEM|EEXIST)\b/)?.[1];
   if (code) {
     const categories: Record<string, string> = { ENAMETOOLONG: "Path too long", ENOENT: "File not found", EACCES: "Permission denied", EPERM: "Operation not permitted", EISDIR: "Expected a file", ENOTDIR: "Expected a directory", ETIMEDOUT: "Timed out", ECONNREFUSED: "Connection refused", ENOSPC: "No space left", ENOMEM: "Out of memory", EEXIST: "Already exists" };
-    return categories[code];
+    return { code, label: categories[code] };
   }
+}
+function failureReason(node: Node): string {
+  if (node.status !== "failed") return "";
+  const known = knownFailure(node);
+  if (known) return known.label;
+  const details = node.result?.details;
   if (typeof details?.exitCode === "number") return `Command failed (exit ${details.exitCode})`;
   return ["bash", "powershell"].includes(shortName(node.name)) ? "Command failed" : "Tool failed";
 }
@@ -176,15 +206,15 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     // Snapshot before native synchronous invalidate -> updateDisplay -> renderer registration.
     for (const invalidate of [...new Set([...nodes.values()].map(node => node.invalidate).filter(Boolean))]) invalidate!();
   };
-  const release = () => { if (focused) { focused.focused = false; focused = undefined; } };
-  const panes = () => [...nodes.values()].flatMap<ToolPane | CodePane>(node => node.group ? node.group.members[0] === node ? [node.group.pane] : [] : node.code ? [node.code] : node.pane ? [node.pane] : []);
+  const release = (preserveAnchor = false) => { if (focused) { focused.focused = false; if (!preserveAnchor && focused instanceof ToolPane) focused.releaseInspection(); focused = undefined; } };
+  const panes = () => [...nodes.values()].flatMap<ToolPane | CodePane>(node => node.group ? node.group.members[0] === node ? [node.group.pane] : [] : node.code ? node.code.content.supported ? [node.code] : [] : node.pane ? [node.pane] : []);
   const focusPane = (pane: ToolPane | CodePane) => {
     if (disposed || !mode.isEnabled() || !panes().includes(pane)) return;
     release(); focused = pane; pane.focused = true; pane.open = true; redraw();
     pi.events.emit("compact-renderer:focus:v1", { owner: "tools", label: pane.title,
       target: (component: any) => component instanceof DynamicComponent && (component.owner?.group?.pane || component.owner?.code || component.owner?.pane) === pane });
   };
-  const action = (node: Node): PaneAction => ({ id: node.id, label: toolLabel(node.name, node.args) + indicators(node), sections: () => sections(node) });
+  const action = (node: Node): PaneAction => ({ id: node.id, label: toolLabel(node.name, node.args) + indicators(node), sections: () => sections(node), ...(question(node.name) ? {} : { details: () => actionDetails(node) }) });
   const refreshGroups = () => {
     let run: Node[] = [];
     const next = new Map<string, Group>();
@@ -222,9 +252,11 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     if (name === "codemode") node.code ||= new CodePane(height);
     return node;
   };
-  const record = (node: Node, result: any, partial: boolean, error: boolean) => {
-    const next = toolStatus(node.name, result, partial, error);
-    const changed = node.result?.content !== result?.content || node.result?.details !== result?.details || node.status !== next.status || node.note !== next.note;
+  const record = (node: Node, result: any, partial: boolean, error: boolean, force = false) => {
+    if (node.code && !force && node.result?.content === result?.content && node.result?.details === result?.details && node.lastPartial === partial && node.lastError === error) { node.result = result; return; }
+    node.lastPartial = partial; node.lastError = error;
+    const next = node.code ? { status: (error || result?.isError ? "failed" : partial ? "running" : "success") as Status, note: undefined } : toolStatus(node.name, result, partial, error);
+    const changed = force || node.result?.content !== result?.content || node.result?.details !== result?.details || node.status !== next.status || node.note !== next.note;
     node.result = result; node.note = next.note; node.status = next.status;
     if (!changed) return;
     node.revision++; node.pane?.reset();
@@ -242,13 +274,13 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     } else if (message?.role === "toolResult") {
       if (usesNativePresentation(message.toolName || "")) { epoch++; return; }
       const node = ensure(message.toolCallId, message.toolName || "tool");
-      record(node, message, false, !!message.isError);
+      record(node, message, false, !!message.isError, true);
       if (node.status !== "success") epoch++;
     } else if (message?.role !== "system" && !(message?.role === "custom" && message.display === false)) epoch++;
   };
   const clear = () => {
     release(); inputOff?.(); inputOff = undefined;
-    for (const node of nodes.values()) node.native.dispose();
+    for (const node of nodes.values()) { node.native.dispose(); node.code?.dispose(); }
     nodes = new Map(); groups = new Map(); epoch = 0; generation++;
   };
   const attach = (_event: any, ctx: any) => {
@@ -288,10 +320,15 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     if (question(event.toolName)) epoch++;
     refreshGroups();
   });
+  on("tool_execution_update", (event: any) => {
+    if (event.parentToolCallId || event.toolName !== "codemode") return;
+    const node = ensure(event.toolCallId, event.toolName, event.args);
+    record(node, event.partialResult, true, !!event.partialResult?.isError, true);
+  });
   on("tool_execution_end", (event: any) => {
     if (event.parentToolCallId || usesNativePresentation(event.toolName)) return;
     const node = ensure(event.toolCallId, event.toolName);
-    record(node, event.result, false, !!event.isError); node.native.suspend();
+    record(node, event.result, false, !!event.isError, true); node.native.suspend();
     if (node.status !== "success") epoch++;
     redraw();
   });
@@ -301,7 +338,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
   }));
   const focusOff = pi.events.on("compact-renderer:focus:v1", (event: any) => { if (event?.owner !== "tools") { release(); redraw(); } });
   if (typeof focusOff === "function") subscriptions.push(focusOff);
-  subscriptions.push(mode.onChange(() => { release(); for (const node of nodes.values()) node.native.suspend(); redraw(); }));
+  subscriptions.push(mode.onChange(() => { release(); for (const node of nodes.values()) { node.native.suspend(); node.code?.suspend(); } redraw(); }));
   pi.registerToolRenderer((name, next) => {
     const stock = next();
     if (usesNativePresentation(name)) return stock;
@@ -336,7 +373,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       if (!pane || disposed || !mode.isEnabled()) return undefined;
       const result = pane.handleMouse(event);
       if (result?.handled && result.render !== false) {
-        release();
+        release(true);
         pi.events.emit("compact-renderer:focus:v1", { owner: "editor" }); redraw();
       }
       // Native MouseRegion otherwise toggles the entire row for an out-of-bounds left click.
@@ -349,26 +386,26 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     };
     const codePane = (node: Node, theme: any, context: Context) => {
       const pane = node.code!;
-      const calls = Array.isArray(node.result?.details?.calls) ? node.result.details.calls : [];
-      const errors = calls.filter((call: any) => ["error", "failed"].includes(call.status)).length;
-      const cancelled = calls.filter((call: any) => call.status === "cancelled").length;
-      const unresolved = calls.filter((call: any) => ["started", "running", "unavailable"].includes(call.status)).length;
+      node.native.suspend(); pane.adoptClock(node.native.clock);
+      const supported = pane.update(node.args, node.result, node.revision, context);
+      if (!supported) { pane.suspend(); node.native.adoptClock(pane.clock); return false; }
+      const calls = pane.content.calls;
+      const { errors, cancelled, unresolved } = pane.content;
       const status = node.status === "failed" ? "✗ Failed" : context.isPartial ? context.executionStarted ? "… Running" : "Preparing" : "";
       pane.title = `codemode${status ? ` · ${status}` : ""}${calls.length ? ` · ${calls.length} nested call${calls.length === 1 ? "" : "s"}` : ""}${errors ? ` · ${errors} nested error${errors === 1 ? "" : "s"}` : ""}${cancelled ? ` · ${cancelled} nested cancelled` : ""}${unresolved ? ` · ${unresolved} nested unresolved` : ""}${typeof context.durationMs === "number" ? ` · ${(context.durationMs / 1000).toFixed(2)}s` : ""}${indicators(node)}`;
-      pane.theme = theme; pane.tone = node.status === "failed" ? "error" : errors || cancelled || unresolved || context.isPartial ? "warning" : "toolTitle";
-      pane.setNative(node.native.context(context, "call").lastComponent, node.native.context(context, "result").lastComponent);
-      return pane;
+      pane.setTheme(theme); pane.tone = node.status === "failed" ? "error" : errors || cancelled || unresolved || context.isPartial ? "warning" : "toolTitle";
+      return true;
     };
     return {
       renderShell: "self",
       renderCall(args, theme, context) {
         if (disposed || !nativeToolContextSupported(context) || stale(context)) return stock?.renderCall?.(args, theme, { ...context, executionStarted: false, state: {}, lastComponent: undefined }) ?? new Text(json(args), 0, 0);
         const node = get(args, context);
-        if (disposed || !mode.isEnabled()) return node.native.renderCall(args, theme, context);
+        if (disposed || !mode.isEnabled()) { node.code?.suspend(); if (node.code) node.native.adoptClock(node.code.clock); return node.native.renderCall(args, theme, context); }
         if (node.code) {
-          node.native.renderCall(args, theme, { ...context, expanded: true });
-          syncExpansion(node, context.expanded); codePane(node, theme, context);
-          return new DynamicComponent(width => node.code!.render(width), event => mouse(node.code, event), node);
+          if (!codePane(node, theme, context)) node.native.renderCall(args, theme, context);
+          syncExpansion(node, context.expanded);
+          return new DynamicComponent(width => node.code!.content.supported ? node.code!.render(width) : node.native.renderCurrent(width), event => node.code!.content.supported ? mouse(node.code, event) : undefined, node);
         }
         node.native.suspend(); syncExpansion(node, context.expanded);
         return new DynamicComponent(width => {
@@ -380,10 +417,10 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       renderResult(result, options, theme, context) {
         if (disposed || !nativeToolContextSupported(context) || stale(context)) return stock?.renderResult?.(result, options, theme, { ...context, executionStarted: false, state: {}, lastComponent: undefined }) ?? nativeTextFallback(result, theme);
         const node = get(context.args, context); record(node, result, options.isPartial, context.isError);
-        if (disposed || !mode.isEnabled()) return node.native.renderResult(result, options, theme, context);
+        if (disposed || !mode.isEnabled()) { node.code?.suspend(); if (node.code) node.native.adoptClock(node.code.clock); return node.native.renderResult(result, options, theme, context); }
         if (node.code) {
-          node.native.renderResult(result, { ...options, expanded: true }, theme, { ...context, expanded: true });
-          syncExpansion(node, context.expanded); codePane(node, theme, context);
+          if (!codePane(node, theme, context)) { node.native.renderCall(node.args, theme, context); node.native.renderResult(result, options, theme, context); }
+          syncExpansion(node, context.expanded);
           return new DynamicComponent(() => [], undefined, node);
         }
         node.native.suspend(); syncExpansion(node, context.expanded);

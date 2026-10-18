@@ -15,6 +15,9 @@ export function* recordedValues(value: any, indent = 0, ancestors = new Set<obje
     const field = value[key];
     const label = Array.isArray(value) ? `[${key}]` : key;
     if (field === null || typeof field !== "object" && typeof field !== "string") yield { text: `${label}: ${scalar(field)}`, indent, kind: "field", format: "code", language: "json" };
+    else if (typeof field === "string" && !languages[key] && field.length <= 160 && !/[\r\n\p{Cc}\p{Cf}]/u.test(field)) {
+      yield { text: `${label}: ${JSON.stringify(field)}`, indent, kind: "field", format: "code", language: "json" };
+    }
     else {
       yield { text: `${label}:`, indent, kind: "field" };
       yield* recordedValues(field, indent + 2, ancestors, languages, languages[key]);

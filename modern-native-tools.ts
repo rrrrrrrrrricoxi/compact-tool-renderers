@@ -63,6 +63,9 @@ export class NativeToolOwner {
     this.nativeShell(theme, context);
     return this.empty;
   }
+  renderCurrent(width: number) { return (this.stock?.renderShell === "self" ? this.call : this.shell)?.render(width) ?? []; }
+  get clock() { return { startedAt: this.state.startedAt as number | undefined, endedAt: this.state.endedAt as number | undefined }; }
+  adoptClock(clock: { startedAt?: number; endedAt?: number }) { this.state.startedAt ??= clock.startedAt; this.state.endedAt ??= clock.endedAt; }
   suspend() {
     // Pi 1.3.0 render-utils ToolTimerState. Only clear a handle owned by this native state.
     // Never inspect or mutate the host row's rendererState or extension execution timers.

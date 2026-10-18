@@ -1,22 +1,39 @@
-import { matchesKey, truncateToWidth, type Component, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
+import { matchesKey, truncateToWidth, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
 import { activityRow, cardContentWidth } from "./display-card.ts";
+import { CodeContent } from "./modern-code-content.ts";
 
-/** A viewport over Pi's actual native components. No script/result text is reconstructed. */
+/** Native-style code mode with lazy bounded text/call formatting. Native-off stays stock. */
 export class CodePane {
-  open = false;
-  focused = false;
-  offset = 0;
-  title = "codemode · Preparing";
-  theme?: any;
-  tone = "toolTitle";
-  private call?: Component;
-  private result?: Component;
-  private lastWidth = 0;
-  private lastHeight = 0;
+  open = false; focused = false; offset = 0;
+  title = "codemode · Preparing"; theme?: any; tone = "toolTitle";
+  content = new CodeContent();
+  private rows: string[] = []; private iterator?: Iterator<string>; private done = false; private width = 0;
+  private lastWidth = 0; private lastHeight = 0;
+  private startedAt?: number; private endedAt?: number; private interval?: ReturnType<typeof setInterval>;
+  private themeKey = "";
+  private partial = false; private isError = false; private durationMs?: number;
+  paintedRows = 0;
   constructor(private height: () => number) {}
-  get nativeCall() { return this.call; }
-  get nativeResult() { return this.result; }
-  setNative(call?: Component, result?: Component) { this.call = call; this.result = result; }
+  get clock() { return { startedAt: this.startedAt, endedAt: this.endedAt }; }
+  adoptClock(clock: { startedAt?: number; endedAt?: number }) { this.startedAt ??= clock.startedAt; this.endedAt ??= clock.endedAt; }
+  suspend() { if (this.interval !== undefined) clearInterval(this.interval); this.interval = undefined; }
+  dispose() { this.suspend(); this.rows = []; this.iterator = undefined; }
+  private reset() { this.rows = []; this.iterator = undefined; this.done = false; this.width = 0; }
+  setTheme(theme: any) {
+    const tokens = ["text", "toolTitle", "toolOutput", "mdCodeBlock", "muted", "dim", "warning", "error", "success", "syntaxKeyword", "syntaxString", "syntaxComment", "syntaxNumber", "syntaxFunction", "syntaxOperator", "syntaxPunctuation", "syntaxType", "syntaxVariable", "toolDiffAdded", "toolDiffRemoved"];
+    const key = tokens.map(token => theme?.fg(token, "x") ?? "x").join("") + (theme?.bg("selectedBg", "x") ?? "x") + (theme?.bold("x") ?? "x");
+    if (key !== this.themeKey) { this.themeKey = key; this.reset(); }
+    this.theme = theme;
+  }
+  update(args: any, result: any, revision: number, context: any) {
+    if (this.content.update(args, result, revision)) this.reset();
+    if (context.executionStarted) this.startedAt ??= Date.now();
+    if (this.durationMs !== context.durationMs || this.isError !== context.isError) this.reset();
+    this.partial = context.isPartial; this.isError = context.isError; this.durationMs = context.durationMs;
+    if (result && (!this.partial || this.isError)) { this.endedAt ??= Date.now(); this.suspend(); }
+    else if (result && this.partial && this.startedAt !== undefined && !this.interval) this.interval = setInterval(() => context.invalidate(), 1000);
+    return this.content.supported;
+  }
   handle(data: string): boolean {
     if (matchesKey(data, "enter")) { this.open = !this.open; this.offset = 0; return true; }
     if (matchesKey(data, "home")) { this.open = true; this.offset = 0; return true; }
@@ -35,24 +52,38 @@ export class CodePane {
     if (!this.open) { this.lastHeight = 1; return [header]; }
     const indent = contentWidth >= 4 ? "  " : "";
     const nativeWidth = Math.max(1, contentWidth - indent.length);
-    const rows = [...(this.call?.render(nativeWidth) || []), ...(this.result?.render(nativeWidth) || [])];
+    if (this.width !== nativeWidth) { this.reset(); this.width = nativeWidth; this.offset = 0; }
+    this.iterator ??= this.content.rows(nativeWidth, this.theme, this.isError, this.durationMs !== undefined || this.startedAt !== undefined);
     const bodyHeight = Math.max(1, Math.min(20, this.height()) - 2);
-    this.offset = Math.min(this.offset, Math.max(0, rows.length - bodyHeight));
-    const body = rows.slice(this.offset, this.offset + bodyHeight).map(row => activityRow(indent + row, width, this.theme));
-    const more = this.offset + bodyHeight < rows.length;
-    const footer = this.focused ? `Enter collapse · ↑/↓ scroll · Home start · Esc release${more ? " · more ↓" : ""}` : more ? "more ↓" : "";
-    const visible = [header, ...body, ...(footer ? [activityRow(this.theme ? this.theme.fg("dim", truncateToWidth(footer, contentWidth)) : footer, width, this.theme)] : [])];
-    this.lastHeight = visible.length;
-    return visible;
+    this.offset = Math.min(this.offset, this.rows.length);
+    while (!this.done && this.rows.length <= this.offset + bodyHeight) {
+      const row = this.iterator.next();
+      if (row.done) this.done = true;
+      else { this.rows.push(truncateToWidth(row.value, nativeWidth, "")); this.paintedRows++; }
+    }
+    if (this.done) this.offset = Math.min(this.offset, Math.max(0, this.rows.length - bodyHeight));
+    const body = this.rows.slice(this.offset, this.offset + bodyHeight).map(row => activityRow(indent + row, width, this.theme));
+    const more = !this.done || this.offset + bodyHeight < this.rows.length;
+    const duration = (ms: number) => {
+      const seconds = ms / 1000;
+      if (seconds < 60) return `${seconds.toFixed(1)}s`;
+      const total = Math.floor(seconds), minutes = Math.floor(total / 60), remainder = total % 60;
+      return minutes < 60 ? `${minutes}m ${remainder}s` : `${Math.floor(minutes / 60)}h ${minutes % 60}m ${remainder}s`;
+    };
+    let timer = "";
+    if (!this.partial && this.durationMs !== undefined) timer = `Took ${duration(this.durationMs)}`;
+    else if (this.startedAt !== undefined) timer = `${this.partial ? "Elapsed" : "Took"} ${duration((this.endedAt ?? Date.now()) - this.startedAt)}`;
+    const footer = [timer, this.focused ? `Enter collapse · ↑/↓ scroll · Home start · Esc release${more ? " · more ↓" : ""}` : more ? "more ↓" : ""].filter(Boolean).join(" · ");
+    const visible = [header, ...body, ...(footer ? [activityRow(this.theme ? this.theme.fg("muted", truncateToWidth(footer, contentWidth)) : truncateToWidth(footer, contentWidth), width, this.theme)] : [])];
+    this.lastHeight = visible.length; return visible;
   }
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
     if (event.x < 0 || event.x >= this.lastWidth || event.y < 0 || event.y >= this.lastHeight) return undefined;
-    if (event.type === "wheel" && this.open && Number.isFinite(event.wheelDelta) && event.wheelDelta) {
-      this.offset = Math.max(0, this.offset + Math.max(-20, Math.min(20, Math.trunc(event.wheelDelta)))); return { handled: true };
-    }
+    if (event.type === "wheel" && this.open && Number.isFinite(event.wheelDelta) && event.wheelDelta) { this.offset = Math.max(0, this.offset + Math.max(-20, Math.min(20, Math.trunc(event.wheelDelta)))); return { handled: true }; }
     if (event.type !== "click" || event.button !== "left") return undefined;
     if (event.shift || event.alt || event.ctrl) return { handled: true, render: false };
     if (event.y === 0) { this.open = !this.open; this.offset = 0; return { handled: true }; }
     return { handled: true, render: false };
   }
+  invalidate() { this.reset(); }
 }

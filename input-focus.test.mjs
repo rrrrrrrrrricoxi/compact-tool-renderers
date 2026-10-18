@@ -45,6 +45,7 @@ try {
       { chunks: ['calculate'], expected: 'calculate' },
       { chunks: ['©', '†'], expected: '©†' },
       { chunks: ['c', 'ostmade'], expected: 'costmade' },
+      { chunks: ['d', 'ensity'], expected: 'density' },
       { chunks: [' ', 'status'], expected: ' status' },
       { chunks: ['\x1b[200~', 'pasted status', '\x1b[201~'], expected: 'pasted status' },
       { initial: 'statux', chunks: ['\x7f', 's'], expected: 'status' },
@@ -67,6 +68,16 @@ try {
     component.handleMouse({ type: 'click', button: 'left', x: 2, y: header, width: 100, height: lines.length });
     assert.equal(key('\r'), false, 'a card click does not intercept editor submission');
   }
+  // Details clicks preserve editor focus; /inspect Tab only changes the inline target.
+  pi.events.emit('compact-renderer:focus:v1', { owner: 'editor' });
+  tool.setExpanded(true);
+  const detailRows = tool.render(100), detailRow = detailRows.findIndex(row => row.includes('Details'));
+  assert.ok(detailRow >= 0);
+  tool.handleMouse({ type: 'click', button: 'left', x: 3, y: detailRow, width: 100, height: detailRows.length });
+  assert.equal(key('\t'), false, 'editor Tab stays native after clicking Details');
+  assert.equal(key('\r'), false, 'Details mouse expansion never captures editor Enter');
+  assert.equal(key('\x1bg'), true); assert.equal(key('\t'), true); assert.equal(key('\x1b[Z'), true);
+  send('density'); assert.equal(key('\r'), false, 'typing releases Details inspection for normal submission');
   // Explicit keyboard inspection still supports Enter until the user starts editing.
   for (const shortcut of ['\x1bg', '\x1bt', '\x1bi']) {
     assert.equal(key(shortcut), true); assert.equal(key('\r'), true);

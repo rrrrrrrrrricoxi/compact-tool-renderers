@@ -62,11 +62,12 @@ export async function createPreview() {
       append({ role: 'toolResult', toolCallId: id, toolName: name, content: Array.isArray(output) ? output : [{ type: 'text', text: output }], details, isError, ...(durationMs === undefined ? {} : { durationMs }) });
     };
     append({ role: 'user', content: template });
-    call('read-1', 'read', { path: '/fixture/example.txt' }, 'Recorded first line\nRecorded second line', {}, false, '# Inspect the sample fields\n\n' + Array.from({ length: 70 }, (_, i) => `Synthetic paragraph ${i + 1}: compare the sample identifier, recorded units, and required fields. This is invented preview text, not model reasoning.`).join('\n\n'));
-    call('shell-1', 'bash', { command: 'printf sample' }, Array.from({ length: 250 }, (_, i) => `Example row ${i + 1} · 中文 · coating units kg/L`).join('\n'), {}, false,
-      '# Compare the recorded output\n\n' + Array.from({ length: 70 }, (_, i) => `Synthetic paragraph ${i + 1}: inspect the fixture output and retain missing-value warnings. This is invented preview text for scrolling tests.`).join('\n\n'));
-    call('edit-1', 'edit', { path: '/fixture/example.txt', oldText: 'before', newText: 'after' }, 'Recorded edit completed.', { warning: 'Example warning retained in the group label.' });
-    assistant([{ type: 'text', text: 'Visible reply: the three completed actions above form one group. This reply separates the next group. /fixture above is a prompt template; the native [skill] example appears below.' }]);
+    call('write-1', 'write', { path: '/fixture/sample-a.txt', content: 'alpha' }, 'Successfully wrote to /fixture/sample-a.txt', {}, false, '**Inspect the sample fields**\n\n' + Array.from({ length: 70 }, (_, i) => `Synthetic paragraph ${i + 1}: compare the sample identifier, recorded units, and required fields. This is invented preview text, not model reasoning.`).join('\n\n'));
+    call('write-2', 'write', { path: '/fixture/sample-b.txt', content: 'beta' }, 'Successfully wrote to /fixture/sample-b.txt', {}, false, '# Compare the recorded output\n\n' + Array.from({ length: 70 }, (_, i) => `Synthetic paragraph ${i + 1}: inspect the fixture output and retain missing-value warnings. This is invented preview text for scrolling tests.`).join('\n\n'));
+    call('read-1', 'read', { path: '/fixture/sample-a.txt', offset: null, limit: null }, 'alpha');
+    call('read-density-2', 'read', { path: '/fixture/sample-b.txt', offset: null, limit: null }, 'beta');
+    call('missing-density', 'read', { path: '/fixture/missing.txt', offset: null, limit: null }, "ENOENT: no such file or directory, access '/fixture/missing.txt'", {}, true);
+    assistant([{ type: 'text', text: 'Visible reply: the four actions above form one group. The missing-file error stays separate. Expand an action for content, then its Details for exact arguments and diagnostics. /fixture above is a prompt template; the native [skill] example appears below.' }]);
     append({ role: 'user', content: 'Show the recorded native JavaScript, detailed questions, and failure examples.' });
     const code = [
       '// Synthetic recording only. This script is never executed.',

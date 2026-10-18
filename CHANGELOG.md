@@ -1,5 +1,13 @@
 # Release notes
 
+## 2.1.0 — Content-first inspection and bounded code mode
+
+- Show useful action content first, keep exact arguments under independently expandable Details, and remove gaps between sibling actions. Preserve readable question history.
+- Render supported code-mode scripts, nested calls, errors, output, timing, and costs incrementally as the user scrolls. Retain all recorded content and metadata.
+- Preserve editor return, native-off display, and fallback for unsupported result shapes. Handle streaming updates, theme changes, and timer cleanup.
+- Aggregate result blocks/calls once per update; cache visited rows. Long multiline syntax colors can differ at chunk boundaries.
+- Verify the combined preview in local Herdr and CCC over mosh/tmux before publication.
+
 ## 2.0.1 — Readable inspection and concise summaries
 
 - Show compact operation labels for embedded scripts and short failure categories. Keep exact commands and errors in expanded details.
