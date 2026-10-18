@@ -18,17 +18,15 @@ Authoritative package: rrrrrrrrrricoxi/compact-tool-renderers. The approved scop
 - [x] User accepted the final quiet preview after terminal review; harmless native mosh/tmux checks also passed. Normal installed-session acceptance is tracked separately below.
 - [x] Publish config, stage both hosts, guarded activation and actual startup-label checks.
 
-## Release outcome — 2026-10-18
+## Current release and acceptance — 2026-10-18
 
-Current installed release: `v2.0.1` at `3a92b30`, pinned and active on MacBook and CCC through Pi Config `1.6.2`. The Content first density change below is a new unpublished candidate awaiting visual review. The following earlier implementation/acceptance notes are historical.
+Renderer **2.1.1** (`60d4eb2e3e94faa3266d1362b71bcdcba634d6ea`) is published and active on MacBook and CCC through Pi Config **1.6.4** (`7494a95da507d61a5f870caa6d3ebb6aa22b2692`). Both hosts activated through their deployment guards after the user closed Pi. Active manifests, exact Git lockfile pins, package versions, matching renderer file hashes, and cleared pending updates were verified. Host credentials, package resolutions, and unrelated configuration work remain intact.
 
-This section supersedes the historical candidate status below. The user accepted the final quiet preview with “Looks good for now.” Published `v2.0.0` at `a3deec933cad02c527ef5b18c70124ce04e95de6`; Pi Config `pi-config-v1.6.0` pins that exact commit and replaces its embedded renderer. Prompt Jump `v0.2.0` is pinned separately. Both hosts activated through their deployment guards without stopping sessions.
+All nine native renderer regression suites pass on both machines. Native startup labels, 17 mode selectors, and isolated native `codemode` execution/rendering also pass. The user approved the final preview after refining questions to bold purple headings without a background or rail. Selected answers remain green and inline; native subagents/Fleet remain unchanged.
 
-Final installed-package checks pass on MacBook and CCC: all nine renderer suites, actual native startup-resource labels with one copy each, and mode selectors. The Pi Config selector test now compares visible status state, allowing an idempotent clear of the inspection footer when a native selector opens. Permission policy and renderer behavior did not change for that test correction.
+Live acceptance transcripts on both hosts confirm ordinary writes/reads, a separate expected missing-file failure, native `codemode` with one fulfilled and one rejected nested read, and question option/custom/cancelled outcomes. These execution results were recorded before the final presentation update. After 1.6.4 activation, the user confirmed “Pass on both machines” for recorded question inspection, Esc/editor typing, `/prompt-jump list`, `back`, `end`, and exit/resume. This completes the final live acceptance gate. This user report is distinct from automated test and transcript evidence.
 
-The user requested a separate post-publication acceptance test. Pi Config `docs/compact-acceptance.md` contains runnable workspace setup, prompts, and a pending host-results table. It covers real model/tool interactions, inspection/editor return, code mode, question history, prompt navigation, and resume. No live test transcript is available yet; automated and preview evidence must not be reported as live-session acceptance.
-
-Released v2.0.1 limit: code mode used a viewport over eager native components. The new user-approved bounded native-style candidate below replaces that compact-mode path. Native mode off and unsupported shapes still delegate to stock and retain its eager-formatting behavior.
+Pi Config's `docs/compact-acceptance.md` contains the current acceptance procedure and results. The task's `work/compact-live-acceptance-2026-10-18.md` retains the chronological evidence and earlier failures. Earlier releases and rejected candidates below are historical; their pending statuses do not describe the current deployment.
 
 ## Ownership and interface
 
@@ -39,7 +37,7 @@ Permission worker owns permission-presentation.ts plus Pi Config's permission ca
 Each registration returns a dispose callback. mode has isEnabled(): boolean and onChange(callback): unsubscribe. Modules use current Pi 1.3.0 and must fall back truthfully on incompatible shapes. Tests resolve PI_RUNTIME (runtime folder) or PI_INSTALL_ROOT (agent package), with the current host runtime as default; no fixed Homebrew paths.
 No child edits another child's or parent's files without coordination. No live database/model calls, no installed-source edits, and no independent commits or pushes.
 
-## Integration evidence (2026-10-18)
+## Historical integration evidence (2026-10-18)
 
 - All five standalone native-component suites passed from the packed candidate on MacBook and CCC. The source suite also covers restored native shell backgrounds/padding and unknown-renderer fallback output.
 - Pi Config native selector and actual startup-resource checks passed; startup labels are pi-ascend-bridge and pi-compact-renderer, with one copy each and unchanged commands.
@@ -49,7 +47,7 @@ No child edits another child's or parent's files without coordination. No live d
 - Pi Config seeds native hidden-thinking only if absent; native Ctrl+T changes remain unowned and survive deploys without drift. Both actual hosts currently have no explicit hideThinkingBlock value.
 - Legacy 1.x implementation files are removed from the working tree; Git retains their history. The embedded Pi Config renderer is retired only when the published standalone pin is integrated.
 
-That pre-release integration stage is complete. The current release/pin is stated above; only the new Content first density candidate remains pending.
+That pre-release integration stage is complete. The current release and completed acceptance evidence are stated above.
 
 Final source review also verified native-off ANSI/background/padding parity and bounded preceding-page navigation after End in permission Details. A subsequent real mosh/tmux check exposed Pi fullscreen capturing PageUp/PageDown before extension input. Permission Details now advertises Left/Right paging; a native TuiAltScreen/InteractiveMode input regression verifies paging, unchanged background position, option selection, denial, and editor restoration. Transcript pane hints use their working Up/Down controls.
 
@@ -111,6 +109,6 @@ Regressions include a 11-million-character script, 20,000 nested calls, giant st
 
 Content-first inspection and bounded `codemode` shipped in renderer 2.1.0 with Pi Config 1.6.3. Both hosts activated that release. The user then approved the Decision highlight mockup: questions need visible emphasis as decision records, without returning to large filled tool blocks.
 
-This candidate keeps question descriptions and options close together. Recorded selections receive an inline green checkmark; custom answers remain explicit. A bold purple question heading distinguishes the card from ordinary prose. The user refined the design to remove the header background and vertical rail. Questions now use the same gutter and indentation as other actions; only keyboard focus receives a background. Ordinary action and `codemode` headings use a restrained native category color; thinking headings are muted; failure headings remain red. Focus retains its separate selection background. Native user prompts, skill cards, and subagent/Fleet rendering remain unchanged. The exact feature name is `codemode`.
+This release keeps question descriptions and options close together. Recorded selections receive an inline green checkmark; custom answers remain explicit. A bold purple question heading distinguishes the card from ordinary prose. The user refined the design to remove the header background and vertical rail. Questions now use the same gutter and indentation as other actions; only keyboard focus receives a background. Ordinary action and `codemode` headings use a restrained native category color; thinking headings are muted; failure headings remain red. Focus retains its separate selection background. Native user prompts, skill cards, and subagent/Fleet rendering remain unchanged. The exact feature name is `codemode`.
 
-The change affects display only. It does not execute tools, change permissions, rewrite recorded answers, or add model calls. The combined preview was made available on both machines, and the user approved proceeding after the final alignment refinement. Automated native checks passed on both hosts. Publication and guarded activation are separate from the remaining installed-session acceptance checks. Isolated previews do not activate a release or modify running sessions.
+The change affects display only. It does not execute tools, change permissions, rewrite recorded answers, or add model calls. The combined preview was made available on both machines, and the user approved proceeding after the final alignment refinement. Automated native checks passed on both hosts. Publication, guarded activation, and final installed-session acceptance are complete as recorded above. Isolated previews do not activate a release or modify running sessions.
