@@ -2,10 +2,10 @@ import { matchesKey, truncateToWidth, type TuiMouseEvent, type TuiMouseEventResu
 import { activityRow, cardContentWidth } from "./display-card.ts";
 import { CodeContent } from "./modern-code-content.ts";
 
-/** Native-style code mode with lazy bounded text/call formatting. Native-off stays stock. */
+/** Native-style codemode with lazy bounded text/call formatting. Native-off stays stock. */
 export class CodePane {
   open = false; focused = false; offset = 0;
-  title = "codemode · Preparing"; theme?: any; tone = "toolTitle";
+  title = "codemode · Preparing"; theme?: any; tone = "mdLink";
   content = new CodeContent();
   private rows: string[] = []; private iterator?: Iterator<string>; private done = false; private width = 0;
   private lastWidth = 0; private lastHeight = 0;

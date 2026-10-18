@@ -75,30 +75,46 @@ function indicators(node: Node) {
   const details = node.result?.details;
   return `${details?.truncation?.truncated || details?.truncated ? " · output truncated" : ""}${details?.fullOutputPath ? " · full output saved" : ""}${details?.warning || details?.warnings?.length ? " · warning recorded" : ""}`;
 }
+function matchesQuestionOption(answer: any, option: any, index: number): boolean {
+  if (!answer || answer.type && answer.type !== "option") return false;
+  // pi-questions records one-based indices. They disambiguate repeated labels/values.
+  if (Number.isInteger(answer.index)) return answer.index === index + 1;
+  if (answer.value !== undefined) return answer.value === (option?.value ?? option?.label);
+  return answer.label !== undefined && answer.label === option?.label;
+}
 function* sections(node: Node): Generator<PaneContent> {
   if (question(node.name)) {
     const details = node.result?.details;
-    yield { text: "Question", kind: "section" };
     yield String(details?.question ?? node.args?.question ?? "");
     const context = details?.context ?? node.args?.details;
-    if (typeof context === "string" && context) yield context;
+    if (typeof context === "string" && context.trim()) yield context;
+    const answers = node.status === "answered" && Array.isArray(details?.answers) ? details.answers : [];
+    const matched = new Set<number>();
     if (Array.isArray(node.args?.options) && node.args.options.length) {
-      yield " "; yield { text: "Options", kind: "section" };
-      for (const [index, option] of node.args.options.entries()) {
-        yield `${index + 1}. ${String(option.label ?? "")}`;
-        if (typeof option.description === "string" && option.description) yield { text: option.description, indent: 2 };
+      let index = 0;
+      for (const recordedOption of node.args.options) {
+        // Match pi-questions' trim/filter normalization without reading later options eagerly.
+        const label = typeof recordedOption?.label === "string" ? recordedOption.label.trim() : "";
+        if (!label) continue;
+        const option = { label, value: recordedOption.value?.trim() || label, description: recordedOption.description?.trim() };
+        const answerIndex = answers.findIndex((answer: any, i: number) => !matched.has(i) && matchesQuestionOption(answer, option, index));
+        const selected = answerIndex !== -1;
+        if (selected) matched.add(answerIndex);
+        const description = typeof option?.description === "string" && option.description ? ` — ${option.description}` : "";
+        yield { text: `${selected ? "✓" : " "} ${index + 1}. ${String(option?.label ?? "")}${description}`, ...(selected ? { kind: "answer" as const } : {}) };
+        index++;
       }
     }
-    yield " "; yield { text: "Answer", kind: "section" };
-    if (node.status === "answered") for (const answer of details.answers) {
+    for (const [index, answer] of answers.entries()) {
+      if (matched.has(index)) continue;
       const prefix = answer.type === "other" ? "Other: " : answer.type === "option" && Number.isInteger(answer.index) ? `${answer.index}. ` : "";
-      yield prefix + String(answer.label ?? answer.value ?? "");
+      yield { text: "✓ " + prefix + String(answer.label ?? answer.value ?? ""), kind: "answer" };
     }
-    else yield questionState(node);
     if (node.status !== "answered") {
-      const message = typeof details?.message === "string" ? details.message :
-        (node.result?.content ?? []).filter((block: any) => block.type === "text" && typeof block.text === "string").map((block: any) => block.text).join("\n");
-      if (message && message.trim() !== questionState(node)) yield message;
+      const diagnostic = (message: unknown): message is string => typeof message === "string" && !!message.trim() && message.trim() !== questionState(node) &&
+        !(node.status === "cancelled" && message.trim() === "User cancelled the question");
+      if (diagnostic(details?.message)) yield details.message;
+      else for (const block of node.result?.content ?? []) if (block.type === "text" && diagnostic(block.text)) yield block.text;
     }
     return;
   }
@@ -364,8 +380,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       if (reason) node.pane.title += ` · ${reason}`;
       if (theme) {
         node.pane.theme = theme;
-        node.pane.background = question(name) ? "toolPendingBg" : node.status === "failed" ? "toolErrorBg" : node.status === "success" ? "toolSuccessBg" : "toolPendingBg";
-        node.pane.styleHeader = text => theme.fg(question(name) ? "toolTitle" : node.status === "failed" ? "error" : node.status === "success" ? "toolTitle" : "warning", theme.bold(text));
+        node.pane.styleHeader = text => theme.fg(node.status === "failed" ? "error" : question(name) ? "accent" : "mdLink", theme.bold(text));
       }
       return node.pane;
     };
@@ -393,7 +408,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       const { errors, cancelled, unresolved } = pane.content;
       const status = node.status === "failed" ? "✗ Failed" : context.isPartial ? context.executionStarted ? "… Running" : "Preparing" : "";
       pane.title = `codemode${status ? ` · ${status}` : ""}${calls.length ? ` · ${calls.length} nested call${calls.length === 1 ? "" : "s"}` : ""}${errors ? ` · ${errors} nested error${errors === 1 ? "" : "s"}` : ""}${cancelled ? ` · ${cancelled} nested cancelled` : ""}${unresolved ? ` · ${unresolved} nested unresolved` : ""}${typeof context.durationMs === "number" ? ` · ${(context.durationMs / 1000).toFixed(2)}s` : ""}${indicators(node)}`;
-      pane.setTheme(theme); pane.tone = node.status === "failed" ? "error" : errors || cancelled || unresolved || context.isPartial ? "warning" : "toolTitle";
+      pane.setTheme(theme); pane.tone = node.status === "failed" ? "error" : errors || cancelled || unresolved && !context.isPartial ? "warning" : "mdLink";
       return true;
     };
     return {
@@ -411,7 +426,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
         return new DynamicComponent(width => {
           if (node.group) return [];
           if (singleCard(node)) return individual(node, theme).render(width);
-          return [activityRow(truncateToWidth(theme.fg("toolTitle", theme.bold(`${node.result ? "" : "… "}${toolLabel(name, node.args)}${node.result ? "" : ` · ${context.executionStarted ? "running" : "preparing"}`}`)), cardContentWidth(width)), width, theme)];
+          return [activityRow(truncateToWidth(theme.fg("mdLink", theme.bold(`${node.result ? "" : "… "}${toolLabel(name, node.args)}${node.result ? "" : ` · ${context.executionStarted ? "running" : "preparing"}`}`)), cardContentWidth(width)), width, theme)];
         }, event => mouse(!node.group && singleCard(node) ? individual(node, theme) : undefined, event), node);
       },
       renderResult(result, options, theme, context) {
@@ -425,7 +440,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
         }
         node.native.suspend(); syncExpansion(node, context.expanded);
         return new DynamicComponent(width => {
-          if (node.group) { const group = node.group; if (group.members[0] !== node) return []; group.pane.theme = theme; group.pane.styleHeader = text => theme.fg("toolTitle", theme.bold(text)); return group.pane.render(width); }
+          if (node.group) { const group = node.group; if (group.members[0] !== node) return []; group.pane.theme = theme; group.pane.styleHeader = text => theme.fg("mdLink", theme.bold(text)); return group.pane.render(width); }
           if (singleCard(node)) return [];
           return individual(node, theme).render(width);
         }, event => mouse(node.group ? node.group.members[0] === node ? node.group.pane : undefined : !singleCard(node) ? individual(node, theme) : undefined, event), node);

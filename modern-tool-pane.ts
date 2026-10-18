@@ -2,7 +2,8 @@ import { matchesKey, truncateToWidth, type TuiMouseEvent, type TuiMouseEventResu
 import { richTextRows, type TextFormat } from "./modern-rich-text.ts";
 import { activityRow, cardContentWidth } from "./display-card.ts";
 
-export type PaneContent = string | { text: string; kind?: "section" | "field"; indent?: number; label?: string } & TextFormat;
+type RowKind = "section" | "field" | "answer";
+export type PaneContent = string | { text: string; kind?: RowKind; indent?: number; label?: string } & TextFormat;
 export type PaneAction = { id: string; label: string; sections: () => Iterable<PaneContent>; details?: () => Iterable<PaneContent> };
 // Render only visited text chunks. Never split/highlight an entire result to paint a viewport.
 export function* textRows(text: string, width: number): Generator<string> {
@@ -16,6 +17,7 @@ export class ToolPane {
   styleHeader = (text: string) => text;
   theme?: any;
   background = "toolSuccessBg";
+  headingTone = "mdLink";
   itemName = "action";
   selected = 0;
   private anchor = 0;
@@ -30,7 +32,7 @@ export class ToolPane {
   private actionRows = new Map<number, number>();
   private detailsRows = new Map<number, number>();
   private contentAnchoredAbove = false;
-  private rowKinds = new Map<number, "section" | "field">();
+  private rowKinds = new Map<number, RowKind>();
   private lastWidth = 0;
   private lastHeight = 0;
   private lastBodyHeight = 0;
@@ -95,7 +97,7 @@ export class ToolPane {
             }
           }
         }.bind(this);
-        const emitRows = function* (this: ToolPane, rows: Iterable<{ text: string; kind?: "section" | "field" }>) {
+        const emitRows = function* (this: ToolPane, rows: Iterable<{ text: string; kind?: RowKind }>) {
           for (const row of rows) { if (row.kind) this.rowKinds.set(this.rows.length, row.kind); yield row.text; }
         }.bind(this);
         if (this.detailsFocused && index === this.selected) {
@@ -120,7 +122,10 @@ export class ToolPane {
     this.lastWidth = width;
     const outerWidth = width;
     width = cardContentWidth(width);
-    const paint = (line: string, selected = false) => activityRow(this.theme ? this.theme.fg("text", line) : line, outerWidth, this.theme, selected);
+    const paint = (line: string, selected = false) => {
+      line = this.theme ? this.theme.fg("text", line) : line;
+      return activityRow(line, outerWidth, this.theme, selected);
+    };
     const header = this.styleHeader(`${this.open ? "▾" : "▸"} ${this.title}${this.focused ? " · focused" : ""}`);
     if (!this.open) { this.lastHeight = 1; this.lastBodyHeight = 0; return [paint(truncateToWidth(header, width), this.focused && !this.detailsFocused)]; }
     const height = Math.max(5, Math.min(20, this.height()));
@@ -146,8 +151,11 @@ export class ToolPane {
       const action = this.actionRows.get(this.offset + index);
       const details = this.detailsRows.get(this.offset + index);
       const selected = this.focused && (this.detailsFocused ? details === this.selected : action === this.selected);
-      if (this.theme && (action !== undefined || details !== undefined)) line = this.theme.fg(selected ? "accent" : "toolTitle", this.theme.bold(line));
-      else if (this.theme && this.rowKinds.has(this.offset + index)) line = this.theme.fg("muted", this.rowKinds.get(this.offset + index) === "section" ? this.theme.bold(line) : line);
+      if (this.theme && (action !== undefined || details !== undefined)) line = this.theme.fg(selected ? "accent" : this.headingTone, this.theme.bold(line));
+      else if (this.theme && this.rowKinds.has(this.offset + index)) {
+        const kind = this.rowKinds.get(this.offset + index);
+        line = this.theme.fg(kind === "answer" ? "success" : "muted", kind === "field" ? line : this.theme.bold(line));
+      }
       return paint(line, selected);
     });
     const visible = [paint(truncateToWidth(header, width), this.focused && !this.detailsFocused), ...body, ...(footer ? [paint(truncateToWidth(this.theme ? this.theme.fg("dim", footer) : footer, width))] : [])];

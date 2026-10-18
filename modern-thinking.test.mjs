@@ -28,6 +28,7 @@ try {
   assert.deepEqual(cards.slice(0,2).map(c=>c.render(70)),[[],[]]);
   assert.match(plain(cards[2].render(70)),/Thinking · 3 rounds/);
   const collapsedThinking = cards[2].render(100);
+  assert.ok(collapsedThinking.find(row => stripAnsi(row).includes('Thinking ·')).includes(themeModule.theme.getFgAnsi('thinkingText')), 'thinking heading uses native muted neutral tone');
   assert.equal(collapsedThinking.length, 2, 'one native spacer plus one neutral summary');
   assert.match(stripAnsi(collapsedThinking[1]), /^ ▸ Thinking/);
   assert.doesNotMatch(collapsedThinking.join(''), /\x1b\[(?:4[0-8]|10[0-7])(?:[;m])/, 'unfocused summary has no filled surface');

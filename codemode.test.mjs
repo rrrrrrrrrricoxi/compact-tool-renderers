@@ -35,6 +35,8 @@ try {
   assert.equal(intervals.size, 1, 'collapsed execution retains one native timer');
   assert.match(paint(code), /▸ codemode · … Running · 1 nested call/);
   assert.equal(code.render(100).length, 2, 'native spacer plus one compact summary');
+  assert.ok(code.render(100)[1].includes(themeModule.theme.getFgAnsi('mdLink')), 'running codemode heading uses restrained native blue');
+  assert.ok(backgroundCells(code.render(100)[1]).every(value => value === ''), 'running codemode leaves the terminal surface clear');
   assert.doesNotMatch(paint(code), /const value|… read/);
   mouse(code, 'click', 1);
   assert.match(paint(code), /const value/); assert.match(paint(code), /… read/);
@@ -74,6 +76,7 @@ try {
   assert.match(paint(code), /Recorded script output/); assert.equal(code.callRendererComponent.constructor.name, 'Box');
   mode.setEnabled(true); code.setExpanded(false); assert.equal(code.render(100).length, 2);
   const failed = { ...final, isError: true }; code.updateResult(failed); assert.match(paint(code), /✗ Failed · 2 nested calls · 1 nested error/);
+  assert.ok(code.render(100)[1].includes(themeModule.theme.getFgAnsi('error')), 'failed codemode summary uses native red');
   code.updateResult(final);
   code.updateArgs({ code: Array.from({ length: 100 }, (_, index) => `text(${index});`).join('\n') });
   code.setExpanded(true);

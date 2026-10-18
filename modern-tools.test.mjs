@@ -83,9 +83,11 @@ assert.equal(read.render(100).length, 2, 'collapsed activity uses one summary pl
 const assertNeutral = rows => { for (const row of rows) assert.ok(backgroundCells(row).every(value => value === ''), 'compact activity keeps terminal surface'); };
 assertNeutral(read.render(100));
 assertNeutral(shell.render(100));
+assert.ok(shell.render(100)[1].includes(themeModule.theme.getFgAnsi('mdLink')), 'ordinary running action heading uses native blue');
 assert.doesNotMatch(paint(read), /Alt\+G/, 'unfocused collapsed cards omit repeated key hints');
 shell.updateResult(result('hello', { exitCode: 0 }));
 assert.match(paint(read), /2 actions/);
+assert.ok(read.render(100)[1].includes(themeModule.theme.getFgAnsi('mdLink')), 'completed action group heading uses native blue');
 assert.equal(paint(shell), '');
 assert.equal(input('\x1b[A'), undefined, 'editor arrows remain untouched until pane focus');
 assert.equal(input('\x1bg').consume, true);
@@ -201,16 +203,26 @@ for (const status of ['cancelled', 'unavailable']) assert.equal(toolStatus('ask_
 assert.equal(toolStatus('ask_user_question', result('', { status: 'answered', answers: [] })).status, 'unanswered');
 const ask = make('ask_user_question', 'q', { question: 'Which host?' });
 assert.match(paint(ask), /Question · Pending · Which host/);
-assert.match(ask.render(120).map(stripAnsi)[1], /^ ▸ Question · /, 'question title shares the tool disclosure column');
-assertNeutral(ask.render(100));
-assert.ok(ask.render(100).find(row => stripAnsi(row).includes('Question ·')).includes(themeModule.theme.getFgAnsi('toolTitle')), 'question heading uses neutral title color');
-capture('Question pending with neutral native surface', ask);
+assert.match(ask.render(120).map(stripAnsi)[1], /^ ▸ Question · /, 'question heading aligns with ordinary action headings');
+const assertDecision = (component, width = 100, focused = false) => {
+  const rows = component.render(width).slice(1);
+  if (focused) assertCardBackground([rows[0]], width, 'selectedBg');
+  else assertNeutral([rows[0]]);
+  assert.ok(rows[0].includes(themeModule.theme.getFgAnsi('accent')), 'question heading uses the native purple accent');
+  for (const row of rows) assert.doesNotMatch(stripAnsi(row), /^│/, 'question has no decorative rail');
+  assertNeutral(rows.slice(1));
+};
+assertDecision(ask);
+assert.ok(ask.render(100)[1].includes(themeModule.theme.getFgAnsi('accent')), 'question heading uses purple accent');
+assert.notEqual(themeModule.theme.getFgAnsi('accent'), themeModule.theme.getFgAnsi('mdLink'), 'questions and actions have distinct native tones');
+capture('Question pending with aligned purple heading', ask);
 ask.updateResult(result('User answered: MacBook', { question: 'Which host?', status: 'answered', answers: [{ label: 'MacBook', value: 'mac' }] }));
 assert.match(paint(ask), /Question · Answered · Which host\? · MacBook/);
-assertNeutral(ask.render(100));
+assertDecision(ask);
 assert.equal((paint(ask).match(/Question ·/g) || []).length, 1);
 ask.setExpanded(true);
-assert.match(paint(ask), /Answer\s*\n +MacBook/);
+assert.match(paint(ask), /✓ MacBook/);
+assert.doesNotMatch(paint(ask), /^ +(?:Question|Options|Answer)\s*$/m);
 assert.doesNotMatch(paint(ask), /1\. ask_user_question/);
 capture('Answered question opened directly with readable answer', ask);
 ask.setExpanded(false);
@@ -219,7 +231,8 @@ for (const [status, expected, isError] of [['unavailable', 'Unavailable', false]
   assert.match(paint(ask), new RegExp(`Question · ${expected}`));
   assert.doesNotMatch(paint(ask), /MacBook/, 'prior answers cannot leak into a later unresolved interaction');
   ask.setExpanded(true);
-  assert.match(paint(ask), new RegExp(`Answer\\s*\\n +${expected}`), 'answer section shows the recorded unresolved state');
+  assert.equal((paint(ask).match(new RegExp(expected, 'g')) || []).length, 1, 'unresolved state appears in the header once');
+  assert.doesNotMatch(paint(ask), /✓|^ +Answer\s*$/m, 'unresolved states cannot imply a recorded answer');
   assert.doesNotMatch(paint(ask), /MacBook|Arguments|Details|Output/);
   assert.match(paint(ask), /No recorded answer/, 'unresolved question retains its readable recorded message');
   ask.setExpanded(false);
@@ -237,22 +250,133 @@ const detailedResult = result('User selected: 1. MacBook (Recommended)', { statu
 const detailedSource = JSON.stringify({ args: detailedArgs, result: detailedResult });
 const detailedAsk = make('ask_user_question', 'q-details', detailedArgs);
 detailedAsk.updateResult(detailedResult); detailedAsk.setExpanded(true);
-assert.match(paint(detailedAsk), /Question\s*\n +Choose a host/);
-assert.match(paint(detailedAsk), /Options\s*\n +1\. MacBook \(Recommended\)/);
-assert.match(paint(detailedAsk), /Use the local checkout/);
+assert.match(paint(detailedAsk), /\n +Choose a host\?/);
+assert.match(paint(detailedAsk), /✓ 1\. MacBook \(Recommended\) — Use the local checkout\./);
+assert.match(paint(detailedAsk), /\n +2\. CCC/);
+assert.doesNotMatch(paint(detailedAsk), /^ +(?:Question|Options|Answer)\s*$/m);
+assert.ok(detailedAsk.render(120).map(stripAnsi).slice(2).every(row => row.trim()), 'compact question body adds no blank section gaps');
 assert.doesNotMatch(paint(detailedAsk), /1\. ask_user_question/);
 capture('Detailed question with recorded options and descriptions', detailedAsk);
-const scrollQuestion = () => detailedAsk.handleMouse({ type: 'wheel', button: 'none', wheelDelta: 4, x: 2, y: 3, screenX: 2, screenY: 3, width: 120, height: detailedAsk.render(120).length, shift: false, alt: false, ctrl: false });
-scrollQuestion();
-assert.match(paint(detailedAsk), /Answer\s*\n +1\. MacBook \(Recommended\)/, 'structured option answers use their recorded labels and indices');
-capture('Detailed question scrolled to recorded answer', detailedAsk);
-scrollQuestion();
+assert.equal((paint(detailedAsk).match(/✓ 1\. MacBook/g) || []).length, 1, 'selected option is the answer, without a duplicate answer section');
+assertDecision(detailedAsk);
+const questionChoices = []; pi.events.emit('compact-renderer:inspect:v1', { add: entry => questionChoices.push(entry) });
+questionChoices.find(entry => entry.label.includes('Choose a host?')).focus();
+assertDecision(detailedAsk, 100, true);
+assert.match(paint(detailedAsk), /focused/);
+input('\x1b');
+assertDecision(detailedAsk);
+const selectedQuestionRow = detailedAsk.render(120).find(row => stripAnsi(row).includes('✓ 1.'));
+assert.ok(selectedQuestionRow.includes(themeModule.theme.getFgAnsi('success')), 'recorded selection uses native success color');
+assertNeutral([selectedQuestionRow]);
+// Native theme.bold can omit ANSI in a non-TTY test process. Verify the style seam explicitly.
+const answerStylePane = new ToolPane([{ id: 'answer-style', label: '', sections: function* () { yield { text: '✓ 2. Beta', kind: 'answer' }; } }], 'Question');
+answerStylePane.open = true;
+answerStylePane.theme = Object.assign(Object.create(themeModule.theme), { bold: text => `\x1b[1m${text}\x1b[22m` });
+assert.ok(answerStylePane.render(80).find(row => stripAnsi(row).includes('✓ 2. Beta')).includes('\x1b[1m'), 'answer rows request bold styling independently of keyboard focus');
+capture('Detailed question with selected option inline', detailedAsk);
 assert.doesNotMatch(paint(detailedAsk), /Arguments|Details|Output|mode:|value:/, 'question history omits raw duplicate records');
 assert.equal(JSON.stringify({ args: detailedArgs, result: detailedResult }), detailedSource, 'question presentation preserves all stored source');
+const choiceArgs = { question: 'Which option?', details: '   ', options: [
+  { label: 'Alpha', value: 'a', description: 'First choice' },
+  { label: 'Beta', value: 'b', description: 'Second choice' },
+  { label: 'Other', value: 'other' },
+] };
+const choiceAsk = make('ask_user_question', 'q-choice', choiceArgs);
+const updateChoice = (answers, status = 'answered', message) => {
+  choiceAsk.updateResult(result(message ?? 'User selected a recorded answer', { status, question: choiceArgs.question, answers, ...(message === undefined ? {} : { message }) }));
+  choiceAsk.setExpanded(true);
+  return paint(choiceAsk);
+};
+assert.match(updateChoice([{ type: 'option', index: 2, label: 'Beta', value: 'b' }]), /✓ 2\. Beta — Second choice/);
+assert.doesNotMatch(paint(choiceAsk), /✓ 1\.|✓ 3\.|User selected/);
+assert.match(updateChoice([{ type: 'other', label: 'Gamma', value: 'Gamma' }]), /✓ Other: Gamma/);
+assert.doesNotMatch(paint(choiceAsk), /✓ \d\./);
+assert.match(updateChoice([{ type: 'other', label: 'Other', value: 'other' }]), /✓ Other: Other/);
+assert.doesNotMatch(paint(choiceAsk), /✓ 3\./, 'custom Other never selects a regular option with that label or value');
+assert.match(updateChoice([{ type: 'option', index: 7, label: 'Historical choice', value: 'a' }]), /✓ 7\. Historical choice/);
+assert.doesNotMatch(paint(choiceAsk), /✓ 1\./, 'unmatched recorded indices remain standalone instead of selecting a conflicting value');
+for (const status of ['cancelled', 'unavailable']) {
+  const output = updateChoice([{ type: 'option', index: 2, label: 'Beta', value: 'b' }], status, status === 'cancelled' ? 'User cancelled the question' : 'Question UI unavailable: no terminal');
+  assert.doesNotMatch(output, /✓/, 'only answered status can highlight recorded options');
+  assert.equal((output.match(new RegExp(status === 'cancelled' ? 'Cancelled' : 'Unavailable', 'g')) || []).length, 1);
+  if (status === 'cancelled') assert.doesNotMatch(output, /User cancelled the question/);
+  else assert.match(output, /Question UI unavailable: no terminal/);
+}
+assert.match(updateChoice([], 'cancelled', 'User cancelled the question\nConnection closed during selection'), /Connection closed during selection/, 'nonstandard cancellation diagnostics remain intact');
+choiceAsk.updateResult(result('Connection closed during selection', { status: 'cancelled', message: 'User cancelled the question', answers: [] }));
+assert.match(paint(choiceAsk), /Connection closed during selection/, 'suppressing exact boilerplate still retains a separate recorded diagnostic');
+const duplicateAsk = make('ask_user_question', 'q-duplicates', { question: 'Choose repeated labels', options: [
+  { label: 'Same', value: 'first' }, { label: 'Same', value: 'second' }, { label: 'Final', value: 'last' },
+] });
+duplicateAsk.updateResult(result('', { status: 'answered', answers: [{ type: 'option', index: 2, label: 'Same', value: 'second' }, { type: 'option', label: 'Final', value: 'last' }] }));
+duplicateAsk.setExpanded(true);
+assert.match(paint(duplicateAsk), /✓ 2\. Same/);
+assert.match(paint(duplicateAsk), /✓ 3\. Final/);
+assert.doesNotMatch(paint(duplicateAsk), /✓ 1\./, 'multi-select matches recorded indices and values, not all duplicate labels');
+duplicateAsk.updateResult(result('', { status: 'answered', answers: [{ type: 'option', label: 'Same', value: 'second' }] }));
+assert.match(paint(duplicateAsk), /✓ 2\. Same/);
+assert.doesNotMatch(paint(duplicateAsk), /✓ 1\./, 'value disambiguates duplicate labels without an index');
+const normalizedArgs = { question: 'Choose a normalized option', options: [
+  { label: '   ' }, { label: ' Same ', value: ' first ' }, { label: '' }, { label: ' Same ', value: ' second ', description: ' Recorded description ' },
+] };
+const normalizedSource = JSON.stringify(normalizedArgs);
+const normalizedAsk = make('ask_user_question', 'q-normalized', normalizedArgs);
+normalizedAsk.updateResult(result('User selected: 2. Same', { status: 'answered', answers: [{ type: 'option', index: 2, label: 'Same', value: 'second' }] }));
+normalizedAsk.setExpanded(true);
+assert.match(paint(normalizedAsk), /✓ 2\. Same — Recorded description/);
+assert.doesNotMatch(paint(normalizedAsk), /✓ 1\.|3\.|4\./, 'blank options do not occupy native answer indices');
+normalizedAsk.updateResult(result('', { status: 'answered', answers: [{ type: 'option', label: 'Same', value: 'second' }] }));
+assert.match(paint(normalizedAsk), /✓ 2\. Same — Recorded description/);
+assert.doesNotMatch(paint(normalizedAsk), /✓ 1\./, 'normalized values still disambiguate duplicate labels without an index');
+assert.equal(JSON.stringify(normalizedArgs), normalizedSource, 'native option normalization leaves recorded arguments intact');
+const escapedAsk = make('ask_user_question', 'q-controls', { question: 'Recorded\x1b[31m question', options: [{ label: 'Safe\x07', description: 'Literal\u202e detail' }] });
+escapedAsk.updateResult(result('', { status: 'answered', answers: [{ type: 'option', index: 1, label: 'Safe\x07' }] }));
+escapedAsk.setExpanded(true);
+assert.match(paint(escapedAsk), /Recorded\\u001b\[31m question/);
+assert.match(paint(escapedAsk), /✓ 1\. Safe\\u0007 — Literal\\u202e detail/);
+assert.ok(!escapedAsk.render(120).join('\n').includes('\x1b[31m'), 'recorded ANSI cannot inject terminal formatting');
+for (const width of [1, 2, 3, 4, 8, 16, 30]) {
+  assert.ok(escapedAsk.render(width).every(row => tui.visibleWidth(row) <= width), `question wraps within ${width} columns`);
+}
+const { activityRow, cardContentWidth } = await loadSource('./display-card.ts');
+for (const appearance of ['dark', 'light']) {
+  themeModule.initTheme(appearance, false);
+  for (const width of [1, 2, 3, 4, 8, 30]) {
+    const line = themeModule.theme.fg('accent', 'Question') + '\x1b[0m' + ' 中文🙂';
+    const header = activityRow(line, width, themeModule.theme, false);
+    const focusedHeader = activityRow(line, width, themeModule.theme, true);
+    assertNeutral([header]);
+    if (width >= 2) {
+      assert.doesNotMatch(stripAnsi(header), /^│/);
+    }
+    assertCardBackground([focusedHeader], width, 'selectedBg');
+    assert.ok(tui.visibleWidth(header) <= width);
+    assert.ok(tui.visibleWidth(activityRow(line, width, themeModule.theme)) <= width);
+    assert.ok(cardContentWidth(width) >= 1, 'narrow decisions retain a text cell');
+  }
+}
+themeModule.initTheme('dark', false);
+const longFields = { question: 'QUESTION_START ' + 'question '.repeat(180) + 'QUESTION_END', details: 'CONTEXT_START ' + 'context '.repeat(100) + 'CONTEXT_END', options: [{ label: 'LABEL_START ' + 'label '.repeat(100) + 'LABEL_END', description: 'DESCRIPTION_START ' + 'description '.repeat(150) + 'DESCRIPTION_END' }] };
+const longQuestionSource = JSON.stringify(longFields);
+const longAsk = make('ask_user_question', 'q-long', longFields);
+const longOther = 'OTHER_START ' + 'other '.repeat(120) + 'OTHER_END';
+longAsk.updateResult(result('', { status: 'answered', answers: [{ type: 'other', label: longOther, value: longOther }] }));
+longAsk.setExpanded(true);
+let longQuestionPaint = '';
+for (let iteration = 0; iteration < 20; iteration++) {
+  const rows = longAsk.render(60);
+  longQuestionPaint += rows.map(stripAnsi).join('\n');
+  longAsk.handleMouse({ type: 'wheel', button: 'none', wheelDelta: 8, x: 2, y: 3, screenX: 2, screenY: 3, width: 60, height: rows.length, shift: false, alt: false, ctrl: false });
+}
+for (const field of ['QUESTION', 'CONTEXT', 'LABEL', 'DESCRIPTION', 'OTHER']) {
+  assert.ok(longQuestionPaint.includes(`${field}_START`) && longQuestionPaint.includes(`${field}_END`), `full ${field.toLowerCase()} remains scroll-accessible`);
+}
+assert.equal(JSON.stringify(longFields), longQuestionSource, 'long question source remains unchanged');
 let laterOptionReads = 0;
 const lazyOptions = [{ label: 'Large recorded option '.repeat(100000) }];
 Object.defineProperty(lazyOptions, 1, { enumerable: true, get() { laterOptionReads++; return { label: 'Later choice' }; } });
 const lazyAsk = make('ask_user_question', 'q-lazy', { question: 'Which recorded option?', options: lazyOptions });
+lazyAsk.updateResult(result('', { status: 'answered', answers: [{ type: 'option', index: 2, label: 'Later choice' }] }));
 lazyAsk.setExpanded(true); lazyAsk.render(40);
 assert.equal(laterOptionReads, 0, 'a long first option does not read later choices while painting one viewport');
 lazyAsk.setExpanded(false);

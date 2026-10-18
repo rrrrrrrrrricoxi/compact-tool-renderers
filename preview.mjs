@@ -95,7 +95,7 @@ export async function createPreview() {
       { name: 'models.classify', args: 'fixture/synthetic-classifier · sample-a', status: 'ok', durationMs: 690, cost: 0.0012 },
       { name: 'models.classify', args: 'fixture/synthetic-classifier · sample-b', status: 'ok', durationMs: 880, cost: 0.0018 },
     ] }, false, '', 1480);
-    assistant([{ type: 'text', text: 'The next card is an ordinary Bash fallback carrying a long Node script. It is separate from native code mode above. Expand it to inspect the exact recorded command and JavaScript colors.' }]);
+    assistant([{ type: 'text', text: 'The next card is an ordinary Bash fallback carrying a long Node script. It is separate from native codemode above. Expand it to inspect the exact recorded command and JavaScript colors.' }]);
     const shellScript = [
       "node - <<'NODE'",
       '// Synthetic recording only. This script is never executed.',
@@ -142,7 +142,7 @@ export async function createPreview() {
     // This is the same envelope Pi writes for /skill:fixture-review, including its optional user message.
     append({ role: 'user', content: `<skill name="fixture-review" location="${path.join(skillDir, 'SKILL.md')}">\nReferences are relative to ${skillDir}.\n\n${skillBody}\n</skill>\n\nShow the native skill card and one final successful action.` });
     call('read-2', 'read', { path: '/fixture/last.txt' }, 'Recorded final output.');
-    assistant([{ type: 'text', text: 'Preview controls: /inspect selects a compact block. Left/Right selects an action or thinking round; Enter expands it; Up/Down scrolls. Esc or typing returns to the editor. Ctrl+O expands native code mode and [skill] cards. /fixture-question opens the existing question UI; /fixture-question text opens free text. /fixture-permission opens a harmless approval dialog. /compact-rendering switches display. Ctrl+D exits. All records and prices are invented; no script or model ran.' }]);
+    assistant([{ type: 'text', text: 'Preview controls: /inspect selects a compact block. Left/Right selects an action or thinking round; Enter expands it; Up/Down scrolls. Esc or typing returns to the editor. Ctrl+O expands native codemode and [skill] cards. /fixture-question opens the existing question UI; /fixture-question text opens free text. /fixture-permission opens a harmless approval dialog. /compact-rendering switches display. Ctrl+D exits. All records and prices are invented; no script or model ran.' }]);
     if (!questionsPath) assistant([{ type: 'text', text: 'Native question UI is unavailable on this host. Recorded question cards still show schema-shaped examples. Set PI_QUESTIONS_PATH to an existing pi-questions/index.ts to enable /fixture-question.' }]);
     if (promptJump) assistant([{ type: 'text', text: 'Prompt navigation: /prompt-jump list selects one of the three invented user prompts; /prompt-jump back returns; /prompt-jump end follows the latest output.' }]);
     manager.appendSessionInfo('compact-renderer-preview');

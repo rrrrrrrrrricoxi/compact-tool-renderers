@@ -1,5 +1,12 @@
 # Release notes
 
+## 2.1.1 — Clear question history and output categories
+
+- Highlight recorded answers inline with their options and tighten question spacing. Preserve custom answers and meaningful diagnostics without duplicate Answer sections.
+- Use bold purple question headings aligned with other actions, without a background or vertical rail. Keep green selected answers, blue ordinary action/`codemode` headings, muted thinking, and red failures.
+- Preserve distinct keyboard focus, native subagent/Fleet rendering, exact transcripts, bounded inspection, and existing controls.
+- Use Pi's `codemode` spelling in current documentation and preview text.
+
 ## 2.1.0 — Content-first inspection and bounded code mode
 
 - Show useful action content first, keep exact arguments under independently expandable Details, and remove gaps between sibling actions. Preserve readable question history.

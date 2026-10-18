@@ -145,8 +145,8 @@ export class ModernThinkingGroups {
     this.sources(group);
     pane.title = `Thinking · ${group.members.length} round${group.members.length === 1 ? "" : "s"}`;
     pane.focused = this.focused && this.selected === group;
-    pane.theme = theme; pane.background = "customMessageBg"; pane.itemName = "round";
-    pane.styleHeader = text => theme.fg("toolTitle", theme.bold(text));
+    pane.theme = theme; pane.headingTone = "thinkingText"; pane.itemName = "round";
+    pane.styleHeader = text => theme.fg("thinkingText", text);
     const rows = ["", ...pane.render(Math.max(1, width))];
     this.layouts.set(component, { width, height: rows.length });
     return rows;
