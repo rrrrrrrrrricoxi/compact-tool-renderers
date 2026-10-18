@@ -40,6 +40,6 @@ try {
  } finally { for (const handle of intervals) originalClearInterval(handle); globalThis.setInterval = originalSetInterval; globalThis.clearInterval = originalClearInterval; }
  event('message_end', { message: { role: 'toolResult', toolName: 'codemode', toolCallId: 'code', ...result('done') } });
  const last = create('read', 'after-code', { path: '/fixture/after' }, readRenderers); last.updateResult(result('last'));
- for (const component of [first, last]) { const text = stripAnsi(component.render(100).join('\n')); assert.match(text, /1 successful action/); assert.doesNotMatch(text, /2 successful actions/); }
+ for (const component of [first, last]) { const text = stripAnsi(component.render(100).join('\n')); assert.match(text, /read · \/fixture\/(?:before|after) · ✓ Completed/); assert.doesNotMatch(text, /2 successful actions/); }
  console.log('codemode: native renderer identity, script, nested status/errors/time/cost, timer and group boundaries passed');
 } finally { dispose(); }

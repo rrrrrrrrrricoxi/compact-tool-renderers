@@ -1,10 +1,10 @@
 import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { matchesKey } from "@earendil-works/pi-tui";
+import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import { readFileSync } from "node:fs";
 import { installModernPromptAdapter, invalidateModernPrompt } from "./modern-prompts-adapter.ts";
 
 type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
-type Template = { name: string; parts: string[] };
+type Template = { name: string; parts: string[]; description?: string };
 type PromptCard = { component: any; original: string; name: string; open: boolean; revision: number };
 const placeholders = /\$\{(?:\d+|ARGUMENTS|@):-[^}]*\}|\$\{@:\d+(?::\d+)?\}|\$(?:ARGUMENTS|@|\d+)/g;
 export function modernPromptTemplates(commands: readonly any[]): Template[] {
@@ -16,7 +16,7 @@ export function modernPromptTemplates(commands: readonly any[]): Template[] {
       if (raw.length > 100000) continue;
       const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "").trim();
       const parts = body.split(placeholders);
-      if (parts[0].length >= 40 && parts.length <= 33) templates.push({ name: command.name, parts });
+      if (parts[0].length >= 40 && parts.length <= 33) templates.push({ name: command.name, parts, description: typeof command.description === "string" ? command.description : undefined });
     } catch { /* Missing templates leave their original text visible. */ }
   }
   return templates;
@@ -36,6 +36,14 @@ export function matchingModernPrompt(text: string, templates: readonly Template[
     }
     if (matches && (!last || position <= value.length - last.length)) return name;
   }
+}
+
+/** Bounded display text from existing metadata or the recorded expansion, never a model summary. */
+export function modernPromptSummary(original: string, description?: string): string {
+  const sample = (description?.trim() || original).slice(0, 1024).replace(/[\uD800-\uDBFF]$/, "");
+  const text = sample.replace(/^[ \t]*#{1,6}[ \t]+/gm, "").replace(/[\p{Cc}\p{Cf}]/gu, " ").replace(/\s+/g, " ").trim();
+  const sentence = description?.trim() ? text : text.match(/^.*?[.!?。！？](?:\s|$)/u)?.[0]?.trim() || text;
+  return truncateToWidth(sentence, 110, "…").replace(/\x1b\[[0-9;]*m/g, "");
 }
 
 /** Display only: the public transformer sees the original Markdown. Its output
@@ -80,7 +88,8 @@ export function registerModernPrompts(pi: ExtensionAPI, mode: Mode): () => void 
     if (disposed || !active || !adapter || !mode.isEnabled() || context.messageType !== "user" || !rendering || markdown !== rendering.original) return markdown;
     const label = rendering.name.replace(/[\\`*_\[\]<>\p{Cc}\p{Cf}]/gu, "");
     const heading = `**${rendering.open ? "▾" : "▸"} prompt · /${label}**${focused && selected === rendering ? ` · Enter ${rendering.open ? "collapses" : "expands"} · Esc returns` : ""}`;
-    return rendering.open ? `${heading}\n\n${markdown}` : heading;
+    const summary = modernPromptSummary(markdown, templates.find(template => template.name === rendering.name)?.description);
+    return rendering.open ? `${heading}\n\n${markdown}` : `${heading} — ${summary}`;
   });
   const reset = (_event: unknown, ctx: any) => {
     invalidate(); cards.clear(); rendering = undefined; selected = undefined; focused = false; revision++;
@@ -112,7 +121,7 @@ export function registerModernPrompts(pi: ExtensionAPI, mode: Mode): () => void 
   for (const event of ["session_start", "session_tree", "session_compact"] as const) subscriptions.push(pi.on(event, reset));
   subscriptions.push(pi.events.on("compact-renderer:inspect:v1", (request: any) => {
     if (disposed || !active || !mode.isEnabled()) return;
-    [...cards.values()].forEach((card, index) => request?.add?.({ id: `prompt-${index}`, kind: "Prompt", label: `/${card.name}`, focus: () => { if (!disposed && active && mode.isEnabled() && cards.get(card.component) === card) select(card, true); } }));
+    [...cards.values()].forEach((card, index) => request?.add?.({ id: `prompt-${index}`, kind: "Prompt", label: `/${card.name} — ${modernPromptSummary(card.original, templates.find(template => template.name === card.name)?.description)}`, focus: () => { if (!disposed && active && mode.isEnabled() && cards.get(card.component) === card) select(card, true); } }));
   }));
   subscriptions.push(pi.on("ui_prompt_start", release));
   subscriptions.push(pi.on("session_shutdown", () => { active = false; invalidate(); input?.(); input = undefined; redraw = undefined; cards.clear(); selected = undefined; rendering = undefined; release(); }));

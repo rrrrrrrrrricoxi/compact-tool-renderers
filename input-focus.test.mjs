@@ -62,7 +62,7 @@ try {
   for (const component of [tool, thought, card]) {
     pi.events.emit('compact-renderer:focus:v1', { owner: 'editor' });
     const lines = component.render(100);
-    const header = lines.findIndex(row => /(?:successful action|Thinking ·|prompt ·)/.test(row));
+    const header = lines.findIndex(row => /(?:read · \/fixture|Thinking ·|prompt ·)/.test(row));
     assert.ok(header >= 0);
     component.handleMouse({ type: 'click', button: 'left', x: 2, y: header, width: 100, height: lines.length });
     assert.equal(key('\r'), false, 'a card click does not intercept editor submission');

@@ -1,5 +1,30 @@
 // Harmless controls for the isolated native preview. Never loaded by the package entry point.
+import { createCodemodeExtension } from '@earendil-works/pi-coding-agent';
+
+export const fixtureQuestion = {
+  question: 'Which synthetic sample should the preview compare?',
+  details: 'Display exercise only. Your answer does not start an analysis or approve an operation.',
+  options: [
+    { label: 'Sample A (Recommended)', value: 'sample-a', description: 'Inspect a complete invented record with explicit units.' },
+    { label: 'Sample B', value: 'sample-b', description: 'Inspect an invented record with a missing-value warning.' },
+  ],
+};
+export const fixtureTextQuestion = {
+  question: 'What label should this invented comparison use?',
+  details: 'Free-text display example. The label is not saved to a report.',
+};
+
 export default function preview(pi: any) {
+  // Keep Pi's exact native renderers and schema, but never retain its script executor.
+  createCodemodeExtension()({
+    ...pi,
+    registerTool(definition: any) {
+      pi.registerTool({ ...definition, execute: async () => { throw new Error('Code execution is disabled in this preview.'); } });
+    },
+  });
+  let questionUI: any;
+  // The launcher supplies the existing pi-questions UI definition before replacing its registered executor.
+  pi.events.on('preview:question-ui:v1', (definition: any) => { questionUI = definition; });
   pi.on('input', (_event: any, ctx: any) => {
     ctx.ui.notify('Fixture prompt received. No model or tool was called.', 'info');
     return { action: 'handled' };
@@ -7,6 +32,24 @@ export default function preview(pi: any) {
   pi.on('tool_call', () => ({ block: true, reason: 'This preview never executes tools.' }));
   pi.on('user_bash', () => ({ result: { output: 'Shell execution is disabled in this preview.', exitCode: 1, cancelled: false, truncated: false } }));
   pi.on('session_start', (_event: any, ctx: any) => ctx.ui.setStatus('preview', 'FIXTURE · no model, shell, or database calls'));
+  pi.registerCommand('fixture-question', {
+    description: 'Open the existing question UI without running the agent or a tool',
+    async handler(args: string, ctx: any) {
+      if (!questionUI) {
+        ctx.ui.notify('Native question UI unavailable. Set PI_QUESTIONS_PATH to pi-questions/index.ts and restart. Recorded question cards remain available.', 'warning');
+        return;
+      }
+      if (args.trim() && args.trim() !== 'text') {
+        ctx.ui.notify('Use /fixture-question for choices, or /fixture-question text for free text.', 'info');
+        return;
+      }
+      // Call only the captured UI logic, directly. Do not use ctx.executeTool or the tool pipeline.
+      const result = await questionUI.execute('fixture-ui-only', args.trim() === 'text' ? fixtureTextQuestion : fixtureQuestion, undefined, undefined, ctx);
+      const details = result.details;
+      const answer = details?.answers?.map((item: any) => item.type === 'other' ? `Other: ${item.label}` : item.label).join(', ');
+      ctx.ui.notify(`Fixture question: ${details?.status || 'unavailable'}${answer ? ` · ${answer}` : ''}. Nothing was executed or approved.`, details?.status === 'answered' ? 'info' : 'warning');
+    },
+  });
   pi.registerCommand('fixture-permission', {
     description: 'Preview approval controls; no operation runs',
     async handler(_args: string, ctx: any) {

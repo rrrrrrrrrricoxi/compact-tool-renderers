@@ -49,6 +49,27 @@ function indicators(node: Node) {
   return `${details?.truncation?.truncated || details?.truncated ? " · output truncated" : ""}${details?.fullOutputPath ? " · full output saved" : ""}${details?.warning || details?.warnings?.length ? " · warning recorded" : ""}`;
 }
 function* sections(node: Node): Generator<PaneContent> {
+  if (question(node.name)) {
+    const details = node.result?.details;
+    yield { text: "Question", kind: "section" };
+    yield String(details?.question ?? node.args?.question ?? "");
+    const context = details?.context ?? node.args?.details;
+    if (typeof context === "string" && context) yield context;
+    if (Array.isArray(node.args?.options) && node.args.options.length) {
+      yield " "; yield { text: "Options", kind: "section" };
+      for (const [index, option] of node.args.options.entries()) {
+        yield `${index + 1}. ${String(option.label ?? "")}`;
+        if (typeof option.description === "string" && option.description) yield { text: option.description, indent: 2 };
+      }
+    }
+    yield " "; yield { text: "Answer", kind: "section" };
+    if (node.status === "answered") for (const answer of details.answers) {
+      const prefix = answer.type === "other" ? "Other: " : answer.type === "option" && Number.isInteger(answer.index) ? `${answer.index}. ` : "";
+      yield prefix + String(answer.label ?? answer.value ?? "");
+    }
+    else yield questionState(node);
+    yield " ";
+  }
   if (node.result) {
     yield { text: "Output", kind: "section" };
     for (const block of node.result.content ?? []) {
@@ -59,7 +80,9 @@ function* sections(node: Node): Generator<PaneContent> {
   }
   if (node.result) yield " ";
   yield { text: "Arguments", kind: "section" }; yield* recordedValues(node.args);
-  if (node.result?.details !== undefined) { yield " "; yield { text: "Details", kind: "section" }; yield* recordedValues(node.result.details); }
+  const details = node.result?.details;
+  const emptyDetails = details !== null && typeof details === "object" && !Array.isArray(details) && Object.keys(details).length === 0;
+  if (details !== undefined && !emptyDetails) { yield " "; yield { text: "Details", kind: "section" }; yield* recordedValues(details); }
 }
 function failureReason(node: Node): string {
   if (node.status !== "failed") return "";
@@ -75,11 +98,14 @@ function failureReason(node: Node): string {
   if (!reason && typeof details?.exitCode === "number") reason = `exit ${details.exitCode}`;
   return clean(reason).slice(0, 120);
 }
-function questionTitle(node: Node): string {
+function questionState(node: Node): string {
   const statuses: Record<string, string> = { pending: "Pending", running: "Pending", failed: "Failed", answered: "Answered", cancelled: "Cancelled", unavailable: "Unavailable", unanswered: "Unanswered" };
+  return statuses[node.status] || "Unanswered";
+}
+function questionTitle(node: Node): string {
   let answer = "";
-  if (node.status === "answered") answer = ` · ${node.result.details.answers.map((item: any) => clean(item.label ?? item.value)).join("; ")}`;
-  return `Question · ${statuses[node.status] || "Unanswered"} · ${clean(node.result?.details?.question ?? node.args?.question)}${answer}`;
+  if (node.status === "answered") answer = ` · ${node.result.details.answers.slice(0, 3).map((item: any) => clean(item.label ?? item.value)).join("; ")}${node.result.details.answers.length > 3 ? "; …" : ""}`;
+  return `Question · ${questionState(node)} · ${clean(node.result?.details?.question ?? node.args?.question)}${answer}`;
 }
 class DynamicComponent {
   constructor(private draw: (width: number) => string[], private mouse?: (event: TuiMouseEvent) => TuiMouseEventResult | undefined, readonly owner?: Node) {}
@@ -129,7 +155,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       const counts = new Map<string, number>();
       for (const node of run) { const name = clean(shortName(node.name)); counts.set(name, (counts.get(name) || 0) + 1); }
       const kinds = [...counts].slice(0, 3).map(([name, count]) => `${name}${count > 1 ? ` ×${count}` : ""}`).join(", ");
-      group.pane.title = `✓ ${run.length} successful action${run.length === 1 ? "" : "s"} · ${run.length === 1 ? toolLabel(run[0].name, run[0].args) : kinds}${counts.size > 3 ? ` +${counts.size - 3} types` : ""}`;
+      group.pane.title = run.length === 1 ? `${toolLabel(run[0].name, run[0].args)} · ✓ Completed` : `${run.length} successful actions · ${kinds}${counts.size > 3 ? ` +${counts.size - 3} types` : ""} · ✓`;
       if (run.some(node => node.result?.details?.truncation?.truncated || node.result?.details?.truncated)) group.pane.title += " · output truncated";
       if (run.some(node => node.result?.details?.fullOutputPath)) group.pane.title += " · full output saved";
       if (run.some(node => node.result?.details?.warning || node.result?.details?.warnings?.length)) group.pane.title += " · warning recorded";
@@ -250,13 +276,14 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     const singleCard = (node: Node) => question(name) || !!node.result && !["pending", "running", "success"].includes(node.status);
     const individual = (node: Node, theme?: any) => {
       node.pane ||= new ToolPane([action(node)], "", height);
-      node.pane.title = question(name) ? questionTitle(node) : `${node.status === "failed" ? "✗" : node.status === "success" ? "✓" : "…"} ${toolLabel(name, node.args)} · ${node.note || node.status}${indicators(node)}`;
+      const status = node.note || node.status[0].toUpperCase() + node.status.slice(1);
+      node.pane.title = question(name) ? questionTitle(node) : `${toolLabel(name, node.args)} · ${node.status === "failed" ? "✗ Failed" : node.status === "success" ? "✓ Completed" : `… ${status}`}${indicators(node)}`;
       const reason = failureReason(node);
       if (reason) node.pane.title += ` · ${reason}`;
       if (theme) {
         node.pane.theme = theme;
-        node.pane.background = node.status === "failed" ? "toolErrorBg" : question(name) ? "userMessageBg" : node.status === "success" ? "toolSuccessBg" : "toolPendingBg";
-        node.pane.styleHeader = text => theme.fg(node.status === "failed" ? "error" : question(name) ? "accent" : node.status === "success" ? "success" : "warning", theme.bold(text));
+        node.pane.background = question(name) ? "toolPendingBg" : node.status === "failed" ? "toolErrorBg" : node.status === "success" ? "toolSuccessBg" : "toolPendingBg";
+        node.pane.styleHeader = text => theme.fg(question(name) ? "warning" : node.status === "failed" ? "error" : node.status === "success" ? "success" : "warning", theme.bold(text));
       }
       return node.pane;
     };

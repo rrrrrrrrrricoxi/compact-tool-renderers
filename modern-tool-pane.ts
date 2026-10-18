@@ -46,11 +46,13 @@ export class ToolPane {
   // Instrumentation also makes the large-output contract testable without wall-clock assertions.
   paintedRows = 0;
   constructor(public actions: PaneAction[], public title: string, private height = () => 12) {}
+  private get directDetails() { return this.itemName === "action" && this.actions.length === 1; }
   reset() { this.anchor = Math.min(this.anchor, Math.max(0, this.actions.length - 1)); this.key = ""; this.rows = []; this.iterator = undefined; this.done = false; this.actionRows.clear(); this.rowKinds.clear(); }
   handle(data: string): boolean {
     if (matchesKey(data, "home")) { this.open = true; this.selected = 0; this.anchor = 0; this.offset = 0; this.reset(); return true; }
     if (matchesKey(data, "enter")) {
-      if (!this.open) this.open = true;
+      if (this.directDetails) this.open = !this.open;
+      else if (!this.open) this.open = true;
       else { const id = this.actions[this.selected]?.id; if (id) this.expanded.has(id) ? this.expanded.delete(id) : this.expanded.add(id); }
       this.offset = 0; this.reset(); return true;
     }
@@ -72,11 +74,13 @@ export class ToolPane {
     for (let index = this.anchor; index < this.actions.length; index++) {
       const action = this.actions[index];
       if (index > this.anchor) yield "";
-      this.actionRows.set(this.rows.length, index);
       const prefix = `${indent}${index === this.selected ? "›" : " "} ${this.expanded.has(action.id) ? "▾" : "▸"} ${index + 1}. `;
-      yield prefix + action.label;
-      const detailsIndent = width >= 12 ? " ".repeat(Math.min(prefix.length, width - 1)) : "";
-      if (this.expanded.has(action.id)) for (const section of action.sections()) {
+      if (!this.directDetails) {
+        this.actionRows.set(this.rows.length, index);
+        yield prefix + action.label;
+      }
+      const detailsIndent = this.directDetails ? indent : width >= 12 ? " ".repeat(Math.min(prefix.length, width - 1)) : "";
+      if (this.directDetails || this.expanded.has(action.id)) for (const section of action.sections()) {
         const content = typeof section === "string" ? { text: section } : section;
         const indent = detailsIndent + " ".repeat(Math.min(content.indent || 0, Math.max(0, width - detailsIndent.length - 1)));
         for (const row of textRows(content.text, Math.max(1, width - indent.length))) {
@@ -95,7 +99,7 @@ export class ToolPane {
     const header = this.styleHeader(`${this.open ? "▾" : "▸"} ${this.title}${this.focused ? " · focused" : ""}`);
     if (!this.open) { this.lastHeight = 3; this.lastBodyHeight = 0; return cardBlock([paint(truncateToWidth(header, width), this.focused)], outerWidth, this.theme, this.background); }
     const height = Math.max(5, Math.min(20, this.height()));
-    const key = `${width}:${this.anchor}:${this.selected}:${[...this.expanded].join("|")}`;
+    const key = `${width}:${this.directDetails}:${this.anchor}:${this.selected}:${[...this.expanded].join("|")}`;
     if (key !== this.key) { this.reset(); this.key = key; this.iterator = this.body(width); }
     let bodyHeight = height - (this.focused ? 4 : 3);
     // Clamp a seek to one viewport beyond visited content; a key press cannot scan unbounded data.
@@ -108,7 +112,7 @@ export class ToolPane {
     if (this.done) this.offset = Math.min(this.offset, Math.max(0, this.rows.length - bodyHeight));
     let more = !this.done || this.offset + bodyHeight < this.rows.length;
     if (!this.focused && more) { bodyHeight--; more = !this.done || this.offset + bodyHeight < this.rows.length; }
-    const footer = this.focused ? `←/→ ${this.itemName} · Enter details · ↑/↓ scroll · Esc release${more ? " · more ↓" : ""}` : more ? "more ↓" : "";
+    const footer = this.focused ? `${this.directDetails ? "Enter collapse" : `←/→ ${this.itemName} · Enter details`} · ↑/↓ scroll · Esc release${more ? " · more ↓" : ""}` : more ? "more ↓" : "";
     const body = this.rows.slice(this.offset, this.offset + bodyHeight).map((line, index) => {
       const action = this.actionRows.get(this.offset + index);
       const selected = this.focused && action === this.selected;

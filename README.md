@@ -10,13 +10,14 @@ This repository is the authoritative source. The npm manifest stays `private: tr
 
 ## Display
 
-- Cards restore the original renderer’s native backgrounds and horizontal padding: successful tools, running actions, and failures use their native status colors. Questions use the user-message surface; recorded thinking uses the custom-message surface with readable body text.
+- Cards restore the original renderer’s native backgrounds and horizontal padding: successful tools, running actions, and failures use their native status colors. Questions use a neutral tool surface and a distinct heading; user messages keep their blue surface; recorded thinking uses the custom-message surface with readable body text.
 - Running actions remain separate. Only successful completed actions join a group, within visible conversation boundaries.
+- A single-action card opens directly to its output without repeating a numbered action row. Status marks follow the title so headings align. Empty details objects do not add a section.
 - Open a group to see its actions. Expand several action outputs independently in the same scrollable pane. Exact arguments, recorded output, and recorded details remain available.
 - Errors, cancellations, unanswered questions, and background notices stay separate. Question cards combine the question and its recorded answer or actual status.
 - Stock `pi-subagents`, Fleet UI, and code mode renderers remain unchanged. Code mode keeps native JavaScript highlighting, nested calls, timing, cost, and Ctrl+O expansion. Images retain their native display behavior.
 - Recorded thinking rounds can group across tools. Replies, questions, errors, and other visible boundaries separate groups. Each round has a short title taken from its recorded heading or first sentence and expands independently. The pane shows the full recorded text on demand; it does not generate summaries or make model calls.
-- Recognized prompt templates show a short label. Expansion reveals the original text inline. Ordinary user messages and native skill blocks retain their normal rendering.
+- Recognized prompt templates show their command and authored description, or a bounded excerpt when no description is available. Expansion reveals the original text inline. Ordinary user messages stay open. Skill invocations are a separate native Pi component: the purple `[skill] name` card retains click/Ctrl+O expansion.
 
 Thinking groups require Pi's native `hideThinkingBlock: true` preference. Pi Config seeds this preference only when absent, then preserves native changes. **Ctrl+T** still switches to Pi's full thinking display. Unsupported Pi versions or component shapes show native content instead of hiding it.
 
@@ -28,7 +29,7 @@ Thinking groups require Pi's native `hideThinkingBlock: true` preference. Pi Con
 
 | Surface | Controls after selection |
 | --- | --- |
-| Tool groups | Left/Right selects an action; Enter opens/closes its output; Up/Down scroll; Home returns to the first action. |
+| Tool groups | For a single action, Enter opens/closes the card. For groups, Left/Right selects an action and Enter opens/closes its output; Up/Down scroll; Home returns to the first action. |
 | Thinking | Left/Right selects a round; Enter opens/closes its recorded text; Up/Down scroll; Home returns to the first round. Ctrl+T retains native visibility control. |
 | Prompt cards | Enter opens/closes the original text. |
 | Permission | Up/Down chooses Allow once, Deny, or Details; Enter selects; `d` toggles Details; Esc denies. Deny is selected initially. With Details open, Left/Right pages and Home/End jumps. |
@@ -56,7 +57,9 @@ PI_RUNTIME=/path/to/runtime node preview.mjs
 
 The runtime directory contains `node_modules/@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui`. The default is `~/.local/state/pi-config/current/runtime`. Tests use actual native components and isolated fixtures. Coverage includes repeated synchronous redraw, separate native component caches, shell timer cleanup, status transitions, lifecycle changes, stock subagent rendering, Unicode, narrow widths, and bounded work on large outputs. No model or database calls are needed.
 
-The preview runs the actual Pi TUI with invented recorded messages in a temporary home. It blocks model, shell, tool, and network requests. `/fixture-permission` opens an inert approval example. The preview does not load host credentials or change active Pi deployments. Use Ctrl+D to exit. Set `PI_PROMPT_JUMP_PATH=/path/to/pi-prompt-jump` to include the separate navigation package and inspect its behavior with the three invented user prompts.
+The preview runs the actual Pi TUI with invented recorded messages in a temporary home. It blocks model, shell, tool, and network requests. Code mode uses Pi's native JavaScript highlighting, nested calls, timing, and cost display; every recorded call and price is synthetic. Ctrl+O expands native code-mode and skill cards. `/fixture-permission` opens an inert approval example. `/fixture-question` opens the installed pi-questions choice UI; `/fixture-question text` opens its free-text UI. Answers perform no operation. The question UI uses the current Pi Config package by default; set `PI_QUESTIONS_PATH=/path/to/pi-questions/index.ts` to use another source. If unavailable, the preview reports that limit and still shows recorded question cards.
+
+The preview does not load host credentials or change active Pi deployments. Use Ctrl+D to exit. Set `PI_PROMPT_JUMP_PATH=/path/to/pi-prompt-jump` to include the separate navigation package and inspect its behavior with the three invented user prompts.
 
 The adapters for thinking, prompt component identity, viewport positioning, and native shell timers are isolated and gated to Pi 1.3.0. Future versions require review; passing these tests does not certify a different runtime or every terminal. Legacy 1.x implementation and development history remain in Git rather than as a second shipped renderer.
 

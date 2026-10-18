@@ -2,6 +2,9 @@
 
 ## 2.0.0 — Grouped display for Pi 1.3.0
 
+- Open single-action cards directly to output, align headings by moving status marks after the title, and distinguish questions from user prompts.
+- Add descriptive collapsed template labels and richer native code-mode, question, and skill examples to the isolated preview.
+
 - Add native `/inspect` selection, visible header/item focus, viewport reveal, and a short footer status; keep Option-generated characters as editor input.
 - Remove redundant count/control footers, strengthen output/argument hierarchy, and give independently expandable thinking rounds extractive titles.
 - Preserve native code mode rendering, nested-call statuses, JavaScript highlighting, and Ctrl+O expansion.

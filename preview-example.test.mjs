@@ -1,0 +1,109 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createPreview } from './preview.mjs';
+
+const hostHome = process.env.HOME, hostFetch = globalThis.fetch;
+const preview = await createPreview();
+const { core, runtime, manager, temporary, runtimePath, cwd } = preview;
+const load = file => import(pathToFileURL(path.join(runtimePath, 'node_modules/@earendil-works/pi-coding-agent/dist', file)).href);
+const { initTheme, theme } = await load('modes/interactive/theme/theme.js');
+const { codemodeRenderers } = await load('extensions/codemode/renderer.js');
+const { Text } = await import(pathToFileURL(path.join(runtimePath, 'node_modules/@earendil-works/pi-tui/dist/index.js')).href);
+const strip = value => value.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]/g, '');
+const paint = (component, width = 100) => strip(component.render(width).join('\n'));
+initTheme('dark', false);
+try {
+  assert.equal(process.env.HOME, temporary);
+  assert.equal(process.env.PI_CODING_AGENT_DIR, preview.agentDir);
+  await assert.rejects(fetch('https://invalid.example/'), /Network disabled/);
+  assert.throws(() => runtime.session.agent.streamFn(), /Model calls disabled/);
+  assert.deepEqual(runtime.session.getActiveToolNames(), [], 'no executable tools are enabled');
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(preview.agentDir, 'auth.json'), 'utf8')), {}, 'temporary auth store contains no credentials');
+  const messages = manager.buildSessionContext().messages;
+  const users = messages.filter(message => message.role === 'user');
+  assert.equal(users.length, 3, 'prompt-jump still has exactly three recorded user prompts');
+  const templateFile = await fs.readFile(path.join(preview.agentDir, 'prompts/fixture.md'), 'utf8');
+  assert.match(templateFile, /description: Inspect synthetic tool, question, and skill display examples\./);
+  assert.equal(templateFile.split('---\n').at(-1), users[0].content, 'recorded template body matches its actual prompt file');
+  const registered = runtime.session.extensionRunner.getToolDefinition('codemode');
+  assert.equal(registered.renderCall, codemodeRenderers.renderCall, 'the actual native call renderer is registered');
+  assert.equal(registered.renderResult, codemodeRenderers.renderResult, 'the actual native result renderer is registered');
+  await assert.rejects(registered.execute(), /Code execution is disabled/);
+  const renderers = runtime.session.extensionRunner.resolveToolRenderers('codemode', () => registered);
+  assert.equal(renderers, registered, 'compact renderer leaves the native definition unchanged');
+
+  // Replay the saved transcript through the real InteractiveMode, including its native skill parser.
+  const ui = new core.InteractiveMode(runtime, { tuiMode: 'fullscreen' });
+  ui.updateTerminalTitle = () => {};
+  ui.renderSessionEntries(manager.getBranch());
+  const code = ui.chatContainer.children.find(item => item instanceof core.ToolExecutionComponent && item.toolName === 'codemode');
+  assert.ok(code, 'actual transcript replay creates a native codemode component');
+  const collapsed = paint(code);
+  assert.equal(code.callRendererComponent.constructor.name, 'Container');
+  assert.equal(code.callRendererComponent.children[1].constructor.name, 'VisualLinePreview');
+  assert.match(collapsed, /✓ read/); assert.match(collapsed, /✗ read/);
+  assert.match(collapsed, /125ms/); assert.match(collapsed, /Took 1\.5s/);
+  assert.match(collapsed, /Model calls: \$0\.0030/);
+  assert.doesNotMatch(collapsed, /Invented missing file/, 'native nested error detail waits for expansion');
+  assert.ok(code.callRendererComponent.render(100).some(row => /\x1b\[[\d;]+mconst/.test(row)), 'native JavaScript is syntax highlighted');
+  code.setExpanded(true);
+  const expanded = paint(code);
+  for (const text of ['Invented missing file. No file was accessed.', 'models.classify', 'All calls, durations, and costs shown here are synthetic. Nothing ran.']) assert.ok(expanded.includes(text));
+  assert.match(expanded, /\$0\.0012/); assert.match(expanded, /\$0\.0018/);
+  const skill = ui.chatContainer.children.find(item => item instanceof core.SkillInvocationMessageComponent);
+  assert.ok(skill, 'actual transcript replay uses the native skill component');
+  assert.match(paint(skill), /\[skill\] fixture-review/);
+  assert.doesNotMatch(paint(skill), /Review the synthetic preview|Review invented sample/);
+  skill.setExpanded(true);
+  assert.match(paint(skill), /Review the synthetic preview/);
+  const parsed = core.parseSkillBlock(users[2].content);
+  assert.equal(parsed.name, 'fixture-review');
+  assert.equal(parsed.location, path.join(preview.agentDir, 'skills/fixture-review/SKILL.md'));
+  assert.equal(parsed.userMessage, 'Show the native skill card and one final successful action.');
+
+  const questionRecords = messages.filter(message => message.role === 'toolResult' && message.toolName === 'ask_user_question');
+  assert.deepEqual(questionRecords.map(message => message.details.status), ['answered', 'answered', 'answered', 'cancelled']);
+  assert.deepEqual(questionRecords.slice(0, 3).map(message => message.details.answers[0].type), ['option', 'other', 'text']);
+  assert.deepEqual(questionRecords.at(-1).details.answers, [], 'cancellation records no answer');
+  const command = runtime.session.extensionRunner.getCommand('fixture-question');
+  const notifications = [];
+  const ctx = { hasUI: true, cwd, ui: { notify: (...args) => notifications.push(args), input: async () => 'Synthetic comparison · 中文' } };
+  if (preview.questionsPath) {
+    const question = runtime.session.extensionRunner.getToolDefinition('ask_user_question');
+    await assert.rejects(question.execute(), /Tool execution is disabled/);
+    for (const [keys, expected] of [
+      [['\r'], /answered · Sample A/],
+      [['\x1b[B', '\x1b[B', '\r', 'Custom fixture answer', '\r'], /answered · Other: Custom fixture answer/],
+      [['\x1b'], /cancelled/],
+    ]) {
+      ctx.ui.custom = factory => new Promise(resolve => {
+        const component = factory({ requestRender() {} }, theme, {}, resolve);
+        try {
+          const wide = paint(component), narrow = paint(component, 35);
+          assert.match(wide, /Sample A \(Recommended\)/); assert.match(wide, /missing-value warning/);
+          assert.match(wide, /Other/); assert.match(narrow, /Sample A/);
+          assert.equal(component.constructor.name, 'Object', 'the original pi-questions component is returned');
+          for (const key of keys) component.handleInput(key);
+        } finally { component.dispose?.(); }
+      });
+      await command.handler('', ctx);
+      assert.match(notifications.at(-1)[0], expected);
+    }
+    await command.handler('text', ctx);
+    assert.match(notifications.at(-1)[0], /answered · Synthetic comparison · 中文/);
+    ctx.ui.input = async () => undefined;
+    await command.handler('text', ctx);
+    assert.match(notifications.at(-1)[0], /cancelled/);
+    const nativeCall = question.renderCall({ question: 'Which sample?', options: [{ label: 'A', description: 'detail' }] }, theme);
+    assert.ok(nativeCall instanceof Text, 'the loaded package supplies its real native renderer');
+  } else {
+    await command.handler('', ctx);
+    assert.match(notifications.at(-1)[0], /Native question UI unavailable/);
+  }
+  console.log(`preview examples: real runtime, native code/skill replay, 3 prompts, blocked execution, and ${preview.questionsPath ? 'native question selection/Other/text/cancellation' : 'explicit question UI fallback'} passed`);
+} finally { await preview.cleanup(); }
+assert.equal(process.env.HOME, hostHome);
+assert.equal(globalThis.fetch, hostFetch);
+assert.equal(await fs.stat(temporary).then(() => true, () => false), false, 'temporary home was removed');
