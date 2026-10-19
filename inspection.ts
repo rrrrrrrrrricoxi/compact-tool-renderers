@@ -1,9 +1,10 @@
 import { VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, ScrollView, isViewportTUI, type Component } from '@earendil-works/pi-tui';
+import { projectedChildren } from './work-strip-view.ts';
 
 type Choice = { id: string; kind: string; label: string; focus(): void };
 type Target = (component: Component) => boolean;
-const children = (component: any): Component[] => [...(Array.isArray(component?.children) ? component.children : []), ...(component?.child && typeof component.child.render === 'function' ? [component.child] : [])];
+const children = (component: any): Component[] => [...(Array.isArray(component?.[projectedChildren]) ? component[projectedChildren] : Array.isArray(component?.children) ? component.children : []), ...(component?.child && typeof component.child.render === 'function' ? [component.child] : [])];
 
 /** Pi 1.3 viewport seam. Read the mounted tree; never replace its layout/root. */
 export function revealInspection(tui: any, target: Target, version = VERSION): boolean {
@@ -19,6 +20,9 @@ export function revealInspection(tui: any, target: Target, version = VERSION): b
   const scroll = scrolls[0], document = scroll.children[0];
   if (!document) return false;
   const width = scroll.getContentWidth(Math.max(1, tui.terminal.columns));
+  // Opening a work strip changes its projected child list. Measure before the
+  // traversal so nested inspection uses the same tree as native mouse layout.
+  document.render(width);
   const contains = (component: Component, visited = new Set<Component>()): boolean => {
     if (visited.has(component)) return false; visited.add(component);
     return target(component) || children(component).some(child => contains(child, visited));
@@ -61,7 +65,7 @@ export function registerInspection(pi: ExtensionAPI, mode: { isEnabled(): boolea
       // Opening a pane changes the layout height. Reapply once after the native
       // render frame has measured it; do not poll or replace the layout root.
       revealTimer = setTimeout(() => { revealTimer = undefined; if (!disposed) revealInspection(tui, event.target); }, 30);
-      ui?.setStatus?.('compact-inspection', `Inspecting ${event.owner === 'tools' ? 'tools' : event.owner === 'thinking' ? 'thinking' : event.owner === 'subagents' ? 'subagents' : 'prompt'} · Esc or type to return`);
+      ui?.setStatus?.('compact-inspection', `Inspecting ${event.owner === 'work' ? 'work' : event.owner === 'tools' ? 'tools' : event.owner === 'thinking' ? 'thinking' : event.owner === 'subagents' ? 'subagents' : 'prompt'} · Esc or type to return`);
     }),
   ];
   pi.registerCommand('inspect', {

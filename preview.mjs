@@ -50,7 +50,7 @@ export async function createPreview() {
     await fs.writeFile(path.join(skillDir, 'SKILL.md'), `---\nname: fixture-review\ndescription: Review invented sample records for a display exercise.\n---\n${skillBody}\n`);
     await fs.writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({
       packages: [source, ...(promptJump ? [promptJump] : [])],
-      extensions: [path.join(source, 'preview-fixture.ts'), ...(questionsPath ? [questionsPath] : [])],
+      extensions: [path.join(source, 'preview-fixture.ts'), ...(questionsPath ? [questionsPath] : []), ...(process.env.PI_PREVIEW_STATUSLINE ? [path.resolve(process.env.PI_PREVIEW_STATUSLINE)] : [])],
       hideThinkingBlock: true, theme: 'dark', compaction: { enabled: false }, terminal: { showImages: true },
     }));
     const manager = core.SessionManager.inMemory(cwd);
@@ -144,6 +144,7 @@ export async function createPreview() {
     call('question-2', 'ask_user_question', question, 'User cancelled the question', {
       status: 'cancelled', question: question.question, context: question.details, mode: 'single-select', answers: [], message: 'User cancelled the question',
     });
+    if (process.env.PI_PREVIEW_WORK_STRIP === '1') assistant([{ type: 'text', text: 'Recorded preview decisions are shown above. The missing-input examples are preserved for inspection; no command ran.' }]);
     // This is the same envelope Pi writes for /skill:fixture-review, including its optional user message.
     append({ role: 'user', content: `<skill name="fixture-review" location="${path.join(skillDir, 'SKILL.md')}">\nReferences are relative to ${skillDir}.\n\n${skillBody}\n</skill>\n\nShow the native skill card and one final successful action.` });
     call('read-2', 'read', { path: '/fixture/last.txt' }, 'Recorded final output.');
@@ -217,7 +218,7 @@ export async function createPreview() {
     runtime = await core.createAgentSessionRuntime(factory, { cwd, agentDir, sessionManager: manager });
     const diagnostics = runtime.services.resourceLoader.getExtensions().errors;
     if (runtime.diagnostics.some(item => item.type === 'error') || diagnostics.length) throw new Error(JSON.stringify([...runtime.diagnostics, ...diagnostics]));
-    return { core, runtime, manager, temporary, agentDir, cwd, runtimePath, questionsPath, cleanup };
+    return { core, runtime, manager, temporary, agentDir, cwd, runtimePath, questionsPath, eventBus, cleanup };
   } catch (error) { await cleanup(); throw error; }
 }
 

@@ -4,6 +4,16 @@ Authoritative package: rrrrrrrrrricoxi/compact-tool-renderers. The approved scop
 
 ## Required outcomes
 
+### Work-strip release 2.4.0 — 2026-10-20
+
+`work-strip.ts` projects native chat children only during rendering, preserves the canonical child list, and exposes projected children to inspection. Pi 1.3.0 native lifecycle hooks attach message identity and distinguish replay from live input. The terminal assistant message must contain visible text before completion metadata can be recorded. Empty terminal responses remain open rather than promoting earlier commentary.
+
+`work-strip-subagents.ts` tracks prompt-owned root runs and their descendants through read-only native status events. Workflow dispatch completion is not child completion. Unknown or omitted known-child status remains unresolved. `work-strip-view.ts` validates display-only completion entries against the current branch and owns the strip's disclosure state. Manual expansion and scrollback take precedence over automatic folding.
+
+Native top-level spacers belong to the next canonical content block. Projection retains them with visible blocks and discards them with hidden blocks; it does not transfer spacing across hidden content. Components that own internal spacing retain it. The compact DDD replacement restores the original custom-message leading spacer locally. This keeps skill and summary boundaries separate without adding gaps to questions, tools, or custom notices.
+
+The companion Pi Statusline change temporarily masks only execution state and elapsed time while the strip owns them. It queries ownership after restore and releases it on disposal; saved preferences and the native Fleet remain unchanged. `preview-work-strip.mjs` supplies isolated recorded examples and a ten-second synthetic lifecycle playback. All 20 suites passed on Mac and CCC, and the user approved the final terminal spacing and work-strip preview on both hosts on 20 October 2026.
+
 - [x] Separate running actions; group only successful completed actions across no visible conversation boundary.
 - [x] Keep errors, cancellation, questions and background launches separate; stock pi-subagents/Fleet remains untouched.
 - [x] Bounded group pane with independent inline expansion and keyboard navigation.

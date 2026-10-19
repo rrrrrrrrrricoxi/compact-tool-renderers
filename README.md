@@ -27,6 +27,22 @@ Completed action groups and `codemode` show short operation summaries derived fr
 
 Complete assistant `js workflow` or `javascript workflow` fences collapse into a separate **Subagent workflow** row. Surrounding prose remains visible. `/inspect` or a header click opens bounded, syntax-highlighted source; Esc or typing returns to the editor. This changes display only: the subagent runtime still receives the exact original assistant message. Unsupported or incomplete shapes retain native display.
 
+## Work strips
+
+Each user prompt has one work strip. During execution, intermediate replies and compact actions remain visible. The strip shows elapsed time and a short current-step label extracted from recorded prose or operations. After native settlement and completion of that prompt's background descendants, it folds to **Worked for …** and leaves the terminal assistant reply visible. It makes no model calls and does not infer completion from reply wording.
+
+Questions, recorded answers, supervisor decisions, unresolved errors, and unknown notices remain visible outside the fold. Routine DDD notices can fold only when their producer explicitly marks them `severity: notice`; current DDD records without severity remain separate compact rows. Expand a DDD row to read its full recorded text.
+
+Click a strip or select Work in `/inspect` to expand its chronological contents. Nested inspection opens the owning strip first. Manual expansion stays open. Automatic folding waits while you are in scrollback and resumes when you return to the latest output. Interrupted or incomplete turns stay open. Native Ctrl+T and compact-off controls remain available.
+
+Completion is saved as a display-only custom entry, separate from original messages and model context. Resume and reload restore validated completion records. Older turns without this evidence remain open under **Earlier work**, with no invented duration. Unsupported runtimes retain native rendering.
+
+While a supported work strip is mounted, Pi Statusline can omit its duplicate execution state and elapsed time through the `compact-renderer:work-strip:v1` event. Other footer fields and native Fleet controls remain unchanged. Compact-off and renderer disposal release this temporary ownership without changing saved preferences.
+
+### Work-strip preview
+
+Run `PI_RUNTIME=/path/to/runtime node preview-work-strip.mjs`. Optionally set `PI_PREVIEW_STATUSLINE=/path/to/pi-statusline/index.ts` to include the matching footer. `/fixture-work` plays ten seconds of invented progress through native display events; no model or tool executes. Check automatic folding, manual expansion, scrollback, `/inspect`, prompt navigation, and normal typing after Esc.
+
 ## Controls
 
 `/compact-rendering` opens a native selector. Typed `on`, `off`, `toggle`, and `status` remain available. This display mode is session-local and starts enabled.

@@ -1,5 +1,14 @@
 # Release notes
 
+## 2.4.0 — Work strips
+
+- Keep intermediate replies and compact activity visible during execution, then fold completed work under one elapsed-time strip while retaining the final reply and decision evidence.
+- Derive the live step from recorded content. Wait for native settlement and the prompt's background descendants; preserve manual expansion and defer automatic folding in scrollback.
+- Compact DDD notices with full inspection and conservative handling of missing severity. Retain chronological expansion, nested inspection, native-off behavior, and editor controls.
+- Preserve native outside spacing with each visible block, including skill cards and summaries. Drop gaps with hidden blocks and retain internal card spacing without adding duplicate gaps.
+- Store validated display-only completion records for resume/reload. Older turns without records remain open. Coordinate execution status with Pi Statusline without changing saved footer preferences.
+- Add isolated native-runtime playback and regressions for settlement, descendants, replay, decisions, focus, and scrollback. All 20 suites passed on MacBook and CCC. The user approved both terminal previews on 20 October 2026.
+
 ## 2.3.3 — Single-round thinking summaries
 
 - Give a single recorded thinking round a short extractive summary and an aligned disclosure arrow. Expand directly into bounded content without a second round heading.

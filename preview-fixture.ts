@@ -15,6 +15,12 @@ export const fixtureTextQuestion = {
 };
 
 export default async function preview(pi: any) {
+  if (process.env.PI_PREVIEW_WORK_STRIP === '1') pi.registerCommand('fixture-work', {
+    description: 'Play an invented work-strip recording; no model or tool runs',
+    handler(_args: string, ctx: any) {
+      pi.events.emit('preview:work-strip-run:v1', { notify: (value: string) => ctx.ui.notify(value, 'info') });
+    },
+  });
   // Import only native presentation helpers; never initialize the subagent runtime.
   if (process.env.PI_PREVIEW_SUBAGENT_RENDERERS) {
     const native = await import(process.env.PI_PREVIEW_SUBAGENT_RENDERERS);

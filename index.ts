@@ -7,6 +7,7 @@ import { registerModernWorkflows } from './modern-workflows.ts';
 import { registerModernSubagentMessages } from './modern-subagent-messages.ts';
 import { registerInspection } from './inspection.ts';
 import { registerPermissionPresentation } from './permission-presentation.ts';
+import { registerWorkStrip } from './work-strip.ts';
 
 export default function compactRenderer(pi: ExtensionAPI): void {
   const mode = createDisplayMode();
@@ -29,6 +30,7 @@ export default function compactRenderer(pi: ExtensionAPI): void {
     disposers.push(registerModernWorkflows(pi, mode));
     disposers.push(registerPermissionPresentation(pi, mode));
     disposers.push(registerModernSubagentMessages(pi, mode));
+    disposers.push(registerWorkStrip(pi, mode));
     disposers.push(registerInspection(pi, mode));
   } catch (error) {
     dispose();
