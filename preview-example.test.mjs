@@ -22,6 +22,15 @@ try {
   assert.deepEqual(runtime.session.getActiveToolNames(), [], 'no executable tools are enabled');
   assert.deepEqual(JSON.parse(await fs.readFile(path.join(preview.agentDir, 'auth.json'), 'utf8')), {}, 'temporary auth store contains no credentials');
   const messages = manager.buildSessionContext().messages;
+  const previewSettings = JSON.parse(await fs.readFile(path.join(preview.agentDir, 'settings.json'), 'utf8'));
+  assert.equal(previewSettings.terminal.showImages, true, 'visual preview enables native images');
+  const imageResult = messages.find(message => message.role === 'toolResult' && message.toolCallId === 'read-image');
+  const imageCall = messages.flatMap(message => Array.isArray(message.content) ? message.content : []).find(block => block.type === 'toolCall' && block.id === 'read-image');
+  const imageBytes = Buffer.from(imageResult.content.find(block => block.type === 'image').data, 'base64');
+  assert.equal(imageBytes.readUInt32BE(16), 640, 'fixture has a visible width');
+  assert.equal(imageBytes.readUInt32BE(20), 320, 'fixture has a visible height');
+  assert.equal(imageCall.arguments.path, path.join(cwd, 'sample-a.png'));
+  assert.deepEqual(await fs.readFile(imageCall.arguments.path), imageBytes, 'fallback points to the actual isolated test image');
   const users = messages.filter(message => message.role === 'user');
   assert.equal(users.length, 3, 'prompt-jump still has exactly three recorded user prompts');
   const templateFile = await fs.readFile(path.join(preview.agentDir, 'prompts/fixture.md'), 'utf8');
@@ -70,7 +79,7 @@ try {
   for (let index = 0; index < 40; index++) { pane.offset += 8; expanded += '\n' + paint(code); }
   for (const text of ['Invented missing file. No file was accessed.', 'models.classify', 'All calls, durations, and costs shown here are synthetic. Nothing ran.']) assert.ok(expanded.includes(text));
   assert.match(expanded, /✓ read/); assert.match(expanded, /✗ read/);
-  assert.match(expanded, /125ms/); assert.match(expanded, /Took 1\.5s/);
+  assert.match(expanded, /125ms/); assert.match(expanded, /1\.48s/);
   assert.match(expanded, /Model calls: \$0\.0030/);
   assert.match(expanded, /\$0\.0012/); assert.match(expanded, /\$0\.0018/);
   code.setExpanded(false);

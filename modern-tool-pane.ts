@@ -14,6 +14,7 @@ export function* textRows(text: string, width: number): Generator<string> {
 export class ToolPane {
   open = false;
   focused = false;
+  expandedTitle?: string;
   styleHeader = (text: string) => text;
   theme?: any;
   background = "toolSuccessBg";
@@ -126,7 +127,7 @@ export class ToolPane {
       line = this.theme ? this.theme.fg("text", line) : line;
       return activityRow(line, outerWidth, this.theme, selected);
     };
-    const header = this.styleHeader(`${this.open ? "▾" : "▸"} ${this.title}${this.focused ? " · focused" : ""}`);
+    const header = this.styleHeader(`${this.open ? "▾" : "▸"} ${this.open ? this.expandedTitle ?? this.title : this.title}${this.focused ? " · focused" : ""}`);
     if (!this.open) { this.lastHeight = 1; this.lastBodyHeight = 0; return [paint(truncateToWidth(header, width), this.focused && !this.detailsFocused)]; }
     const height = Math.max(5, Math.min(20, this.height()));
     const key = `${width}:${this.directDetails}:${this.anchor}:${this.selected}:${[...this.expanded].join("|")}:${[...this.detailsExpanded].join("|")}:${this.detailsFocused}`;

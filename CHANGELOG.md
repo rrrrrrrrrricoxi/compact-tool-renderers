@@ -1,5 +1,13 @@
 # Release notes
 
+## 2.3.1 — Expand inline images
+
+- Keep image-bearing codemode results in the compact summary and bounded text pane, with image counts and metadata. Preserve Pi's native image components and recorded content.
+- Remove the duplicate heading on standalone image reads. Preserve separate image actions and native rendering when compact mode is off.
+- Show native inline images only in expanded compact blocks, with bounded preview dimensions and a readable fallback when native images are disabled or unavailable. Preserve exact native rendering when compact mode is off.
+- Remove repeated image announcements, question/answer headings, and codemode timing. Keep exact image acknowledgements and metadata in Details.
+- Add native-component regression cases and visible synthetic image examples for terminal review.
+
 ## 2.3.0 — Workflow folding and operation summaries
 
 - Collapse complete assistant workflow fences without changing their execution source or surrounding prose. Expand through the existing inspection controls.

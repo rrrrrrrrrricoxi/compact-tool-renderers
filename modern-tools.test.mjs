@@ -226,6 +226,8 @@ assertDecision(ask);
 assert.equal((paint(ask).match(/Question ·/g) || []).length, 1);
 ask.setExpanded(true);
 assert.match(paint(ask), /✓ MacBook/);
+assert.equal((paint(ask).match(/Which host\?/g) || []).length, 1, 'expanded question shows its prompt once');
+assert.equal((paint(ask).match(/MacBook/g) || []).length, 1, 'expanded question shows its answer once');
 assert.doesNotMatch(paint(ask), /^ +(?:Question|Options|Answer)\s*$/m);
 assert.doesNotMatch(paint(ask), /1\. ask_user_question/);
 capture('Answered question opened directly with readable answer', ask);
@@ -485,7 +487,7 @@ assert.match(paint(customContent), /# literal custom output \*\*keep\*\*/);
 assert.match(paint(customContent), /unknown diagnostic/);
 assert.doesNotMatch(paint(customContent), /Arguments/);
 clickSingle(customContent, 4);
-assert.match(paint(customContent), /Recorded details[\s\S]*null/, 'explicit null diagnostics remain accessible');
+assert.match(paint(customContent), /Metadata[\s\S]*null/, 'explicit null diagnostics remain accessible');
 const missing = make('read', 'density-missing', { path: '/fixture/missing.txt', offset: null, limit: null });
 const missingText = "ENOENT: no such file or directory, access '/fixture/missing.txt'";
 missing.updateResult({ ...result(missingText), isError: true }); missing.setExpanded(true);
@@ -828,7 +830,7 @@ assert.match(paint(unknownSubagent), /✗ Failed · Launch failed/); assert.matc
 const unknownInspection = []; pi.events.emit('compact-renderer:inspect:v1', { add: item => unknownInspection.push(item) });
 unknownInspection.find(item => item.label === 'Subagent · launch · ✗ Failed · Launch failed').focus();
 input('\t'); input('\r');
-assert.match(paint(unknownSubagent), /Recorded details/); assert.match(paint(unknownSubagent), /keep me/, 'unknown native fields remain accessible in Details');
+assert.match(paint(unknownSubagent), /Metadata/); assert.match(paint(unknownSubagent), /keep me/, 'unknown native fields remain accessible in Details');
 input('\x1b');
 unknownSubagent.setExpanded(false);
 // Import only installed presentation functions; never initialize extension execution/watchers or launch an agent.

@@ -8,11 +8,12 @@ import { cardContentWidth, activityRow } from "./display-card.ts";
 import { acquireSubagentProjection, hiddenSubagent } from "./modern-subagent-groups.ts";
 import { compactSubagent, subagentDecision, subagentTitle } from "./modern-subagents.ts";
 import { groupIntent } from "./action-intent.ts";
+import { compactToolImages, installModernToolImages, type ToolImageView } from "./modern-tool-images.ts";
 
 type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
 type Context = Parameters<NonNullable<ToolRenderers["renderCall"]>>[2];
 type Status = "pending" | "running" | "success" | "failed" | "cancelled" | "unavailable" | "unanswered" | "answered" | "notice";
-type Node = { id: string; name: string; args: any; epoch: number; status: Status; result?: any; note?: string; pane?: ToolPane; code?: CodePane; group?: Group; native: NativeToolOwner; invalidate?: () => void; nativeExpanded?: boolean; rendererAttached?: boolean; revision: number; lastPartial?: boolean; lastError?: boolean };
+type Node = { id: string; name: string; args: any; epoch: number; status: Status; result?: any; images: number; note?: string; pane?: ToolPane; code?: CodePane; group?: Group; native: NativeToolOwner; invalidate?: () => void; nativeExpanded?: boolean; rendererAttached?: boolean; revision: number; lastPartial?: boolean; lastError?: boolean };
 type Group = { members: Node[]; pane: ToolPane; signature: string };
 const shortName = (name: string) => name.split("__").at(-1) || name;
 export const isNativeSubagent = (name: string) => /^(?:subagents?(?:_|$)|fleet(?:_|$))/i.test(shortName(name));
@@ -146,24 +147,36 @@ function compactFailure(node: Node) {
   // Only an explicit diagnostic prefix is collapsed; mixed/unknown output stays visible.
   if (content[0].text.slice(0, 128).trimStart().startsWith(`${category.code}:`) || content[0].text.slice(0, 128).trimStart().startsWith(`Error: ${category.code}:`)) return category;
 }
+function imageAcknowledgement(node: Node, block: any): boolean {
+  return node.name === "read" && node.status === "success" && block.type === "text" &&
+    node.result?.content?.some((image: any) => image.type === "image" && block.text === `Read image file [${image.mimeType}]`);
+}
 function* outputSections(node: Node): Generator<PaneContent> {
   for (const block of node.result?.content ?? []) {
+    if (imageAcknowledgement(node, block)) continue;
     if (block.type === "text") {
       const path = node.args?.path ?? node.args?.file_path;
       const language = node.name === "read" && node.status !== "failed" && typeof path === "string" ? getLanguageFromPath(path) : undefined;
       const markdown = language === "markdown" || block.mimeType === "text/markdown";
       yield { text: String(block.text ?? ""), ...(markdown ? { format: "markdown" as const } : language ? { format: "code" as const, language } : {}) };
     }
-    else if (block.type === "image") yield `[Recorded image: ${clean(block.mimeType)}; native preview is retained outside groups]`;
+    else if (block.type === "image") continue; // The expanded image adapter owns preview/fallback.
     else yield* recordedValues(block);
   }
 }
 function* actionDetails(node: Node): Generator<PaneContent> {
   if (standardWrite(node) || compactFailure(node)) { yield { text: "Output", kind: "section" }; yield* outputSections(node); }
+  if (node.images) {
+    yield { text: "Images", kind: "section" };
+    for (const block of node.result?.content ?? []) {
+      if (imageAcknowledgement(node, block)) yield block.text;
+      else if (block.type === "image") yield clean(block.mimeType);
+    }
+  }
   yield { text: "Arguments", kind: "section" }; yield* recordedValues(node.args, 0, new Set(), argumentLanguages(node));
   const details = node.result?.details;
   const emptyDetails = details !== null && typeof details === "object" && !Array.isArray(details) && Object.keys(details).length === 0;
-  if (details !== undefined && !emptyDetails) { yield { text: "Recorded details", kind: "section" }; yield* recordedValues(details, 0, new Set(), { diff: "diff", code: "javascript" }); }
+  if (details !== undefined && !emptyDetails) { yield { text: "Metadata", kind: "section" }; yield* recordedValues(details, 0, new Set(), { diff: "diff", code: "javascript" }); }
 }
 
 function knownFailure(node: Node): { code: string; label: string } | undefined {
@@ -225,6 +238,8 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
   const rowGenerations = new WeakMap<object, number>();
   let rebuilding = false;
   const subscriptions: (() => void)[] = [];
+  const imageAdapterOff = installModernToolImages();
+  if (imageAdapterOff) subscriptions.push(imageAdapterOff);
   const redraw = () => {
     // Snapshot before native synchronous invalidate -> updateDisplay -> renderer registration.
     for (const invalidate of [...new Set([...nodes.values()].map(node => node.invalidate).filter(Boolean))]) invalidate!();
@@ -268,7 +283,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
   };
   const ensure = (id: string, name: string, args?: any, stock?: ToolRenderers) => {
     let node = nodes.get(id);
-    if (!node) { node = { id, name, args, epoch, status: "pending", revision: 0, native: new NativeToolOwner(name, stock) }; nodes.set(id, node); }
+    if (!node) { node = { id, name, args, epoch, status: "pending", images: 0, revision: 0, native: new NativeToolOwner(name, stock) }; nodes.set(id, node); }
     if (args !== undefined && node.args !== args) { node.args = args; node.revision++; node.pane?.reset(); }
     if (name === "codemode") node.code ||= new CodePane(height);
     return node;
@@ -280,6 +295,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
     const changed = force || node.result?.content !== result?.content || node.result?.details !== result?.details || node.status !== next.status || node.note !== next.note;
     node.result = result; node.note = next.note; node.status = next.status;
     if (!changed) return;
+    node.images = Array.isArray(result?.content) ? result.content.reduce((count: number, block: any) => count + (block?.type === "image" ? 1 : 0), 0) : 0;
     node.revision++; node.pane?.reset();
     if (!rebuilding) refreshGroups();
   };
@@ -377,7 +393,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       if (compactSubagent(name) && !node.result) node.status = context.executionStarted ? "running" : "pending";
       return node;
     };
-    const singleCard = (node: Node) => compactSubagent(name) || question(name) || !!node.result && !["pending", "running", "success"].includes(node.status);
+    const singleCard = (node: Node) => compactSubagent(name) || question(name) || node.result?.content?.some((block: any) => block.type === "image") || !!node.result && !["pending", "running", "success"].includes(node.status);
     const individual = (node: Node, theme?: any) => {
       const projected = subagentView(node);
       if (projected) {
@@ -386,8 +402,9 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
         return pane;
       }
       node.pane ||= new ToolPane([action(node)], "", height);
+      node.pane.expandedTitle = question(name) ? `Question · ${questionState(node)}` : undefined;
       const status = node.note || node.status[0].toUpperCase() + node.status.slice(1);
-      node.pane.title = compactSubagent(name) ? subagentTitle(name, node.args, node.result, node.status) + indicators(node) : question(name) ? questionTitle(node) : `${toolLabel(name, node.args)}${node.status === "success" ? "" : ` · ${node.status === "failed" ? "✗ Failed" : `… ${status}`}`}${indicators(node)}`;
+      node.pane.title = compactSubagent(name) ? subagentTitle(name, node.args, node.result, node.status) + indicators(node) : question(name) ? questionTitle(node) : `${toolLabel(name, node.args)}${node.images ? ` · ${node.images} image${node.images === 1 ? "" : "s"}` : ""}${node.status === "success" ? "" : ` · ${node.status === "failed" ? "✗ Failed" : `… ${status}`}`}${indicators(node)}`;
       const reason = compactSubagent(name) ? "" : failureReason(node);
       if (reason) node.pane.title += ` · ${reason}`;
       if (theme) {
@@ -420,12 +437,23 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       const { errors, cancelled, unresolved } = pane.content;
       const status = node.status === "failed" ? "✗ Failed" : context.isPartial ? context.executionStarted ? "… Running" : "Preparing" : "";
       pane.heading = `codemode${status ? ` · ${status}` : ""} · ${pane.content.intent}`;
-      pane.title = `${pane.heading}${calls.length ? ` · ${calls.length} nested call${calls.length === 1 ? "" : "s"}` : ""}${errors ? ` · ${errors} nested error${errors === 1 ? "" : "s"}` : ""}${cancelled ? ` · ${cancelled} nested cancelled` : ""}${unresolved ? ` · ${unresolved} nested unresolved` : ""}${typeof context.durationMs === "number" ? ` · ${(context.durationMs / 1000).toFixed(2)}s` : ""}${indicators(node)}`;
+      pane.title = `${pane.heading}${calls.length ? ` · ${calls.length} nested call${calls.length === 1 ? "" : "s"}` : ""}${pane.content.images ? ` · ${pane.content.images} image${pane.content.images === 1 ? "" : "s"}` : ""}${errors ? ` · ${errors} nested error${errors === 1 ? "" : "s"}` : ""}${cancelled ? ` · ${cancelled} nested cancelled` : ""}${unresolved ? ` · ${unresolved} nested unresolved` : ""}${typeof context.durationMs === "number" ? ` · ${(context.durationMs / 1000).toFixed(2)}s` : ""}${indicators(node)}`;
       pane.setTheme(theme); pane.tone = node.status === "failed" ? "error" : errors || cancelled || unresolved && !context.isPartial ? "warning" : "syntaxVariable";
       return true;
     };
     return {
       renderShell: "self",
+      [compactToolImages](component: any, width: number): ToolImageView | undefined {
+        if (disposed || !mode.isEnabled() || rowGenerations.get(component.rendererState) !== generation) return;
+        const node = nodes.get(component.toolCallId);
+        if (!node || !node.images || node.code && !node.code.content.supported || subagentView(node)?.hidden) return;
+        const pane = node.code || individual(node);
+        // Only direct reads identify the image source. Never infer a codemode
+        // image path from script text, nested calls, or unrelated text output.
+        const source = shortName(name) === "read" ? node.args?.path ?? node.args?.file_path : undefined;
+        return { open: pane.open, count: node.images, bodyIndent: cardContentWidth(width) >= (node.code ? 4 : 12) ? 2 : 0, get theme() { return pane.theme; },
+          ...(typeof source === "string" && source.length <= 4096 && !/[\p{Cc}\p{Cf}]/u.test(source) ? { source } : {}) };
+      },
       renderCall(args, theme, context) {
         if (disposed || !nativeToolContextSupported(context) || stale(context)) return stock?.renderCall?.(args, theme, { ...context, executionStarted: false, state: {}, lastComponent: undefined }) ?? new Text(json(args), 0, 0);
         const node = get(args, context);

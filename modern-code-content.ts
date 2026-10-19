@@ -36,7 +36,7 @@ export class CodeContent {
   code = "";
   intent = "Run code";
   private details: any;
-  errors = 0; cancelled = 0; unresolved = 0; priced = 0; totalCost = 0;
+  errors = 0; cancelled = 0; unresolved = 0; priced = 0; totalCost = 0; images = 0;
   private visibleContent: { block: any; index: number }[] = [];
   aggregateBlocks = 0;
   aggregateEntries = 0; sourceCharacters = 0; paintedCalls = 0;
@@ -44,7 +44,7 @@ export class CodeContent {
   update(args: any, result: any, revision: number) {
     if (revision === this.revision) return false;
     this.revision = revision; this.supported = true;
-    this.errors = this.cancelled = this.unresolved = this.priced = this.totalCost = 0;
+    this.errors = this.cancelled = this.unresolved = this.priced = this.totalCost = this.images = 0;
     const code = data(args, "code"), content = result ? data(result, "content") : [], details = result ? data(result, "details") : undefined;
     const calls = details == null ? [] : data(details, "calls");
     if (typeof code !== "string" || !Array.isArray(content) || details === missing || calls === missing || calls != null && !Array.isArray(calls)) { this.supported = false; return true; }
@@ -52,8 +52,12 @@ export class CodeContent {
     for (let i = 0; i < content.length; i++) {
       this.aggregateBlocks++;
       const block = data(content, String(i));
-      if (data(block, "type") !== "text" || typeof data(block, "text") !== "string") { this.supported = false; return true; }
-      if (data(block, "text").length) this.visibleContent.push({ block, index: i });
+      const type = data(block, "type");
+      if (type === "image" && typeof data(block, "mimeType") === "string" && typeof data(block, "data") === "string") {
+        this.images++; this.visibleContent.push({ block, index: i });
+      } else if (type === "text" && typeof data(block, "text") === "string") {
+        if (data(block, "text").length) this.visibleContent.push({ block, index: i });
+      } else { this.supported = false; return true; }
     }
     for (let i = 0; i < this.calls.length; i++) {
       this.aggregateEntries++;
@@ -110,6 +114,9 @@ export class CodeContent {
     }
     if (this.priced > 1) yield fg("muted", `Model calls: ${codeCost(this.totalCost)}`);
     for (const { block, index } of this.visibleContent) {
+      // The heading counts images and the image adapter displays them or their
+      // fallback. Do not repeat a placeholder for each image in the text pane.
+      if (block.type === "image") continue;
       const text = block.text;
       if (hasDuration && index === 0 && text.length < 160 && scriptHeader.test(text)) continue;
       if (text) { yield ""; yield* this.text(text, width, theme, isError ? "error" : "toolOutput"); }

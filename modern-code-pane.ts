@@ -1,4 +1,4 @@
-import { matchesKey, truncateToWidth, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
+import { matchesKey, truncateToWidth, visibleWidth, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
 import { activityRow, cardContentWidth } from "./display-card.ts";
 import { CodeContent } from "./modern-code-content.ts";
 
@@ -80,8 +80,10 @@ export class CodePane {
       return minutes < 60 ? `${minutes}m ${remainder}s` : `${Math.floor(minutes / 60)}h ${minutes % 60}m ${remainder}s`;
     };
     let timer = "";
-    if (!this.partial && this.durationMs !== undefined) timer = `Took ${duration(this.durationMs)}`;
-    else if (this.startedAt !== undefined) timer = `${this.partial ? "Elapsed" : "Took"} ${duration((this.endedAt ?? Date.now()) - this.startedAt)}`;
+    // Avoid repeating the heading's duration, but retain it below a clipped
+    // heading so a narrow terminal does not lose the timing information.
+    if (!this.partial && this.durationMs !== undefined && visibleWidth(title) > contentWidth) timer = `Took ${duration(this.durationMs)}`;
+    else if (this.durationMs === undefined && this.startedAt !== undefined) timer = `${this.partial ? "Elapsed" : "Took"} ${duration((this.endedAt ?? Date.now()) - this.startedAt)}`;
     const footer = [timer, this.focused ? `Enter collapse · ↑/↓ scroll · Home start · Esc release${more ? " · more ↓" : ""}` : more ? "more ↓" : ""].filter(Boolean).join(" · ");
     const visible = [header, ...body, ...(footer ? [activityRow(this.theme ? this.theme.fg("muted", truncateToWidth(footer, contentWidth)) : truncateToWidth(footer, contentWidth), width, this.theme)] : [])];
     this.lastHeight = visible.length; return visible;
