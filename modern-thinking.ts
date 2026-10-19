@@ -1,11 +1,11 @@
 import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
-import { hiddenThinkingShape, installModernThinkingAdapter } from "./modern-thinking-adapter.ts";
+import { hiddenThinkingShape, mixedThinkingRegion, installModernThinkingAdapter } from "./modern-thinking-adapter.ts";
 import { recordedPaneHeight } from "./modern-recorded-pane.ts";
 import { ToolPane, type PaneAction } from "./modern-tool-pane.ts";
 
 type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
-type Round = { id: number; sources?: string[]; action?: PaneAction; message: any; component?: any; kind: "round" | "bridge" | "boundary"; group?: ThinkingGroup };
+type Round = { id: number; sources?: string[]; action?: PaneAction; message: any; hasThinking: boolean; component?: any; kind: "round" | "bridge" | "boundary"; group?: ThinkingGroup };
 type ThinkingGroup = { members: Round[]; pane: ToolPane; activeEpoch?: number; activeResult?: boolean };
 /** The label is an extract from recorded text, never a generated summary.
  * Limit work even when the first line has millions of characters. */
@@ -19,6 +19,7 @@ export function recordedThinkingLabel(sources: readonly string[]): string {
 }
 
 const hasThinking = (message: any) => (message?.content || []).some((b: any) => b.type === "thinking" && typeof b.thinking === "string" && b.thinking.trim());
+const supportedThinking = (component: any, message: any) => hiddenThinkingShape(component, message) || !!mixedThinkingRegion(component, message);
 const classify = (message: any): Round["kind"] => {
   if (["error", "aborted", "length"].includes(message?.stopReason) || (message?.content || []).some((b: any) => b.type === "text" && b.text?.trim() || b.type === "toolCall" && ["ask_user_question", "question"].includes(b.name))) return "boundary";
   return hasThinking(message) ? "round" : "bridge";
@@ -56,7 +57,10 @@ export class ModernThinkingGroups {
       return;
     }
     let record = this.aliases.get(message) || (phase === "start" ? undefined : this.live);
-    if (!record) { record = { id: this.records.length, message, kind: classify(message) }; this.records.push(record); this.dirty = true; }
+    if (!record) { record = { id: this.records.length, message, hasThinking: hasThinking(message), kind: classify(message) }; this.records.push(record); this.dirty = true; }
+    // Native streaming messages can share a mutated content array.
+    const thinking = hasThinking(message);
+    if (record.hasThinking !== thinking) { record.hasThinking = thinking; this.dirty = true; }
     record.message = message; this.aliases.set(message, record);
     const kind = classify(message);
     if (record.kind !== kind) { record.kind = kind; this.dirty = true; }
@@ -85,7 +89,10 @@ export class ModernThinkingGroups {
     };
     for (const record of this.records) {
       if (record) record.group = undefined;
-      if (!record || record.kind === "boundary") flush();
+      if (!record || record.kind === "boundary") {
+        flush();
+        if (record && hasThinking(record.message) && record.message.content.some((block: any) => block.type === "text" && block.text?.trim())) { members.push(record); flush(); }
+      }
       else if (record.kind === "round") members.push(record);
     }
     flush();
@@ -94,7 +101,8 @@ export class ModernThinkingGroups {
   private active(group?: ThinkingGroup): group is ThinkingGroup {
     if (!group || !this.enabled()) return false;
     if (group.activeEpoch !== this.epoch) {
-      group.activeResult = group.members.every(record => record.component && this.components.get(record.component) === record && classify(record.message) === "round" && hiddenThinkingShape(record.component, record.message));
+      group.activeResult = group.members.every(record => record.component && this.components.get(record.component) === record && hasThinking(record.message)
+        && (record.kind === "round" ? hiddenThinkingShape(record.component, record.message) : !!mixedThinkingRegion(record.component, record.message)));
       group.activeEpoch = this.epoch;
     }
     return group.activeResult === true;
@@ -102,7 +110,7 @@ export class ModernThinkingGroups {
   association(component: any) {
     this.regroup();
     const record = this.components.get(component);
-    if (record && !hiddenThinkingShape(component, record.message)) this.epoch++;
+    if (record && !supportedThinking(component, record.message)) this.epoch++;
     return record && record.component === component && this.active(record.group) ? { record, group: record.group } : undefined;
   }
   private choose(group: ThinkingGroup) {
@@ -143,7 +151,8 @@ export class ModernThinkingGroups {
     if (group.members.at(-1) !== record) return [];
     const pane = group.pane, theme = this.theme();
     this.sources(group);
-    pane.title = `Thinking · ${group.members.length} round${group.members.length === 1 ? "" : "s"}`;
+    pane.title = group.members.length === 1 ? `Thinking · ${pane.actions[0]?.label || "Recorded thinking"}` : `Thinking · ${group.members.length} rounds`;
+    pane.directContent = group.members.length === 1;
     pane.focused = this.focused && this.selected === group;
     pane.theme = theme; pane.headingTone = "thinkingText"; pane.itemName = "round";
     pane.styleHeader = text => theme.fg("thinkingText", text);

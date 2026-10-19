@@ -1,5 +1,11 @@
 # Release notes
 
+## 2.3.3 — Single-round thinking summaries
+
+- Give a single recorded thinking round a short extractive summary and an aligned disclosure arrow. Expand directly into bounded content without a second round heading.
+- Compact one hidden thinking run beside a visible reply while preserving native reply rendering, ordering, and terminal markers. Keep native fallback for unsupported layouts, failures, and expansion overrides.
+- Track shared streaming content changes and retain grouping boundaries, mouse controls, editor focus, and lifecycle cleanup. All 16 suites passed on MacBook and CCC; the user approved both terminal previews.
+
 ## 2.3.2 — Preserve compact history after reload
 
 - Keep historical tool rows attached when Pi rebuilds chat before the new renderer receives session start. Restore compact Bash, MCP, and codemode history after `/reload`.

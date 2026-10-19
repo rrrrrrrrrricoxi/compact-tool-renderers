@@ -192,6 +192,12 @@ export async function createPreview() {
     call('read-image', 'read', { path: sampleImagePath }, [{ type: 'text', text: 'Read image file [image/png]' }, { ...pixel }]);
     manager.appendSessionInfo('compact-renderer-preview');
     const eventBus = core.createEventBus();
+    assistant([
+      { type: 'thinking', thinking: '**Compare the recorded samples**\n\nSynthetic preview only: compare the two recorded sample labels and retain their units. This text is invented, not model reasoning.' },
+      { type: 'text', text: 'Single-round example: this reply stays outside the thinking block. Expand the summary above in one step; collapse it and check that the arrow aligns with the action rows.' },
+    ]);
+    call('single-thinking-read', 'read', { path: '/fixture/summary.txt' }, 'Recorded sample summary.', {}, false, '# Check the recorded units\n\nSynthetic preview only: the sample units are present in the fixture. This is invented text for the single-round tool-call example.');
+    assistant([{ type: 'text', text: 'The single-round tool example above uses the same summary and disclosure. /inspect opens either thinking block; Esc or typing returns to the editor. No model or tool executed.' }]);
     const factory = async ({ sessionManager, sessionStartEvent }) => {
       const modelRuntime = await core.ModelRuntime.create({ authPath: path.join(agentDir, 'auth.json'), modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
       const services = await core.createAgentSessionServices({ cwd, agentDir, modelRuntime,

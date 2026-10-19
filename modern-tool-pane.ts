@@ -20,6 +20,7 @@ export class ToolPane {
   background = "toolSuccessBg";
   headingTone = "mdLink";
   itemName = "action";
+  directContent = false;
   selected = 0;
   private anchor = 0;
   offset = 0;
@@ -40,7 +41,7 @@ export class ToolPane {
   // Instrumentation also makes the large-output contract testable without wall-clock assertions.
   paintedRows = 0;
   constructor(public actions: PaneAction[], public title: string, private height = () => 12) {}
-  private get directDetails() { return this.itemName === "action" && this.actions.length === 1; }
+  private get directDetails() { return this.directContent || this.itemName === "action" && this.actions.length === 1; }
   reset() { this.anchor = Math.min(this.anchor, Math.max(0, this.actions.length - 1)); this.key = ""; this.rows = []; this.iterator = undefined; this.done = false; this.actionRows.clear(); this.detailsRows.clear(); this.rowKinds.clear(); }
   releaseInspection() { if (this.detailsFocused) { this.detailsFocused = false; this.offset = 0; this.reset(); } }
   handle(data: string): boolean {

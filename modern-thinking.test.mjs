@@ -82,20 +82,20 @@ try {
   for(const boundary of [visible,error,{role:'user',content:'question'},{type:'toolResult',role:'toolResult',toolName:'ask_user_question',content:[],isError:false}]) {
     const a=round(8), b=round(9);branch=[entry(a),entry(boundary),entry(b)];cards.length=0;emit('session_start',{type:'session_start',reason:'resume'});
     cards.push(new AssistantMessageComponent(a,true,themeModule.getMarkdownTheme()),new AssistantMessageComponent(b,true,themeModule.getMarkdownTheme()));
-    assert.ok(cards.every(c=>/Thinking · 1 round/.test(plain(c.render(70)))));
+    assert.ok(cards.every(c=>/Thinking · Round-[89] original first/.test(plain(c.render(70)))));
   }
   // Public streaming events may replace message objects; preserve recorded order.
   branch=[];cards.length=0;emit('session_start',{type:'session_start',reason:'resume'});
   const start=round(10);emit('message_start',{message:start});cards.push(new AssistantMessageComponent(start,true,themeModule.getMarkdownTheme()));
   const update={...start,content:[{type:'thinking',thinking:'Updated exact recorded text'},start.content[1]]};emit('message_update',{message:update});cards[0].updateContent(update);emit('message_end',{message:update});
-  assert.match(plain(cards[0].render(70)),/Thinking · 1 round/);
-  key('\x1bt');key('\r');key('\r');assert.match(plain(cards[0].render(70)),/Updated exact recorded text/);
+  assert.match(plain(cards[0].render(70)),/▸ Thinking · Updated exact recorded text/);
+  key('\x1bt');key('\r');assert.match(plain(cards[0].render(70)),/▾ Thinking · Updated exact recorded text/);
   // A very large recorded block still paints a bounded native assistant surface.
   const hugeRound={...round(11),content:[{type:'thinking',thinking:'Large exact recorded line 行🙂\n'.repeat(100000)},round(11).content[1]]};
   branch=[entry(hugeRound)];cards.length=0;emit('session_start',{type:'session_start',reason:'resume'});cards.push(new AssistantMessageComponent(hugeRound,true,themeModule.getMarkdownTheme()));
   const markdownRender=tui.Markdown.prototype.render;let markdownPaints=0;
   tui.Markdown.prototype.render=function(...args){markdownPaints++;return markdownRender.apply(this,args);};
-  try{assert.match(plain(cards[0].render(60)),/Thinking · 1 round/);key('\x1bt');key('\r');key('\r');assert.ok(cards[0].render(60).length<=17);assert.match(plain(cards[0].render(60)),/Large exact recorded line/);assert.equal(markdownPaints,0,'bounded thinking never eagerly paints native full Markdown');}
+  try{assert.match(plain(cards[0].render(60)),/▸ Thinking · Large exact recorded line/);key('\x1bt');key('\r');assert.ok(cards[0].render(60).length<=17);assert.match(plain(cards[0].render(60)),/Large exact recorded line/);assert.equal(markdownPaints,0,'bounded thinking never eagerly paints native full Markdown');}
   finally{tui.Markdown.prototype.render=markdownRender;}
   // Long recorded rounds remain a concise list until each is opened. Labels
   // identify their source; the original thinking stays available without edits.
