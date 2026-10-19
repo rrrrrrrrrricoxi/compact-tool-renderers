@@ -1,5 +1,11 @@
 # Release notes
 
+## 2.3.2 — Preserve compact history after reload
+
+- Keep historical tool rows attached when Pi rebuilds chat before the new renderer receives session start. Restore compact Bash, MCP, and codemode history after `/reload`.
+- Reconnect replayed rows after rebuilding groups. Retain stale-row protection for session switches and shutdown.
+- Add a regression using native chat replay and tool components, with synthetic records and no tool execution.
+
 ## 2.3.1 — Expand inline images
 
 - Keep image-bearing codemode results in the compact summary and bounded text pane, with image counts and metadata. Preserve Pi's native image components and recorded content.

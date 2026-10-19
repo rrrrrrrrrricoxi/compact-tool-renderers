@@ -235,6 +235,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
   let inputOff: (() => void) | undefined;
   const height = () => Math.max(4, Math.min(20, (process.stdout.rows || 24) - 10));
   let generation = 0;
+  let attached = false;
   const rowGenerations = new WeakMap<object, number>();
   let rebuilding = false;
   const subscriptions: (() => void)[] = [];
@@ -315,13 +316,19 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       if (node.status !== "success") epoch++;
     } else if (message?.role !== "system" && !(message?.role === "custom" && message.display === false)) epoch++;
   };
-  const clear = () => {
+  const reset = (retireRows: boolean) => {
     release(); inputOff?.(); inputOff = undefined;
     for (const node of nodes.values()) { node.native.dispose(); node.code?.dispose(); }
-    nodes = new Map(); groups = new Map(); epoch = 0; generation++;
+    nodes = new Map(); groups = new Map(); epoch = 0;
+    if (retireRows) generation++;
   };
+  const clear = () => reset(true);
   const attach = (_event: any, ctx: any) => {
-    clear();
+    // Native reload replays chat through this new registration before session_start.
+    // Those rows belong to this session; reconnect them after rebuilding history.
+    // Later transitions must still retire detached rows, including reused tool IDs.
+    const replayed = attached ? [] : [...new Set([...nodes.values()].map(node => node.invalidate).filter(Boolean))];
+    reset(attached); attached = true;
     rebuilding = true;
     try { for (const entry of ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getBranch?.() ?? []) {
       if (entry.type === "message") observeMessage(entry.message);
@@ -342,6 +349,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       // the first typed character, paste, or editor key so Enter submits normally.
       release(); pi.events.emit("compact-renderer:inspection-ended:v1", {}); redraw();
     });
+    for (const invalidate of replayed) invalidate!();
   };
   const on = (event: string, callback: any) => { const off = (pi.on as any)(event, callback); if (typeof off === "function") subscriptions.push(off); };
   for (const event of ["session_start", "session_tree", "session_compact"]) on(event, attach);
