@@ -47,7 +47,7 @@ try {
   const runner = runtime.session.extensionRunner;
   const rendererErrors = [];
   runner.onError(error => rendererErrors.push(error));
-  runner.setUIContext({ onTerminalInput() { return () => {}; }, setHiddenThinkingLabel() {}, setStatus() {}, setWidget() {}, notify() {} }, 'tui');
+  runner.setUIContext({ theme, onTerminalInput() { return () => {}; }, setHiddenThinkingLabel() {}, setStatus() {}, setWidget() {}, notify() {} }, 'tui');
   await runner.emit({ type: 'session_start', reason: 'resume' });
   const ui = new core.InteractiveMode(runtime, { tuiMode: 'fullscreen' });
   ui.updateTerminalTitle = () => {};
@@ -114,7 +114,9 @@ try {
   assert.doesNotMatch(paint(densityFailure), /access '/);
   const skill = ui.chatContainer.children.find(item => item instanceof core.SkillInvocationMessageComponent);
   assert.ok(skill, 'actual transcript replay uses the native skill component');
-  assert.match(paint(skill), /\[skill\] fixture-review/);
+  assert.match(paint(skill), /▸ \/skill:fixture-review/);
+  assert.match(paint(skill), /Show the native skill card and one final successful action\./);
+  assert.doesNotMatch(paint(skill), /\[skill\]|Ctrl\+O/);
   assert.doesNotMatch(paint(skill), /Review the synthetic preview|Review invented sample/);
   skill.setExpanded(true);
   assert.match(paint(skill), /Review the synthetic preview/);

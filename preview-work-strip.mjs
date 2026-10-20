@@ -16,7 +16,7 @@ export async function createWorkStripPreview({ stepMs = 1000 } = {}) {
   const base = Date.now();
   const assistant = value => ({role:'assistant',content:[{type:'text',text:value}],timestamp:Date.now(),stopReason:'stop',api:'openai-codex-responses',provider:'openai-codex',model:'gpt-6-luna',usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}});
   manager.appendCustomMessageEntry('ddd', 'Five recorded maintenance reminders.\n\nThis invented notice has no severity metadata. It stays visible as a compact row. Expand it to inspect this complete text.', true);
-  manager.appendMessage(assistant('Work-strip preview: intermediate content is folded; final replies and decisions remain visible. /inspect or a click opens a strip. Run /fixture-work to play 10 seconds of invented progress. Scroll up before it finishes to test deferred folding, or manually open its strip to keep it open. /prompt-jump end returns to the latest output. No model or tool runs.'));
+  manager.appendMessage(assistant('Work-strip preview: intermediate content is folded; final replies and decisions remain visible. /inspect or a click opens a strip. Use /work collapse, /work expand, or Ctrl+Alt+W to manage work sections. Run /fixture-work to play 10 seconds of invented progress. Scroll up before it finishes to test deferred folding, or manually open its strip to keep it open. /prompt-jump end returns to the latest output. No model or tool runs.'));
   const entries = manager.getBranch();
   const users = entries.map((entry,index)=>entry.message?.role==='user'?index:-1).filter(index=>index>=0);
   for (const [number,start] of users.entries()) {
@@ -24,6 +24,14 @@ export async function createWorkStripPreview({ stepMs = 1000 } = {}) {
     const final = entries.slice(start+1,end+1).findLast(entry=>entry.message?.role==='assistant' && entry.message.content.some(block=>block.type==='text' && block.text.trim()));
     if (final) manager.appendCustomEntry('compact-renderer:work-settled:v1',{version:1,userId:entries[start].id,finalId:final.id,endId:entries[end].id,startedAt:base-90000,endedAt:base-30000+number*1000,outcome:'completed'});
   }
+  manager.appendMessage({role:'user',content:[
+    'Long submitted prompt: inspect these invented renderer requirements.',
+    '',
+    ...Array.from({length:10},(_,i)=>`${i+1}. Preserve recorded sample ${i+1}, its unit, and its original wording.`),
+    '',
+    'This is a display fixture. Do not execute tools or access any external data.',
+  ].join('\n'),timestamp:Date.now()});
+  manager.appendMessage(assistant('This direct reply has no work strip. Expand the prompt above to inspect all ten recorded requirements.'));
   const emit = async event => {
     if (stopped) return;
     runtime.session._emit(event);
@@ -41,6 +49,11 @@ export async function createWorkStripPreview({ stepMs = 1000 } = {}) {
     try {
       await emit({type:'agent_start'});
       await message({role:'user',content:'Invented playback: inspect the recorded samples.',timestamp:Date.now()});
+      const call = assistant('');
+      const toolCallId = `fixture-read-${Date.now()}`;
+      call.content = [{type:'toolCall',id:toolCallId,name:'read',arguments:{path:'/fixture/sample-a.txt'}}]; call.stopReason = 'toolUse';
+      await message(call);
+      await message({role:'toolResult',toolCallId,toolName:'read',content:[{type:'text',text:'Synthetic sample: 3 kg'}],isError:false,timestamp:Date.now()});
       await message(assistant('Reading the recorded sample labels.'));
       await delay(3 * stepMs); if(stopped)return;
       await message(assistant('Comparing the recorded units.'));

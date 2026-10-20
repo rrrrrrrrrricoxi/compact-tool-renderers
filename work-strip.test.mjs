@@ -77,7 +77,7 @@ try {
   assert.match(paint(),/SECOND_INTERMEDIATE/);
   ui.isFollowingOutput=true; assert.doesNotMatch(paint(),/SECOND_INTERMEDIATE/); assert.match(paint(),/SECOND_FINAL/);
   // Explicit user expansion during execution wins over completion.
-  event('agent_start'); add({role:'user',content:'Third sample.'}); assistant('THIRD_INTERMEDIATE'); paint();
+  event('agent_start'); add({role:'user',content:'Third sample.'}); assistant('THIRD_INTERMEDIATE'); tool('read','THIRD_TOOL'); paint();
   choices().filter(c=>c.kind==='Work').at(-1).focus(); assistant('THIRD_FINAL'); event('agent_settled'); await wait();
   assert.match(paint(),/THIRD_INTERMEDIATE/);
   // Background children keep the current turn open after parent settlement.
@@ -89,18 +89,18 @@ try {
   assert.doesNotMatch(paint(),/FOURTH_INTERMEDIATE/); assert.match(paint(),/FOURTH_FINAL/);
   // An earlier turn can finish after a later prompt. Unrelated children cannot hold the later reply open.
   childrenActive=1;
-  event('agent_start'); add({role:'user',content:'Fifth sample.'}); assistant('FIFTH_INTERMEDIATE'); assistant('FIFTH_FINAL'); paint();
+  event('agent_start'); add({role:'user',content:'Fifth sample.'}); assistant('FIFTH_INTERMEDIATE'); tool('read', 'FIFTH_TOOL'); assistant('FIFTH_FINAL'); paint();
   pi.events.emit('subagent:async-started',{id:'fifth-root'}); event('agent_settled'); await wait();
-  event('agent_start'); add({role:'user',content:'Sixth sample.'}); assistant('SIXTH_INTERMEDIATE'); assistant('SIXTH_FINAL'); paint();
+  event('agent_start'); add({role:'user',content:'Sixth sample.'}); assistant('SIXTH_INTERMEDIATE'); tool('read','SIXTH_TOOL'); assistant('SIXTH_FINAL'); paint();
   event('agent_settled'); await wait();
   assert.match(paint(),/FIFTH_INTERMEDIATE/); assert.doesNotMatch(paint(),/SIXTH_INTERMEDIATE/);
   childrenActive=0; pi.events.emit('subagent:async-complete',{runId:'fifth-root',state:'complete',success:true}); await wait(); await wait();
   assert.doesNotMatch(paint(),/FIFTH_INTERMEDIATE/); assert.match(paint(),/FIFTH_FINAL/);
   // Reloaded completed work must not reopen between agent_start and the next user.
   event('session_start',{reason:'reload'}); paint(); event('agent_start'); assert.doesNotMatch(paint(),/FIFTH_INTERMEDIATE/);
-  add({role:'user',content:'Seventh sample.'}); assistant('SEVENTH_INTERMEDIATE'); paint();
+  add({role:'user',content:'Seventh sample.'}); assistant('SEVENTH_INTERMEDIATE'); tool('read','SEVENTH_TOOL'); paint();
   // A steering message during the same agent run still owns its own strip.
-  add({role:'user',content:'Eighth sample.'}); assistant('EIGHTH_INTERMEDIATE'); assistant('EIGHTH_FINAL'); paint();
+  add({role:'user',content:'Eighth sample.'}); assistant('EIGHTH_INTERMEDIATE'); tool('read','EIGHTH_TOOL'); assistant('EIGHTH_FINAL'); paint();
   event('agent_settled'); await wait();
   assert.doesNotMatch(paint(),/EIGHTH_INTERMEDIATE/); assert.match(paint(),/EIGHTH_FINAL/);
   // An empty terminal response must not promote earlier commentary to 'final'.

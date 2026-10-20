@@ -3,6 +3,14 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 export const cardPadding = (width: number) => width >= 4 ? 1 : 0;
 export const cardContentWidth = (width: number) => Math.max(1, width - cardPadding(width) * 2);
 
+/** Routine headings keep only their category colored; recorded intent is secondary. */
+export function activityHeading(line: string, theme: any, tone = "mdLink"): string {
+  if (!theme) return line;
+  if (tone !== "mdLink" && tone !== "syntaxVariable") return theme.fg(tone, theme.bold(line));
+  const separator = line.indexOf(" · ");
+  return separator < 0 ? theme.fg(tone, line) : theme.fg(tone, line.slice(0, separator)) + theme.fg("muted", line.slice(separator));
+}
+
 /** Match Pi's default Box(1, 1): one filled row above and below the content. */
 export function cardBlock(rows: string[], width: number, theme: any, background: string): string[] {
   const blank = fillBackground("", width, theme, background);

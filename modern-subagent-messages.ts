@@ -5,6 +5,7 @@ import { recordedPaneHeight } from './modern-recorded-pane.ts';
 import { acquireSubagentProjection, hiddenSubagent } from './modern-subagent-groups.ts';
 import { installSubagentSpacingAdapter } from './modern-subagent-spacing.ts';
 import { recordedValues } from './modern-tool-content.ts';
+import { activityHeading } from './display-card.ts';
 
 type Mode = { isEnabled(): boolean; onChange(fn: () => void): () => void };
 type Summary = { title: string; tone: string };
@@ -112,7 +113,7 @@ export function registerModernSubagentMessages(pi: ExtensionAPI, mode: Mode): ()
           if (projected?.hidden) return [];
           const pane = projectedPane();
           if (!projected) { pane.title = current.summary.title; pane.headingTone = current.summary.tone; }
-          pane.theme = theme; pane.styleHeader = line => theme.fg(pane.headingTone, theme.bold(line));
+          pane.theme = theme; pane.styleHeader = line => activityHeading(line, theme, pane.headingTone);
           pane.focused = focused && selected === current;
           if (pane.focused) pane.open = true;
           return pane.render(width);

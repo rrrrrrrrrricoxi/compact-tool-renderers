@@ -45,6 +45,12 @@ try {
   assert.ok(askCard.render(90).join('').includes(themeModule.theme.getFgAnsi('customMessageLabel')));
   assert.ok(failedCard.render(90).join('').includes(themeModule.theme.getFgAnsi('error')));
   assert.ok(completionCard.render(90).join('').includes(themeModule.theme.getFgAnsi('mdLink')));
+  const boldTheme = Object.assign(Object.create(themeModule.theme), { bold: text => `\x1b[1m${text}\x1b[22m` });
+  const styledHeader = source => runners[0].getMessageRenderer(source.customType)(source, { expanded: false }, boldTheme).render(90)[0];
+  assert.doesNotMatch(styledHeader(completion), /\x1b\[1m/, 'routine subagent completion has normal weight');
+  assert.ok(styledHeader(completion).includes(themeModule.theme.getFgAnsi('muted')), 'subagent metadata uses muted text');
+  assert.match(styledHeader(ask), /\x1b\[1m/, 'subagent decision retains its weight');
+  assert.match(styledHeader(failed), /\x1b\[1m/, 'subagent failure retains its weight');
   assert.equal(key('\x1b[B'), false, 'editor keeps arrows before inspection');
   let focus; const off = pi.events.on('compact-renderer:focus:v1', event => focus = event);
   const askChoice = choices().find(c => /needs a decision/.test(c.label));

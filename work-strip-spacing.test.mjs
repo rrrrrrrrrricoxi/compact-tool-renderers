@@ -49,6 +49,9 @@ function fixture() {
   const assistant = text => add({ role: 'assistant', content: [{ type: 'text', text }], stopReason: 'stop' }).at(-1);
   const user = add({ role: 'user', content: 'Initial prompt.' }).at(-1);
   const userId = manager.getBranch().at(-1).id;
+  const activity = new core.ToolExecutionComponent('read', 'spacing-activity', {}, { outputPad: 1 }, undefined, ui, '/synthetic-spacing');
+  activity.setArgsComplete(); activity.updateResult({ content: [{type:'text',text:'HIDDEN_ACTIVITY'}], isError:false });
+  display.chatContainer.addChild(activity);
   const commentary = assistant('HIDDEN_COMMENTARY');
   const final = assistant('VISIBLE_FINAL');
   const finalId = manager.getBranch().at(-1).id;
@@ -74,6 +77,14 @@ for (const suffix of ['\n\nFollow-up prompt.', '']) {
     assert.ok(card instanceof core.SkillInvocationMessageComponent);
     const { rows, text } = f.start();
     assert.equal(rows[rows.indexOf(card) - 1], gap, 'skill retains its native outside spacer');
+    const finalView = rows.find(row => row.children?.[0] === f.final);
+    const finalLines = finalView.render(100).map(stripAnsi);
+    assert.equal(finalLines.length, f.final.render(100).length + 2, 'final card adds exactly two internal padding rows');
+    assert.equal(finalLines[0], '', 'final keeps its separate native outer gap');
+    assert.equal(finalLines[1], ' '.repeat(100), 'final owns its filled top padding');
+    assert.equal(finalLines.at(-1), ' '.repeat(100), 'final owns its filled bottom padding');
+    assert.deepEqual(gap.render(100), [''], 'following skill keeps an unfilled outside gap after the final bottom padding');
+    assert.equal(rows[rows.indexOf(finalView) + 1], gap, 'no extra component separates final card and following native gap');
     if (suffix) {
       assert.ok(userGap instanceof tui.Spacer);
       assert.ok(user instanceof core.UserMessageComponent);
@@ -114,7 +125,7 @@ for (const kind of ['custom', 'custom-entry', 'user-bash', 'question']) {
     const internalGap = card.children[0];
     assert.ok(internalGap instanceof tui.Spacer, `${kind} owns a native internal gap`);
     const { rows } = f.start();
-    const index = rows.indexOf(card);
+    const index = rows.findIndex(row => row === card || row.constructor.name === 'WorkChild' && row.children[0] === card);
     assert.ok(index >= 0, `${kind} remains visible`);
     assert.ok(!(rows[index - 1] instanceof tui.Spacer), `${kind} receives no extra outside spacer`);
     assert.equal(card.children[0], internalGap, `${kind} retains its own spacer`);
@@ -144,7 +155,7 @@ for (const kind of ['custom', 'custom-entry', 'user-bash', 'question']) {
     const header = rows.find(row => row.constructor.name === 'WorkStripHeader');
     header.expand();
     const open = f.paint();
-    assert.deepEqual(open.rows.filter(row => row !== header), canonical, 'expanded projection keeps canonical row identity and order');
+    assert.deepEqual(open.rows.filter(row => row !== header).map(row => row.children?.length === 1 && canonical.includes(row.children[0]) ? row.children[0] : row), canonical, 'expanded projection keeps canonical row identity and order');
     assert.match(open.text, /HIDDEN_TOOL|HIDDEN_COMMENTARY/);
     f.mode.setEnabled(false);
     const native = f.paint();
@@ -160,8 +171,9 @@ for (const kind of ['custom', 'custom-entry', 'user-bash', 'question']) {
     f.add({ role: 'custom', customType: 'ddd', display: true, content: 'DDD_NOTICE' });
     const { rows } = f.start();
     const replacement = rows.find(row => row.render(100).some(line => stripAnsi(line).includes('DDD · DDD_NOTICE')));
-    assert.ok(replacement instanceof tui.Container, 'DDD replacement retains a host wrapper');
-    assert.ok(replacement.children[0] instanceof tui.Spacer, 'DDD wrapper restores its native internal leading gap');
+    assert.equal(replacement.constructor.name, 'WorkChild', 'DDD remains indented within its work section');
+    assert.ok(replacement.children[0] instanceof tui.Container, 'DDD replacement retains a host wrapper');
+    assert.ok(replacement.children[0].children[0] instanceof tui.Spacer, 'DDD wrapper restores its native internal leading gap');
     assert.ok(!(rows[rows.indexOf(replacement) - 1] instanceof tui.Spacer), 'DDD receives no extra outside gap');
   } finally { f.dispose(); }
 }

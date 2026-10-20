@@ -1,5 +1,13 @@
 # Release notes
 
+## 2.5.0 — Clearer conversation hierarchy
+
+- Keep work children indented, including visible questions, decisions, failures and DDD notices. Use quieter routine headings and collapse-all controls.
+- Omit work strips for replies without execution activity. Preserve elapsed labels where recorded and use Work details when duration is unavailable.
+- Give settled final replies a faint neutral surface with the same vertical padding as user prompts. Preserve native content and consistent outer spacing.
+- Collapse long prompts around their original opening and ending. Combine explicit skill invocation and optional user text into one blue prompt card with inspectable skill content.
+- Preserve native fallback, prompt-jump anchors, editor controls, images, reload and resume. All 24 suites passed on Mac and CCC; the user approved both terminal previews.
+
 ## 2.4.0 — Work strips
 
 - Keep intermediate replies and compact activity visible during execution, then fold completed work under one elapsed-time strip while retaining the final reply and decision evidence.

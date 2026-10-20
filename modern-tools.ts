@@ -4,7 +4,7 @@ import { NativeToolOwner, nativeToolsSupported, nativeToolContextSupported, nati
 import { ToolPane, type PaneAction, type PaneContent } from "./modern-tool-pane.ts";
 import { recordedValues } from "./modern-tool-content.ts";
 import { CodePane } from "./modern-code-pane.ts";
-import { cardContentWidth, activityRow } from "./display-card.ts";
+import { cardContentWidth, activityRow, activityHeading } from "./display-card.ts";
 import { acquireSubagentProjection, hiddenSubagent } from "./modern-subagent-groups.ts";
 import { compactSubagent, subagentDecision, subagentTitle } from "./modern-subagents.ts";
 import { groupIntent } from "./action-intent.ts";
@@ -406,7 +406,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       const projected = subagentView(node);
       if (projected) {
         const pane = projected.pane;
-        if (theme) { pane.theme = theme; pane.styleHeader = text => theme.fg(pane.headingTone, theme.bold(text)); }
+        if (theme) { pane.theme = theme; pane.styleHeader = text => activityHeading(text, theme, pane.headingTone); }
         return pane;
       }
       node.pane ||= new ToolPane([action(node)], "", height);
@@ -417,7 +417,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
       if (reason) node.pane.title += ` · ${reason}`;
       if (theme) {
         node.pane.theme = theme;
-        node.pane.styleHeader = text => theme.fg(node.status === "failed" ? "error" : question(name) || subagentDecision(name, node.args) ? "accent" : compactSubagent(name) && node.status === "notice" ? "warning" : "mdLink", theme.bold(text));
+        node.pane.styleHeader = text => activityHeading(text, theme, node.status === "failed" ? "error" : question(name) || subagentDecision(name, node.args) ? "accent" : compactSubagent(name) && node.status === "notice" ? "warning" : "mdLink");
       }
       return node.pane;
     };
@@ -475,7 +475,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
         return new DynamicComponent(width => {
           if (subagentView(node)?.hidden || node.group) return [];
           if (singleCard(node)) return individual(node, theme).render(width);
-          return [activityRow(truncateToWidth(theme.fg("mdLink", theme.bold(`${node.result ? "" : "… "}${toolLabel(name, node.args)}${node.result ? "" : ` · ${context.executionStarted ? "running" : "preparing"}`}`)), cardContentWidth(width)), width, theme)];
+          return [activityRow(truncateToWidth(activityHeading(`${node.result ? "" : "… "}${toolLabel(name, node.args)}${node.result ? "" : ` · ${context.executionStarted ? "running" : "preparing"}`}`, theme), cardContentWidth(width)), width, theme)];
         }, event => mouse(!subagentView(node)?.hidden && !node.group && singleCard(node) ? individual(node, theme) : undefined, event), node);
       },
       renderResult(result, options, theme, context) {
@@ -490,7 +490,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
         node.native.suspend(); syncExpansion(node, context.expanded);
         return new DynamicComponent(width => {
           if (subagentView(node)?.hidden) return [];
-          if (node.group) { const group = node.group; if (group.members[0] !== node) return []; group.pane.theme = theme; group.pane.styleHeader = text => theme.fg("mdLink", theme.bold(text)); return group.pane.render(width); }
+          if (node.group) { const group = node.group; if (group.members[0] !== node) return []; group.pane.theme = theme; group.pane.styleHeader = text => activityHeading(text, theme); return group.pane.render(width); }
           if (singleCard(node)) return [];
           return individual(node, theme).render(width);
         }, event => mouse(node.group ? node.group.members[0] === node ? node.group.pane : undefined : !singleCard(node) ? individual(node, theme) : undefined, event), node);

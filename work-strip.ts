@@ -1,4 +1,4 @@
-import { AssistantMessageComponent, CustomMessageComponent, InteractiveMode, ToolExecutionComponent, UserMessageComponent, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { AssistantMessageComponent, CustomMessageComponent, InteractiveMode, SkillInvocationMessageComponent, ToolExecutionComponent, UserMessageComponent, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, Spacer, matchesKey } from '@earendil-works/pi-tui';
 import { chainNativeMethod } from './native-method-chain.ts';
 import { ToolPane } from './modern-tool-pane.ts';
@@ -6,13 +6,20 @@ import { recordedPaneHeight } from './modern-recorded-pane.ts';
 import { monitorWorkStripSubagents } from './work-strip-subagents.ts';
 import { mixedThinkingRegion } from './modern-thinking-adapter.ts';
 import { actionIntent } from './action-intent.ts';
-import { projectedChildren, recordedWorkEvidence, workEvidenceType, workSummary, WorkStripHeader, type WorkEvidence } from './work-strip-view.ts';
+import { projectedChildren, recordedWorkEvidence, renderFinalReply, workEvidenceType, workSummary, WorkChild, WorkStripHeader, type WorkEvidence } from './work-strip-view.ts';
 
 type Mode = { isEnabled(): boolean; onChange(fn: () => void): () => void };
-type Turn = { user: any; header: WorkStripHeader; rows: any[]; evidence?: WorkEvidence; startedAt?: number; settled?: boolean; final?: any; outcome?: WorkEvidence['outcome']; completedAt?: number; persisted?: boolean; noFinal?: boolean; children: Set<string> };
+type Turn = { user: any; header: WorkStripHeader; rows: any[]; activity?: boolean; evidence?: WorkEvidence; startedAt?: number; settled?: boolean; final?: any; finalReply?: any; outcome?: WorkEvidence['outcome']; completedAt?: number; persisted?: boolean; noFinal?: boolean; children: Set<string> };
 const text = (message: any) => typeof message?.content === 'string' ? message.content : Array.isArray(message?.content) ? message.content.filter((b: any) => b?.type === 'text' && typeof b.text === 'string').map((b: any) => b.text).join('\n') : '';
 const visibleText = (message: any) => typeof message?.content === 'string' ? message.content : message?.content?.find((b: any) => b?.type === 'text' && typeof b.text === 'string' && /\S/.test(b.text))?.text || '';
 const shortName = (name: string) => name.split(/[/:]/).at(-1) || name;
+/** Thinking, commentary and a response clock alone are not execution activity. */
+export function isWorkActivity(row: any): boolean {
+  if (row instanceof ToolExecutionComponent) return true;
+  if (row instanceof AssistantMessageComponent) return row.lastMessage?.content?.some((b: any) => b.type === 'toolCall') === true;
+  const message = row.message || row.entry;
+  return message?.role === 'bashExecution' || /^subagent(?:s?[-_]|$)/.test(message?.customType || '');
+}
 const descendant = (component: any, target: (c: any) => boolean, seen = new Set<any>()): boolean => {
   if (!component || seen.has(component)) return false;
   seen.add(component);
@@ -23,7 +30,15 @@ const descendant = (component: any, target: (c: any) => boolean, seen = new Set<
 export function keepWorkRowVisible(row: any, completed: boolean): boolean {
   if (row instanceof ToolExecutionComponent) {
     const name = shortName(row.toolName);
-    if (['ask_user_question', 'contact_supervisor', 'subagent_supervision', 'subagent_supervisor'].includes(name)) return true;
+    if (['ask_user_question', 'contact_supervisor'].includes(name)) return true;
+    if (['subagent_supervision', 'subagent_supervisor'].includes(name)) {
+      // Recorded reply content remains in the decision entry. Successful tool
+      // receipts/status checks are routine activity; unknown operations stay out.
+      if (row.result && !row.isPartial && !row.result.isError &&
+          ['reply', 'pending', 'status', 'list'].includes(row.args?.action) &&
+          (!row.result.details?.status || ['success', 'ok', 'completed'].includes(row.result.details.status))) return false;
+      return true;
+    }
     return !row.result || row.isPartial || !completed && !!row.result.isError;
   }
   if (row instanceof AssistantMessageComponent) return ['error', 'aborted', 'length'].includes(row.lastMessage?.stopReason);
@@ -58,11 +73,12 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
   let ownership = false, replaying = 0;
   let liveStarts = new WeakMap<any, number>();
   const finalViews = new WeakMap<any, any>();
+  const childViews = new WeakMap<any, WorkChild>();
   const hookViews = new WeakMap<any, Container>();
   const redraw = () => host?.ui?.requestRender?.();
   const release = () => { if (selected) selected.focused = false; selected = undefined; };
   const publishOwnership = (force = false) => {
-    const active = !disposed && !!ctx && !!attached && mode.isEnabled() && [...turns.values()].some(turn => turn.rows.length > 0);
+    const active = !disposed && !!ctx && !!attached && mode.isEnabled() && current()?.activity === true;
     if (force || active !== ownership) {
       ownership = active;
       pi.events.emit('compact-renderer:work-strip:v1', { version: 1, ownsExecutionStatus: active });
@@ -105,20 +121,29 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
     pane.styleHeader = value => pane!.theme ? pane!.theme.fg(pane!.headingTone, pane!.theme.bold(value)) : value;
     return pane;
   };
-  const finalView = (row: any) => {
+  const finalView = (row: any, foldThinking: boolean) => {
     let view = finalViews.get(row);
     if (!view) {
-      view = { children: [row], invalidate: () => row.invalidate(), handleMouse: (event: any) => row.handleMouse(event), render(width: number) {
+      view = { children: [row], theme: undefined, foldThinking: false, invalidate: () => row.invalidate(), handleMouse: (event: any) => row.handleMouse(event), render(width: number) {
         // Only the known hidden-thinking region is folded. Native reply Markdown,
         // OSC markers, explicit Ctrl+T expansion and unknown shapes are retained.
-        const region = mixedThinkingRegion(row, row.lastMessage);
-        if (!region) return row.render(width);
-        const render = region.render;
-        region.render = () => [];
-        try { return row.render(width); } finally { region.render = render; }
+        const region = this.foldThinking && mixedThinkingRegion(row, row.lastMessage);
+        if (!region) return renderFinalReply(row, width, this.theme);
+        const container = row.contentContainer, children = container.children;
+        const index = children.indexOf(region);
+        // The validated native shape places a spacer after hidden thinking
+        // when text follows. Remove both, retaining the initial message gap.
+        container.children = children.filter((child: any, i: number) => child !== region && !(i === index + 1 && child instanceof Spacer));
+        try { return renderFinalReply(row, width, this.theme); } finally { container.children = children; }
       } };
       finalViews.set(row, view);
     }
+    view.theme = ctx?.ui?.theme; view.foldThinking = foldThinking;
+    return view;
+  };
+  const childView = (row: any) => {
+    let view = childViews.get(row);
+    if (!view) { view = new WorkChild(row); childViews.set(row, view); }
     return view;
   };
   const hookView = (row: any) => {
@@ -136,7 +161,7 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
     let turn: Turn | undefined;
     const present = new Set<any>();
     for (const row of rows) {
-      if (row instanceof UserMessageComponent && sources.has(row)) {
+      if ((row instanceof UserMessageComponent || row instanceof SkillInvocationMessageComponent) && sources.has(row)) {
         const user = sources.get(row);
         turn = turns.get(user);
         if (!turn) {
@@ -156,27 +181,40 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
       }
     }
     for (const key of turns.keys()) if (!present.has(key)) turns.delete(key);
+    for (const turn of turns.values()) turn.activity = turn.children.size > 0 || turn.rows.some(isWorkActivity);
     publishOwnership();
   };
   const project = (rows: any[]) => {
     scan(rows);
     const starts = new Map<any, Turn>();
-    for (const turn of turns.values()) if (turn.rows.length) starts.set(turn.rows[0], turn);
+    for (const turn of turns.values()) if (turn.rows.length) {
+      starts.set(turn.rows[0], turn);
+      const lastAssistant = [...turn.rows].reverse().find(r => r instanceof AssistantMessageComponent);
+      turn.final = turn.evidence ? turn.rows.find(r => r instanceof AssistantMessageComponent && idFor(r.lastMessage) === turn.evidence!.finalId) : lastAssistant;
+      // Replayed terminal replies can use their native turn boundary. Live
+      // replies wait for settlement; a text-bearing tool call is still work.
+      const settled = !!turn.evidence || (turn.startedAt ? turn.settled && (current() !== turn || !running) : true);
+      const message = turn.final?.lastMessage;
+      turn.finalReply = settled && !turn.final?.isStreaming && visibleText(message) &&
+        ['stop', 'error', 'aborted', 'length'].includes(message?.stopReason) &&
+        !message.content.some((block: any) => block.type === 'toolCall') ? turn.final : undefined;
+    }
     const output: any[] = [];
     let spacing: Spacer[] = [];
     const append = (row: any) => { output.push(...spacing, row); spacing = []; };
     let turn: Turn | undefined;
     for (const row of rows) {
-      if (row instanceof UserMessageComponent) {
+      if (row instanceof UserMessageComponent || row instanceof SkillInvocationMessageComponent) {
         turn = undefined; append(row); continue;
       }
       if (starts.has(row)) {
         turn = starts.get(row)!;
+      }
+      if (starts.has(row) && turn?.activity) {
         const h = turn.header, saved = turn.evidence;
         h.theme = ctx?.ui?.theme;
         h.state = turn.completedAt ? turn.noFinal ? 'stopped' : turn.outcome || 'completed' : turn.startedAt ? turn.outcome === 'interrupted' ? 'interrupted' : running && current() === turn ? 'working' : 'waiting' : saved?.outcome || 'history';
         const lastAssistant = [...turn.rows].reverse().find(r => r instanceof AssistantMessageComponent);
-        turn.final = saved ? turn.rows.find(r => r instanceof AssistantMessageComponent && idFor(r.lastMessage) === saved.finalId) : lastAssistant;
         h.summary = workSummary(visibleText(lastAssistant?.lastMessage));
         const lastOperation = [...turn.rows].reverse().find(r => r instanceof ToolExecutionComponent || r instanceof AssistantMessageComponent && visibleText(r.lastMessage));
         if (lastOperation instanceof ToolExecutionComponent) h.summary = actionIntent(lastOperation.toolName, lastOperation.args);
@@ -189,11 +227,16 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
       // and unknown cards; discard it with hidden content. Do not accumulate
       // gaps across hidden blocks or add gaps to internally spaced components.
       if (row instanceof Spacer) { spacing.push(row); continue; }
-      if (!turn || turn.header.open || row === turn.final || keepWorkRowVisible(row, turn.header.state === 'completed')) {
-        append(row instanceof CustomMessageComponent && row.message?.customType === 'ddd' ? hookView(row) : turn && !turn.header.open && row === turn.final ? finalView(row) : row);
+      if (!turn?.activity || turn.header.open || row === turn.final || keepWorkRowVisible(row, turn.header.state === 'completed')) {
+        let view = row instanceof CustomMessageComponent && row.message?.customType === 'ddd' ? hookView(row) : turn && row === turn.finalReply ? finalView(row, !!turn.activity && !turn.header.open) : row;
+        // Attention rows stay visible when folded, but still belong to this
+        // work section. Disclosure policy must not change their indentation.
+        if (turn?.activity && row !== turn.final && (row instanceof AssistantMessageComponent || isWorkActivity(row) ||
+            row instanceof CustomMessageComponent && row.message?.customType === 'ddd')) view = childView(view);
+        append(view);
       } else spacing = [];
     }
-    if (!turn || turn.header.open) output.push(...spacing);
+    if (!turn?.activity || turn.header.open) output.push(...spacing);
     return output;
   };
   const attach = (candidate: any) => {
@@ -230,6 +273,7 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
       readRecords();
       for (const turn of turns.values()) {
         if (!turn.settled || !turn.startedAt || turn.persisted || current() === turn && (running || ctx.isIdle?.() === false)) continue;
+        if (!turn.activity) continue;
         if (monitor.statusFor([...turn.children]) !== 'idle') continue;
         const userId = idFor(turn.user), startIndex = records.findIndex(e => e.id === userId);
         if (!userId || startIndex < 0) continue;
@@ -307,16 +351,56 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
     pi.events.on('compact-renderer:focus:v1', (event: any) => {
       if (event?.owner !== 'work') release();
       if (typeof event?.target === 'function' && mode.isEnabled()) {
-        for (const turn of turns.values()) if (turn.rows.some(row => descendant(row, event.target))) turn.header.expand();
+        for (const turn of turns.values()) if (turn.activity && turn.rows.some(row => descendant(row, event.target))) turn.header.expand();
         redraw();
       }
     }),
     pi.events.on('compact-renderer:inspect:v1', (request: any) => {
       if (!ctx || !mode.isEnabled()) return;
-      for (const [index, turn] of [...turns.values()].entries()) request?.add?.({ id: `work-${index}`, kind: 'Work', label: turn.header.title, focus: () => select(turn.header, turn.header) });
+      for (const [index, turn] of [...turns.values()].entries()) if (turn.activity) request?.add?.({ id: `work-${index}`, kind: 'Work', label: turn.header.title, focus: () => select(turn.header, turn.header) });
       for (const [row, pane] of hooks) request?.add?.({ id: `hook-${[...hooks.keys()].indexOf(row)}`, kind: 'Hook', label: pane.title, focus: () => select(pane, pane) });
     }),
   ];
+  // Use native shortcut dispatch so dialogs and editor input keep their owners.
+  // The command remains available on terminals that do not send modified keys.
+  let shortcut = 'on';
+  const setAll = (open: boolean) => {
+    if (disposed || !ctx || !mode.isEnabled() || !attached) return;
+    project(attached.children);
+    release();
+    for (const turn of turns.values()) {
+      if (!turn.activity || !open && ['working', 'waiting'].includes(turn.header.state)) continue;
+      turn.header.manual = true; turn.header.open = open;
+    }
+    pi.events.emit('compact-renderer:inspection-ended:v1', {});
+    redraw();
+  };
+  pi.registerCommand?.('work', {
+    description: 'Collapse or expand work sections; choose a session shortcut',
+    async handler(args: string, context: any) {
+      if (disposed || !context.hasUI || !ctx || !mode.isEnabled()) return;
+      let action = args.trim().toLowerCase();
+      if (!action) {
+        const choices = ['Collapse all work', 'Expand all work', 'Choose shortcut'];
+        const choice = await context.ui.select('Work sections', choices);
+        action = choice === choices[0] ? 'collapse' : choice === choices[1] ? 'expand' : choice === choices[2] ? 'shortcut' : '';
+      }
+      if (action === 'collapse' || action === 'expand') { setAll(action === 'expand'); return; }
+      if (action === 'shortcut' || action.startsWith('shortcut ')) {
+        let key = action.slice(8).trim();
+        const options = ['on', 'off'];
+        if (!key) key = await context.ui.select(`Ctrl+Alt+W — ${shortcut}`, options) || '';
+        if (options.includes(key)) { shortcut = key; context.ui.notify(`Collapse work shortcut: ${shortcut}`, 'info'); }
+        else if (key) context.ui.notify('Use /work shortcut [on|off]', 'info');
+        return;
+      }
+      if (action) context.ui.notify('Use /work [collapse|expand|shortcut]', 'info');
+    },
+  });
+  pi.registerShortcut?.('ctrl+alt+w', {
+    description: 'Collapse work sections (enabled with /work shortcut)',
+    handler: () => { if (shortcut === 'on') setAll(false); },
+  });
   const dispose = () => {
     if (disposed) return; disposed = true;
     release(); input?.(); if (timer) clearTimeout(timer); if (ticker) clearInterval(ticker);

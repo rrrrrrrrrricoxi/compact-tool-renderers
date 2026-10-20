@@ -1,5 +1,5 @@
 import { matchesKey, truncateToWidth, visibleWidth, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
-import { activityRow, cardContentWidth } from "./display-card.ts";
+import { activityHeading, activityRow, cardContentWidth } from "./display-card.ts";
 import { CodeContent } from "./modern-code-content.ts";
 
 /** Native-style codemode with lazy bounded text/call formatting. Native-off stays stock. */
@@ -53,7 +53,7 @@ export class CodePane {
     const label = `${this.open ? "▾" : "▸"} ${this.heading}`;
     const metadata = title.slice(label.length);
     const styled = this.theme
-      ? this.theme.fg(this.tone === "error" ? "error" : "syntaxVariable", this.theme.bold(label)) +
+      ? activityHeading(label, this.theme, this.tone === "error" ? "error" : "syntaxVariable") +
         metadata.split(/( · \d+ nested (?:errors?|cancelled|unresolved))/).map(part =>
           this.theme.fg(this.tone === "error" ? "error" : this.tone === "warning" && /^ · \d+ nested (?:errors?|cancelled|unresolved)$/.test(part) ? "warning" : "muted", part)).join("")
       : title;

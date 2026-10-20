@@ -1,9 +1,40 @@
-import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
-import { activityRow, cardContentWidth } from './display-card.ts';
+import { Box, Markdown, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+import { activityRow, cardContentWidth, fillBackground } from './display-card.ts';
 
 /** Shared with inspection. Canonical native children stay untouched. */
 export const projectedChildren = Symbol.for('compact-renderer:projected-children:v1');
 export const workEvidenceType = 'compact-renderer:work-settled:v1';
+/** Paint native reply Markdown with one filled row above and below the reply.
+ * Native containers own the added rows and mouse layout. The outer message gap,
+ * thinking, text gutters, image payloads and OSC zones retain native rendering. */
+export function renderFinalReply(row: any, width: number, theme: any): string[] {
+  const restore: (() => void)[] = [];
+  const container = row.contentContainer, children = container?.children;
+  const first = children?.findIndex((child: any) => child instanceof Markdown) ?? -1;
+  if (first < 0) return row.render(width);
+  const last = children.findLastIndex((child: any) => child instanceof Markdown);
+  const padding = { invalidate() {}, render: (contentWidth: number) => [fillBackground('', contentWidth, theme, 'toolPendingBg')] };
+  for (const child of children) {
+    if (!(child instanceof Markdown)) continue;
+    const native = child.render, own = Object.getOwnPropertyDescriptor(child, 'render');
+    child.render = function(contentWidth: number) {
+      return native.call(this, contentWidth).map((line: string) => line.includes('\x1b_G') || line.includes('\x1b]1337;File=') ? line : fillBackground(line, Math.max(contentWidth, visibleWidth(line)), theme, 'toolPendingBg'));
+    };
+    restore.push(() => { if (own) Object.defineProperty(child, 'render', own); else delete (child as any).render; });
+  }
+  container.children = [...children.slice(0, first), padding, ...children.slice(first, last + 1), padding, ...children.slice(last + 1)];
+  try { return row.render(width); } finally { container.children = children; restore.forEach(fn => fn()); }
+}
+/** Native Box owns both rendering and mouse-coordinate translation. */
+export class WorkChild extends Box {
+  private inset = 2;
+  constructor(row: any) { super(2, 0); this.addChild(row); }
+  render(width: number) {
+    const padding = width >= 8 ? 2 : 0;
+    if (this.inset !== padding) { this.inset = padding; this.setPaddingX(padding); }
+    return super.render(width);
+  }
+}
 export type WorkEvidence = { version: 1; userId: string; finalId: string; endId: string; startedAt: number; endedAt: number; outcome: 'completed' | 'interrupted' | 'error' };
 
 export function workSummary(value: unknown): string {
@@ -53,7 +84,7 @@ export class WorkStripHeader {
   finish(following: boolean) { if (following && !this.manual && this.state === 'completed') this.open = false; }
   get title() {
     if (this.state === 'completed') return `Worked for ${workDuration(this.elapsedMs)}`;
-    if (this.state === 'history') return 'Earlier work';
+    if (this.state === 'history') return 'Work details';
     const label = this.state === 'working' ? 'Working' : this.state === 'waiting' ? 'Waiting' : this.state === 'interrupted' ? 'Interrupted' : 'Stopped';
     return `${label} · ${workDuration(this.elapsedMs)}${this.summary ? ` · ${this.summary}` : ''}`;
   }
@@ -62,7 +93,7 @@ export class WorkStripHeader {
     const label = `${this.open ? '▾' : '▸'} ${this.title}`;
     const remaining = cardContentWidth(width) - visibleWidth(label) - 2;
     const divider = remaining >= 4 ? `  ${'─'.repeat(remaining)}` : '';
-    const heading = this.theme ? this.theme.fg(this.state === 'error' ? 'error' : 'text', this.theme.bold(label)) : label;
+    const heading = this.theme ? this.theme.fg(this.state === 'error' ? 'error' : 'muted', label) : label;
     return ['', activityRow(heading + (this.theme ? this.theme.fg('dim', divider) : divider), width, this.theme, this.focused)];
   }
   handleMouse(event: any) {

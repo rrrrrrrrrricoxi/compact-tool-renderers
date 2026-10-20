@@ -21,6 +21,9 @@ try{
   // Native reload ordering: replay first, extension session_start second.
   ui.renderSessionEntries(manager.getBranch());
   await runtime.session.extensionRunner.emit({type:'session_start',reason:'resume'});
+  // Native startup refreshes the UI after extension session_start. Rebuild
+  // cached custom-message renderers too, as the terminal's invalidation does.
+  ui.chatContainer.invalidate();
   const before=paint();
   const lines=before.split('\n');
   const dddLine=lines.findIndex(line=>line.includes('DDD · Five recorded maintenance'));
@@ -29,13 +32,23 @@ try{
   const canonical=ui.chatContainer.children;
   const skill=canonical.find(row=>row.constructor.name==='SkillInvocationMessageComponent');
   const skillPosition=projected.indexOf(skill);
-  assert.ok(skillPosition>0,'native skill remains visible');
-  assert.equal(projected[skillPosition-1],canonical[canonical.indexOf(skill)-1],'folding preserves the native gap before the skill');
+  assert.ok(skillPosition>0,'native skill remains the combined prompt anchor');
+  assert.equal(projected[skillPosition-1],canonical[canonical.indexOf(skill)-1],'folding preserves the outside gap before the combined prompt');
+  const combined = strip(skill.render(110).join('\n'));
+  assert.match(combined, /▸ \/skill:fixture-review/);
+  assert.match(combined, /Show the native skill card and one final successful action/);
+  assert.doesNotMatch(combined, /\[skill\]|ctrl\+o|Review the synthetic preview/);
+  assert.equal((before.match(/Show the native skill card and one final successful action/g)||[]).length,1,'combined user text appears exactly once');
+  const promptFill = theme.bg('userMessageBg', '').replace(/\x1b\[49m$/, '');
+  assert.ok(skill.render(110).every(line => line.includes(promptFill)), 'combined skill and message share the blue prompt surface');
+  skill.handleMouse({type:'click',button:'left',x:3,y:1,width:110});
+  assert.match(strip(skill.render(110).join('\n')), /Review the synthetic preview/, 'click reveals the recorded skill body');
+  skill.handleMouse({type:'click',button:'left',x:3,y:1,width:110});
   for(let i=1;i<projected.length;i++) if(projected[i] instanceof core.UserMessageComponent) {
     assert.equal(projected[i-1].constructor.name,'Spacer','next prompt keeps an outside gap after folded work');
   }
   const header=projected.find(row=>row.constructor.name==='WorkStripHeader');
-  assert.ok(header.render(110).join('\n').includes(theme.fg('text',theme.bold('▸ '+header.title))),'work-strip label uses the primary text contrast');
+  assert.ok(header.render(110).join('\n').includes(theme.fg('muted','▸ '+header.title)),'work-strip label uses quiet secondary contrast');
   assert.match(strip(header.render(110).join('\n')),/Worked for.*─{4}/,'work strip has a visible divider');
   for(const width of [1,2,4,20,80,160]) for(const line of header.render(width)) assert.ok(visibleWidth(line)<=width,'divider stays within the terminal width');
   header.render(110);
@@ -44,8 +57,29 @@ try{
   header.handleMouse({type:'click',button:'left',x:30,y:1});
   assert.equal((before.match(/▸ Worked for/g)||[]).length,3);
   assert.match(before,/Question · Answered/); assert.match(before,/DDD · Five recorded maintenance/);
+  const workColumn = lines.find(line => line.includes('Worked for')).search(/\S/);
+  for (const label of ['Question · Answered', 'worker · Decision answered', 'Subagent · researcher', 'Subagent · scout', 'DDD · Five recorded maintenance']) {
+    const row = lines.find(line => line.includes(label));
+    assert.ok(row, `preview includes ${label}`);
+    assert.equal(row.search(/\S/), workColumn + 2, `${label} is indented beneath the collapsed work strip`);
+  }
   assert.doesNotMatch(before,/Run Node.js script|Subagent workflow|Synthetic instruction 70|Read files/);
   assert.match(before,/Work-strip preview/);
+  assert.match(before,/⋯ Show more/,'long prompt has generic quiet disclosure');
+  assert.match(before,/Do not execute tools or access any external data/,'long prompt keeps its ending');
+  assert.doesNotMatch(before,/Preserve recorded sample 1,/,'opening excerpt does not expose a partial list');
+  const neutral = theme.bg('toolPendingBg', '').replace(/\x1b\[49m$/, '');
+  for (const label of ['Recorded preview decisions', 'Work-strip preview:', 'This direct reply has no work strip']) {
+    const line = ui.chatContainer.render(110).find(row => strip(row).includes(label));
+    assert.ok(line?.includes(neutral), `${label} uses the final reply surface in the real runtime`);
+  }
+  const finalRows = ui.chatContainer.render(110);
+  const directStart = finalRows.findIndex(row => strip(row).includes('This direct reply has no work strip'));
+  const finalEnd = finalRows.findIndex((row, index) => index >= directStart && !strip(row).trim());
+  for (const index of [directStart - 1, finalEnd]) {
+    assert.equal(strip(finalRows[index]).trim(), '', 'final reply has blank internal padding at both boundaries');
+    assert.ok(finalRows[index].includes(neutral), 'final padding uses the same neutral fill as the content');
+  }
   // Final mixed thinking is folded, while final Markdown remains native.
   ui.isInitialized=true;
   off=runtime.session.subscribe(event=>ui.handleEvent(event));
@@ -62,6 +96,7 @@ try{
   assert.equal((after.match(/▸ Worked for/g)||[]).length,4);
   assert.doesNotMatch(after,/Comparing the recorded units|Checking the recorded result|Compare the invented samples|Thinking/);
   assert.match(after,/The invented samples agree/);
+  assert.ok(ui.chatContainer.render(110).find(row => strip(row).includes('The invented samples agree'))?.includes(neutral), 'live final reply receives its surface after settlement');
   assert.equal(manager.getBranch().filter(e=>e.customType==='compact-renderer:work-settled:v1').length,4);
   assert.deepEqual(errors,[]);
   console.log('Work strip real runtime preview, native reload order, live playback and final folding passed');
