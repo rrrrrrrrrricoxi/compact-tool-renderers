@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {createWorkStripPreview} from './preview-work-strip.mjs';
+import {createWorkStripPreview} from '../scripts/preview-work-strip.mjs';
 const preview=await createWorkStripPreview({stepMs:20});
 const {core,runtime,manager}=preview;
 const {visibleWidth}=await import(pathToFileURL(path.join(preview.runtimePath,'node_modules/@earendil-works/pi-tui/dist/index.js')));
@@ -16,7 +16,7 @@ Object.defineProperty(ui.ui,'isFollowingOutput',{get:()=>true});
 const inputs=[];
 runtime.session.extensionRunner.setUIContext({...ui.createExtensionUIContext(),theme,onTerminalInput(fn){inputs.push(fn);return()=>{};},setHiddenThinkingLabel(){},setStatus(){},setWidget(){},notify(){}},'tui');
 const paint=()=>strip(ui.chatContainer.render(110).join('\n'));
-let off;
+let off, offLive;
 try{
   // Native reload ordering: replay first, extension session_start second.
   ui.renderSessionEntries(manager.getBranch());
@@ -83,6 +83,17 @@ try{
   // Final mixed thinking is folded, while final Markdown remains native.
   ui.isInitialized=true;
   off=runtime.session.subscribe(event=>ui.handleEvent(event));
+  const live=[];
+  offLive=runtime.session.subscribe(event=>{
+    if(!['message_start','message_end'].includes(event.type) || event.message.role!=='assistant')return;
+    const label=event.message.content.find(block=>block.type==='text' && block.text)?.text;
+    if(!label)return;
+    const rendered=paint().split('\n');
+    const projected=ui.chatContainer[Symbol.for('compact-renderer:projected-children:v1')];
+    const row=ui.chatContainer.children.findLast(row=>row instanceof core.AssistantMessageComponent);
+    const view=projected.find(item=>item===row || item.children?.[0]===row);
+    live.push({type:event.type,label,row,view,column:rendered.findLast(line=>line.includes(label.slice(0,40)))?.search(/\S/)});
+  });
   const playing=preview.play();
   await new Promise(resolve=>setTimeout(resolve,30));
   assert.match(paint(),/Working · 0s · Reading the recorded sample labels/);
@@ -92,6 +103,12 @@ try{
     assert.doesNotMatch(strip(ui.customFooter.render(160).join('\n')),/Working ·/,'work strip owns execution status');
   }
   await playing; await new Promise(resolve=>setTimeout(resolve,150));
+  assert.equal(live.length,8,'all four invented replies render during streaming and after message_end');
+  for(const frame of live) {
+    assert.equal(frame.view?.constructor.name,'WorkChild',`${frame.label} stays indented during ${frame.type}`);
+    assert.equal(frame.column,workColumn+2,'live commentary uses the same child column as recorded work');
+  }
+  for(let i=0;i<live.length;i+=2) assert.equal(live[i].view,live[i+1].view,'message_end does not shift the current reply');
   const after=paint();
   assert.equal((after.match(/▸ Worked for/g)||[]).length,4);
   assert.doesNotMatch(after,/Comparing the recorded units|Checking the recorded result|Compare the invented samples|Thinking/);
@@ -100,4 +117,4 @@ try{
   assert.equal(manager.getBranch().filter(e=>e.customType==='compact-renderer:work-settled:v1').length,4);
   assert.deepEqual(errors,[]);
   console.log('Work strip real runtime preview, native reload order, live playback and final folding passed');
-}finally{off?.(); ui.ui.stop(); await preview.cleanup(); ui.footerDataProvider.dispose();}
+}finally{offLive?.(); off?.(); ui.ui.stop(); await preview.cleanup(); ui.footerDataProvider.dispose();}

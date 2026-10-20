@@ -112,7 +112,7 @@ function fixture() {
   };
   const paint = () => display.chatContainer.render(60);
   const view = row => { paint(); return display.chatContainer[projectedChildren].find(item => item === row || item.children?.[0] === row); };
-  return { add, tool, event, paint, view, mode, dispose, ui, display, manager, ctx, commands };
+  return { add, tool, event, emit: pi.events.emit, paint, view, mode, dispose, ui, display, manager, ctx, commands };
 }
 
 // A direct answer gets a final surface without introducing a Work header.
@@ -162,6 +162,66 @@ for (const stopReason of ['stop', 'toolUse', 'error', 'aborted', 'length']) {
   } finally { f.dispose(); f.mode.dispose(); }
 }
 
+// Execution commentary keeps one gutter through streaming and later replies.
+// Only the settled terminal reply moves out of the work section.
+{
+  const f = fixture();
+  try {
+    f.event('session_start'); f.event('agent_start');
+    f.add({ role: 'user', content: 'Follow the live reply lifecycle.' });
+    const first = f.add(message('FIRST_LIVE_COMMENTARY')).row;
+    assert.equal(f.view(first), first, 'commentary alone does not introduce a work section');
+    f.tool();
+    const firstView = f.view(first);
+    assert.equal(firstView.constructor.name, 'WorkChild', 'execution activity indents the current commentary immediately');
+    assert.match(stripAnsi(firstView.render(60).join('\n')), /\n   FIRST_LIVE_COMMENTARY/);
+    const nextMessage = message('NEXT_LIVE_COMMENTARY');
+    f.event('message_start', { message: nextMessage });
+    const next = f.add(nextMessage).row;
+    next.updateContent(nextMessage, true);
+    assert.equal(f.view(first), firstView, 'a newer reply does not shift the preceding commentary');
+    const nextView = f.view(next);
+    assert.equal(nextView.constructor.name, 'WorkChild', 'streaming commentary uses the same child gutter');
+    next.updateContent(nextMessage, false); f.event('message_end', { message: nextMessage });
+    assert.equal(f.view(next), nextView, 'message_end and stop alone do not promote commentary');
+    const canonical = [...f.display.chatContainer.children];
+    f.mode.setEnabled(false);
+    assert.deepEqual(f.paint(), canonical.flatMap(row => row.render(60)), 'compact-off keeps native live rendering byte for byte');
+    f.mode.setEnabled(true);
+    assert.equal(f.view(next), nextView, 'compact-on restores the same commentary gutter');
+
+    const finalMessage = message('CONFIRMED_FINAL_REPLY');
+    f.event('message_start', { message: finalMessage });
+    const final = f.add(finalMessage).row;
+    final.updateContent(finalMessage, true);
+    f.event('agent_settled');
+    assert.equal(f.view(final).constructor.name, 'WorkChild', 'a streaming reply remains a work child even after agent settlement');
+    final.updateContent(finalMessage, false); f.event('message_end', { message: finalMessage });
+    const surface = f.view(final);
+    assert.notEqual(surface.constructor.name, 'WorkChild', 'confirmed final reply leaves the work gutter');
+    assertReplySurface(surface.render(60), f.ui.theme);
+    assert.match(stripAnsi(surface.render(60).join('\n')), /\n CONFIRMED_FINAL_REPLY/);
+    assert.equal(f.view(first), firstView, 'earlier commentary retains its gutter after final confirmation');
+    assert.deepEqual(f.display.chatContainer.children, [...canonical, final], 'projection preserves the native child tree');
+  } finally { f.dispose(); f.mode.dispose(); }
+}
+
+// Parent settlement cannot style a reply as final while its descendants run.
+{
+  const f = fixture();
+  try {
+    f.event('session_start'); f.event('agent_start');
+    f.add({ role: 'user', content: 'Wait for the owned child.' }); f.tool();
+    f.emit('subagent:async-started', { id: 'surface-child' });
+    const final = f.add(message('WAITING_REPLY')).row;
+    f.event('agent_settled');
+    assert.equal(f.view(final).constructor.name, 'WorkChild', 'waiting reply remains inside the work section');
+    assert.match(stripAnsi(f.paint().join('\n')), /Waiting/);
+    f.emit('subagent:async-complete', { id: 'surface-child', state: 'complete', success: true });
+    assertReplySurface(f.view(final).render(60), f.ui.theme);
+  } finally { f.dispose(); f.mode.dispose(); }
+}
+
 {
   const f = fixture();
   try {
@@ -170,7 +230,8 @@ for (const stopReason of ['stop', 'toolUse', 'error', 'aborted', 'length']) {
     intermediate.content.push({ type: 'toolCall', id: 'surface-tool', name: 'read', arguments: {} });
     const row = f.add(intermediate).row;
     f.event('session_start');
-    assert.equal(f.view(row), row, 'text accompanying a tool call is never painted as a final');
+    assert.equal(f.view(row).constructor.name, 'WorkChild', 'text accompanying a tool call stays inside the work section');
+    assert.deepEqual(f.view(row).children, [row], 'tool-call text retains its native component');
   } finally { f.dispose(); f.mode.dispose(); }
 }
 

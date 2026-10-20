@@ -16,7 +16,7 @@ export async function createWorkStripPreview({ stepMs = 1000 } = {}) {
   const base = Date.now();
   const assistant = value => ({role:'assistant',content:[{type:'text',text:value}],timestamp:Date.now(),stopReason:'stop',api:'openai-codex-responses',provider:'openai-codex',model:'gpt-6-luna',usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}});
   manager.appendCustomMessageEntry('ddd', 'Five recorded maintenance reminders.\n\nThis invented notice has no severity metadata. It stays visible as a compact row. Expand it to inspect this complete text.', true);
-  manager.appendMessage(assistant('Work-strip preview: intermediate content is folded; final replies and decisions remain visible. /inspect or a click opens a strip. Use /work collapse, /work expand, or Ctrl+Alt+W to manage work sections. Run /fixture-work to play 10 seconds of invented progress. Scroll up before it finishes to test deferred folding, or manually open its strip to keep it open. /prompt-jump end returns to the latest output. No model or tool runs.'));
+  manager.appendMessage(assistant('Work-strip preview: intermediate content is folded; final replies and decisions remain visible. /inspect or a click opens a strip. Use /work collapse, /work expand, or Ctrl+Alt+W to manage work sections. Run /fixture-work to play 10 seconds of invented progress. Each live reply stays indented until the final reply is confirmed. Scroll up before it finishes to test deferred folding, or manually open its strip to keep it open. /prompt-jump end returns to the latest output. No model or tool runs.'));
   const entries = manager.getBranch();
   const users = entries.map((entry,index)=>entry.message?.role==='user'?index:-1).filter(index=>index>=0);
   for (const [number,start] of users.entries()) {
@@ -59,10 +59,11 @@ export async function createWorkStripPreview({ stepMs = 1000 } = {}) {
       await message(assistant('Comparing the recorded units.'));
       await delay(3 * stepMs); if(stopped)return;
       await message(assistant('Checking the recorded result.'));
-      await delay(4 * stepMs); if(stopped)return;
+      await delay(3 * stepMs); if(stopped)return;
       const final = assistant('The invented samples agree. This final reply remains visible after the work strip folds. Nothing was executed.');
       final.content.unshift({type:'thinking',thinking:'Compare the invented samples. This recorded reasoning belongs inside the completed work strip.'});
       await message(final);
+      await delay(stepMs); if(stopped)return;
       await emit({type:'agent_end',messages:[]});
       await emit({type:'agent_settled',aborted:false});
     } catch (error) { notify?.(`Preview playback stopped: ${error.message}`); }

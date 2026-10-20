@@ -12,7 +12,7 @@ Authoritative package: rrrrrrrrrricoxi/compact-tool-renderers. The approved scop
 
 Native top-level spacers belong to the next canonical content block. Projection retains them with visible blocks and discards them with hidden blocks; it does not transfer spacing across hidden content. Components that own internal spacing retain it. The compact DDD replacement restores the original custom-message leading spacer locally. This keeps skill and summary boundaries separate without adding gaps to questions, tools, or custom notices.
 
-The companion Pi Statusline change temporarily masks only execution state and elapsed time while the strip owns them. It queries ownership after restore and releases it on disposal; saved preferences and the native Fleet remain unchanged. `preview-work-strip.mjs` supplies isolated recorded examples and a ten-second synthetic lifecycle playback. All 20 suites passed on Mac and CCC, and the user approved the final terminal spacing and work-strip preview on both hosts on 20 October 2026.
+The companion Pi Statusline change temporarily masks only execution state and elapsed time while the strip owns them. It queries ownership after restore and releases it on disposal; saved preferences and the native Fleet remain unchanged. `scripts/preview-work-strip.mjs` supplies isolated recorded examples and a ten-second synthetic lifecycle playback. All 20 suites passed on Mac and CCC, and the user approved the final terminal spacing and work-strip preview on both hosts on 20 October 2026.
 
 - [x] Separate running actions; group only successful completed actions across no visible conversation boundary.
 - [x] Keep errors, cancellation, questions and background launches separate; stock pi-subagents/Fleet remains untouched.

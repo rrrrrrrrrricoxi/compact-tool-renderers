@@ -1,5 +1,10 @@
 # Release notes
 
+## 2.5.3 — Stable live alignment and clearer source layout
+
+- Keep live work commentary indented until the turn settles; place confirmed final replies at the main margin.
+- Separate runtime modules, tests, scripts, and documentation. Keep the root Pi entry point and update preview, benchmark, and package paths.
+
 ## 2.5.2 — Less work on redraw
 
 - Cache repeated formatted lines within entry and accounting limits; clear the shared cache at extension lifecycle boundaries.

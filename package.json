@@ -1,6 +1,6 @@
 {
   "name": "pi-compact-renderer",
-  "version": "2.5.2",
+  "version": "2.5.3",
   "type": "module",
   "description": "Compact Pi transcripts with collapsible work strips, grouped tool calls, prompt folding, and readable final replies",
   "license": "MIT",
@@ -9,7 +9,11 @@
     "url": "git+https://github.com/rrrrrrrrrricoxi/compact-tool-renderers.git"
   },
   "scripts": {
-    "test": "node test.mjs"
+    "test": "node scripts/test.mjs",
+    "preview": "node scripts/preview.mjs",
+    "preview:work": "node scripts/preview-work-strip.mjs",
+    "benchmark": "node --expose-gc scripts/performance-review.mjs",
+    "benchmark:memory": "node --expose-gc scripts/retained-memory-review.mjs"
   },
   "pi": {
     "extensions": [
@@ -21,15 +25,15 @@
     "@earendil-works/pi-tui": "*"
   },
   "files": [
-    "*.ts",
-    "*.mjs",
+    "index.ts",
+    "src/*.ts",
+    "tests/*.mjs",
+    "tests/fixtures/*.ts",
+    "scripts/*.mjs",
+    "docs/*.md",
     "LICENSE",
     "README.md",
-    "CHANGELOG.md",
-    "IMPLEMENTATION.md",
-    "PERFORMANCE.md",
-    "renderer/*.mjs",
-    "docs/renderer-reference.md"
+    "CHANGELOG.md"
   ],
   "keywords": [
     "pi-package",

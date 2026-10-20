@@ -194,7 +194,8 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
       turn.final = turn.evidence ? turn.rows.find(r => r instanceof AssistantMessageComponent && idFor(r.lastMessage) === turn.evidence!.finalId) : turn.rows.findLast(r => r instanceof AssistantMessageComponent);
       // Replayed terminal replies can use their native turn boundary. Live
       // replies wait for settlement; a text-bearing tool call is still work.
-      const settled = !!turn.evidence || (turn.startedAt ? turn.settled && (current() !== turn || !running) : true);
+      const settled = !!turn.evidence || (turn.startedAt ? turn.settled && (current() !== turn || !running) &&
+        monitor.statusFor([...turn.children]) === 'idle' : true);
       const message = turn.final?.lastMessage;
       turn.finalReply = settled && !turn.final?.isStreaming && visibleText(message) &&
         ['stop', 'error', 'aborted', 'length'].includes(message?.stopReason) &&
@@ -233,9 +234,9 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
       if (row instanceof Spacer) { spacing.push(row); continue; }
       if (!turn?.activity || turn.header.open || row === turn.final || keepWorkRowVisible(row, turn.header.state === 'completed')) {
         let view = row instanceof CustomMessageComponent && row.message?.customType === 'ddd' ? hookView(row) : turn && row === turn.finalReply ? finalView(row, !!turn.activity && !turn.header.open) : row;
-        // Attention rows stay visible when folded, but still belong to this
-        // work section. Disclosure policy must not change their indentation.
-        if (turn?.activity && row !== turn.final && (row instanceof AssistantMessageComponent || isWorkActivity(row) ||
+        // The newest assistant row is only a final candidate until settlement.
+        // Keep it and attention rows in the work gutter until final confirmation.
+        if (turn?.activity && row !== turn.finalReply && (row instanceof AssistantMessageComponent || isWorkActivity(row) ||
             row instanceof CustomMessageComponent && row.message?.customType === 'ddd')) view = childView(view);
         append(view);
       } else spacing = [];

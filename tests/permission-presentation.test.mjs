@@ -13,7 +13,7 @@ const { visibleWidth, TuiAltScreen, Container, Text, getKeybindings, setKeybindi
 const { createEventBus } = await import(pathToFileURL(path.join(root, 'dist/core/event-bus.js')));
 const { createJiti } = require('jiti');
 const jiti = createJiti(import.meta.url, { fsCache: false, alias: { '@earendil-works/pi-tui': tuiPath } });
-const { PermissionDialog, PermissionDetailsViewport, registerPermissionPresentation, PERMISSION_PRESENTATION_EVENT } = await jiti.import('./permission-presentation.ts');
+const { PermissionDialog, PermissionDetailsViewport, registerPermissionPresentation, PERMISSION_PRESENTATION_EVENT } = await jiti.import('../src/permission-presentation.ts');
 const theme = { fg: (_color, value) => value };
 const description = { version: 1, mode: 'tui', action: 'Run MCP operation', target: 'fixture/query',
   reason: 'Fixture policy requires approval.', details: JSON.stringify({ query: "SELECT '完整 SQL'", text: 'full exact input' }, null, 2) };

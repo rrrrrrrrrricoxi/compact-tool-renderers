@@ -7,13 +7,13 @@ Detailed display behavior, keyboard controls, integration notes, and development
 As an alternative to npm:
 
 ```sh
-pi install git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.2
+pi install git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.3
 ```
 
 Remove it with the matching source:
 
 ```sh
-pi remove git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.2
+pi remove git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.3
 ```
 
 ## Display
@@ -37,7 +37,7 @@ Complete assistant `js workflow` or `javascript workflow` fences collapse into a
 
 ## Work strips
 
-A user prompt gets a work strip only when it has tool or subagent activity. Text-only and thinking-only turns have no strip. During execution, intermediate replies and compact actions remain visible. The strip shows elapsed time and a short current-step label extracted from recorded prose or operations. After native settlement and completion of that prompt's background descendants, it folds to **Worked for …** and leaves the terminal assistant reply visible. It makes no model calls and does not infer completion from reply wording.
+A user prompt gets a work strip only when it has tool or subagent activity. Text-only and thinking-only turns have no strip. During execution, intermediate replies and compact actions remain visible in the same work gutter. The newest reply keeps this indentation until the turn and its owned background work settle; only a confirmed final reply returns to the main margin. The strip shows elapsed time and a short current-step label extracted from recorded prose or operations. After native settlement and completion of that prompt's background descendants, it folds to **Worked for …** and leaves the terminal assistant reply visible. It makes no model calls and does not infer completion from reply wording.
 
 Questions, recorded answers, supervisor decisions, unresolved errors, and unknown notices remain visible when the section is folded. Routine DDD notices can fold only when their producer explicitly marks them `severity: notice`; current DDD records without severity remain separate compact rows. Expand a DDD row to read its full recorded text.
 
@@ -55,7 +55,7 @@ When the current turn has a supported work strip, Pi Statusline can omit duplica
 
 ### Work-strip preview
 
-Run `PI_RUNTIME=/path/to/runtime node preview-work-strip.mjs`. Optionally set `PI_PREVIEW_STATUSLINE=/path/to/pi-statusline/index.ts` to include the matching footer. `/fixture-work` plays ten seconds of invented progress through native display events; no model or tool executes. Check automatic folding, manual expansion, scrollback, `/inspect`, prompt navigation, and normal typing after Esc.
+Run `PI_RUNTIME=/path/to/runtime node scripts/preview-work-strip.mjs`. Optionally set `PI_PREVIEW_STATUSLINE=/path/to/pi-statusline/index.ts` to include the matching footer. `/fixture-work` plays ten seconds of invented progress through native display events; no model or tool executes. Check automatic folding, manual expansion, scrollback, `/inspect`, prompt navigation, and normal typing after Esc.
 
 ## Controls
 
@@ -87,8 +87,8 @@ The renderer presents the caller's action, target, reason, and exact Details. La
 Use Node and a Pi 1.3.0 runtime:
 
 ```sh
-PI_RUNTIME=/path/to/runtime node test.mjs
-PI_RUNTIME=/path/to/runtime node preview.mjs
+PI_RUNTIME=/path/to/runtime npm test
+PI_RUNTIME=/path/to/runtime node scripts/preview.mjs
 ```
 
 The runtime directory contains `node_modules/@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui`. The default is `~/.local/state/pi-config/current/runtime`. Tests use actual native components and isolated fixtures. Coverage includes repeated synchronous redraw, separate native component caches, shell timer cleanup, status transitions, lifecycle changes, stock subagent rendering, Unicode, narrow widths, and bounded work on large outputs. No model or database calls are needed.
