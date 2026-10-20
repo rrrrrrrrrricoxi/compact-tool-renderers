@@ -1,3 +1,4 @@
+import type { DisplayMode } from './display-mode.ts';
 import { VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, ScrollView, isViewportTUI, type Component } from '@earendil-works/pi-tui';
 import { projectedChildren } from './work-strip-view.ts';
@@ -43,7 +44,7 @@ export function revealInspection(tui: any, target: Target, version = VERSION): b
 }
 
 /** Native picker plus visible focus status. No model tools, transcript or editor mutation. */
-export function registerInspection(pi: ExtensionAPI, mode: { isEnabled(): boolean; onChange(fn: () => void): () => void }): () => void {
+export function registerInspection(pi: ExtensionAPI, mode: DisplayMode): () => void {
   let ui: any, tui: any, disposed = false;
   let revealTimer: ReturnType<typeof setTimeout> | undefined;
   const clearStatus = () => { if (revealTimer) clearTimeout(revealTimer); revealTimer = undefined; ui?.setStatus?.('compact-inspection', undefined); };

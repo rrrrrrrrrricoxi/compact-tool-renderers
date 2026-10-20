@@ -15,27 +15,32 @@ Evaluated against renderer 2.5.0, commit `848a4a5`, with Pi 1.3.0 and Node
 - Retain strings only. Limit the shared cache to 4,096 entries and 2 MiB of
   accounting charges, including input/output strings and an entry allowance.
   This is not a hard JavaScript heap limit. Oversized lines bypass the cache.
-- Clear the cache on work-strip session reset and disposal. Evicted text is
-  reformatted when needed. Original transcript content is never removed.
+- The top-level extension owns cache cleanup at registration, session transitions
+  and disposal. Work strips no longer manage this shared resource. Evicted text
+  is reformatted when needed. Original transcript content is never removed.
+- Reuse the shared `DisplayMode` interface in all eight display consumers instead
+  of repeating its definition.
 
-Production changes: 54 added lines and 12 removed lines, or 42 net new lines.
+Production changes: 77 added lines and 27 removed lines, or 50 net new lines.
 The cache is 26 lines. Tests and measurement scripts are counted separately.
 
 ## Layout results
 
 Seven samples, eight warm redraws per sample, width 100. Values below are the
-median batch duration divided by eight, in milliseconds per redraw.
+median batch duration divided by eight, in milliseconds per redraw. The latest
+comparison uses a shared source-module graph, matching extension singleton
+ownership. Both baseline and optimized source use the same measurement scripts.
 
 | Host | Turns | Before | After | Compact disabled, after |
 | --- | ---: | ---: | ---: | ---: |
-| Mac | 48 | 1.444 | 0.465 | 0.039 |
-| Mac | 400 | 13.565 | 4.510 | 0.299 |
-| CCC | 48 | 1.087 | 0.375 | 0.032 |
-| CCC | 400 | 9.508 | 3.466 | 0.207 |
+| Mac | 48 | 1.642 | 0.479 | 0.054 |
+| Mac | 400 | 12.649 | 4.904 | 0.301 |
+| CCC | 48 | 1.093 | 0.411 | 0.031 |
+| CCC | 400 | 9.514 | 3.295 | 0.207 |
 
-At 400 turns, added median layout time is 4.211 ms on Mac and 3.259 ms on CCC.
+At 400 turns, added median layout time is 4.603 ms on Mac and 3.088 ms on CCC.
 Both meet the initial 5 ms target in this fixture. The largest of seven optimized
-batch samples, divided by eight, was 4.979 ms on Mac and 4.124 ms on CCC. These
+batch samples, divided by eight, was 5.294 ms on Mac and 3.664 ms on CCC. These
 are batch measurements, not individual-frame latency percentiles.
 
 ## Retained memory
@@ -47,9 +52,9 @@ source. Figures include native fixture components and renderer state.
 | Host | Compact fixture | Before | After | Added |
 | --- | --- | ---: | ---: | ---: |
 | Mac | 48 turns | 0.736 MiB | 0.757 MiB | 0.021 MiB |
-| Mac | 400 turns | 5.663 MiB | 5.805 MiB | 0.142 MiB |
-| CCC | 48 turns | 0.736 MiB | 0.759 MiB | 0.023 MiB |
-| CCC | 400 turns | 5.666 MiB | 5.805 MiB | 0.139 MiB |
+| Mac | 400 turns | 5.663 MiB | 5.806 MiB | 0.143 MiB |
+| CCC | 48 turns | 0.736 MiB | 0.757 MiB | 0.021 MiB |
+| CCC | 400 turns | 5.663 MiB | 5.805 MiB | 0.142 MiB |
 
 A separate warmed formatting stress case retained approximately 2.16 MiB after
 10,000 distinct lines and remained approximately 2.16 MiB after another 20,000.
@@ -59,13 +64,15 @@ proof or a guarantee about V8 memory accounting.
 
 ## Verification
 
-All 25 regression suites pass on both hosts. Coverage includes streaming work
+All 26 regression suites pass on both hosts. Coverage includes streaming work
 settlement, subagents, prompt/skill disclosure, keyboard focus, native reload,
 spacing, neutral final surfaces, Unicode, ANSI resets and images.
 
 The cache tests cover reuse, entry/byte limits, eviction, oversized bypass,
 clearing, changing content, terminal widths, selection and in-place theme
-changes. Synthetic transcript output hashes match baseline exactly for both
+changes. The root lifecycle test uses actual extension registration to verify
+registration cleanup, session transitions, shutdown, stale callbacks and failed
+startup. It also verifies reuse of the same shared cache between redraws. Synthetic transcript output hashes match baseline exactly for both
 48- and 400-turn fixtures, with compact mode enabled and disabled.
 
 Run:
@@ -76,7 +83,7 @@ node --expose-gc renderer/performance-review.mjs --samples 7 --scales 48,400
 node --expose-gc renderer/retained-memory-review.mjs
 ```
 
-For baseline memory comparison, copy both measurement scripts into a separate
+For baseline memory comparison, copy both measurement scripts and `test-runtime.mjs` into a separate
 checkout of `848a4a5`; use the baseline production sources without modification.
 
 ## Limits and deferred work
@@ -92,3 +99,21 @@ The full-history projection scan remains. Broad grouping changes, native
 compatibility-layer consolidation, image-cache changes and input scheduling are
 deferred: this pass meets the initial measured target without changing those
 contracts or the UI design.
+
+## Pre-integration cleanup decisions
+
+Implemented the two changes with clear ownership benefits and low behavior risk:
+
+1. The extension root owns shared cache lifecycle; individual display features
+   no longer clear a resource used by other features.
+2. Display consumers use the existing `DisplayMode` type. This adds no runtime
+   behavior and keeps the contract in one place.
+
+Deferred adapter unification and focus routing. Those changes require separate
+checks for wrapper removal order, reload, keyboard routing and dialog ownership.
+No measured result requires them in this patch.
+
+Keep separate tool/code/recorded-text panes and distinct grouping rules: their
+interaction and boundary rules differ. Keep the bounded cache, native fallbacks
+and subagent monitor. Combining these solely to reduce file or line counts would
+move complexity into conditionals rather than remove it.

@@ -1,6 +1,6 @@
+import type { DisplayMode } from './display-mode.ts';
 import { AssistantMessageComponent, CustomMessageComponent, InteractiveMode, SkillInvocationMessageComponent, ToolExecutionComponent, UserMessageComponent, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, Spacer, matchesKey } from '@earendil-works/pi-tui';
-import { clearDisplayLineCache } from './display-card.ts';
 import { chainNativeMethod } from './native-method-chain.ts';
 import { ToolPane } from './modern-tool-pane.ts';
 import { recordedPaneHeight } from './modern-recorded-pane.ts';
@@ -9,7 +9,6 @@ import { mixedThinkingRegion } from './modern-thinking-adapter.ts';
 import { actionIntent } from './action-intent.ts';
 import { projectedChildren, recordedWorkEvidence, renderFinalReply, workEvidenceType, workSummary, WorkChild, WorkStripHeader, type WorkEvidence } from './work-strip-view.ts';
 
-type Mode = { isEnabled(): boolean; onChange(fn: () => void): () => void };
 type Turn = { user: any; header: WorkStripHeader; rows: any[]; activity?: boolean; evidence?: WorkEvidence; startedAt?: number; settled?: boolean; final?: any; finalReply?: any; outcome?: WorkEvidence['outcome']; completedAt?: number; persisted?: boolean; noFinal?: boolean; children: Set<string> };
 const text = (message: any) => typeof message?.content === 'string' ? message.content : Array.isArray(message?.content) ? message.content.filter((b: any) => b?.type === 'text' && typeof b.text === 'string').map((b: any) => b.text).join('\n') : '';
 const visibleText = (message: any) => typeof message?.content === 'string' ? message.content : message?.content?.find((b: any) => b?.type === 'text' && typeof b.text === 'string' && /\S/.test(b.text))?.text || '';
@@ -59,7 +58,7 @@ export function keepWorkRowVisible(row: any, completed: boolean): boolean {
 
 /** Pi 1.3 display seam. The native tree, transcript, execution and Fleet remain
  * authoritative. Only chatContainer's rendered child list is projected. */
-export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSION): () => void {
+export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version = VERSION): () => void {
   const owner = Symbol.for('compact-renderer:work-registration:v1'), shared = globalThis as any;
   shared[owner]?.();
   const proto = InteractiveMode.prototype as any;
@@ -302,7 +301,7 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
   const reset = (_event: any, context: any) => {
     release(); input?.(); input = undefined; ctx = context.mode === 'tui' ? context : undefined;
     running = false; pendingStart = undefined;
-    turns.clear(); latestTurn = undefined; clearDisplayLineCache(); hooks.clear(); liveStarts = new WeakMap(); readRecords(); monitor.reset();
+    turns.clear(); latestTurn = undefined; hooks.clear(); liveStarts = new WeakMap(); readRecords(); monitor.reset();
     if (timer) clearTimeout(timer); timer = undefined;
     if (ticker) clearInterval(ticker); ticker = undefined;
     if (ctx) {
@@ -412,7 +411,7 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
     monitor.dispose(); subscriptions.forEach(off => off?.());
     if (attached) delete attached[projectedChildren];
     detachChat?.(); detachEvent(); detachReplay(); detachAdd();
-    publishOwnership(true); redraw(); turns.clear(); latestTurn = undefined; clearDisplayLineCache(); hooks.clear(); ctx = undefined;
+    publishOwnership(true); redraw(); turns.clear(); latestTurn = undefined; hooks.clear(); ctx = undefined;
     if (shared[owner] === dispose) delete shared[owner];
   };
   subscriptions.push(pi.on('session_shutdown', dispose));

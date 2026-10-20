@@ -1,16 +1,16 @@
+import type { DisplayMode } from './display-mode.ts';
 import { InteractiveMode, SkillInvocationMessageComponent, UserMessageComponent, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, Markdown, MouseRegion, Spacer, Text, matchesKey, stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui';
 import { fillBackground } from './display-card.ts';
 import { chainNativeMethod } from './native-method-chain.ts';
 import { projectedChildren } from './work-strip-view.ts';
 
-type Mode = { isEnabled(): boolean; onChange(fn: () => void): () => void };
 type Card = { skill: any; user?: any; gap?: any; detachGap?: () => void; headerEnd?: number; userStart?: number; userHeight?: number; body?: Markdown; bodyKey?: string; bodyTheme?: any };
 const startZone = '\x1b]133;A\x07', endZone = '\x1b]133;B\x07\x1b]133;C\x07';
 
 /** Pi 1.3 creates a native skill and optional user row from one user envelope.
  * Keep those identities and inputs; combine only their rendered presentation. */
-export function registerModernSkillPrompts(pi: ExtensionAPI, mode: Mode, version = VERSION): () => void {
+export function registerModernSkillPrompts(pi: ExtensionAPI, mode: DisplayMode, version = VERSION): () => void {
   const owner = Symbol.for('compact-renderer:skill-prompts:v1'), shared = globalThis as any;
   shared[owner]?.();
   const proto = InteractiveMode.prototype as any;

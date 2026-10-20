@@ -5,13 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
-import { loadAgent, loadSource, core, runtime, themeModule, tui } from '../test-runtime.mjs';
+import { loadAgent, loadSharedSource as loadSource, core, runtime, themeModule, tui } from '../test-runtime.mjs';
 
 const { ToolExecutionComponent } = await loadAgent('modes/interactive/components/tool-execution.js');
 const { createShellRenderers } = await loadAgent('core/tools/renderers/bash.js');
 const { readRenderers } = await loadAgent('core/tools/renderers/read.js');
 const { codemodeRenderers } = await loadAgent('extensions/codemode/renderer.js');
 const { registerModernTools } = await loadSource('./modern-tools.ts');
+const { clearDisplayLineCache } = await loadSource('./display-card.ts');
 const { createDisplayMode } = await loadSource('./display-mode.ts');
 const { registerWorkStrip } = await loadSource('./work-strip.ts');
 const { WorkStripHeader, WorkChild, workEvidenceType, projectedChildren } = await loadSource('./work-strip-view.ts');
@@ -160,6 +161,8 @@ export function makeProjectionFixture(turnCount, enabled) {
   };
   const modeProjection = createDisplayMode(enabled);
   const dispose = registerWorkStrip(piProjection, modeProjection, VERSION);
+  // This partial-registration benchmark supplies the cache boundary owned by index.ts.
+  clearDisplayLineCache?.();
   const uiProjection = { isFollowingOutput: true, theme: themeModule.theme, requestRender() {}, onTerminalInput(fn) { inputs.add(fn); return () => inputs.delete(fn); } };
   const context = { mode: 'tui', hasUI: true, ui: uiProjection, sessionManager: manager, isIdle: () => true };
   const display = {
@@ -192,7 +195,7 @@ export function makeProjectionFixture(turnCount, enabled) {
   return {
     manager, mode: modeProjection, display, paint, work,
     rows: () => display.chatContainer[projectedChildren] || display.chatContainer.children,
-    dispose() { dispose(); modeProjection.dispose(); if (inputs.size) throw new Error('Projection fixture leaked terminal input handlers.'); },
+    dispose() { dispose(); modeProjection.dispose(); clearDisplayLineCache?.(); if (inputs.size) throw new Error('Projection fixture leaked terminal input handlers.'); },
   };
 }
 
@@ -232,7 +235,7 @@ function longResultScenario(modeName, enabled) {
 }
 
 export function disposePerformanceReview() {
-  mode.setEnabled(true); emit('session_shutdown'); disposeRenderer(); mode.dispose();
+  mode.setEnabled(true); emit('session_shutdown'); disposeRenderer(); mode.dispose(); clearDisplayLineCache?.();
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { clearDisplayLineCache } from './display-card.ts';
 import { createDisplayMode } from './display-mode.ts';
 import { registerModernTools } from './modern-tools.ts';
 import { registerModernThinking } from './modern-thinking.ts';
@@ -11,6 +12,7 @@ import { registerPermissionPresentation } from './permission-presentation.ts';
 import { registerWorkStrip } from './work-strip.ts';
 
 export default function compactRenderer(pi: ExtensionAPI): void {
+  clearDisplayLineCache();
   const mode = createDisplayMode();
   const disposers: Array<() => void> = [];
   let disposed = false;
@@ -22,9 +24,15 @@ export default function compactRenderer(pi: ExtensionAPI): void {
       try { cleanup(); } catch (error) { errors.push(error); }
     }
     mode.dispose();
+    clearDisplayLineCache();
     if (errors.length) throw new AggregateError(errors, 'Compact renderer cleanup failed');
   };
   try {
+    // All display features share the cache; its lifetime belongs to the extension.
+    for (const event of ['session_start', 'session_tree', 'session_compact', 'session_before_switch'] as const) {
+      const off = pi.on(event, () => { if (!disposed) clearDisplayLineCache(); });
+      if (typeof off === 'function') disposers.push(off);
+    }
     disposers.push(registerModernTools(pi, mode));
     disposers.push(registerModernThinking(pi, mode));
     disposers.push(registerModernPrompts(pi, mode));

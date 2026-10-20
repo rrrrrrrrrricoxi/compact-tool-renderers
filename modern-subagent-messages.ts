@@ -1,3 +1,4 @@
+import type { DisplayMode } from './display-mode.ts';
 import { ExtensionRunner, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
 import { ToolPane, type PaneContent } from './modern-tool-pane.ts';
@@ -7,7 +8,6 @@ import { installSubagentSpacingAdapter } from './modern-subagent-spacing.ts';
 import { recordedValues } from './modern-tool-content.ts';
 import { activityHeading } from './display-card.ts';
 
-type Mode = { isEnabled(): boolean; onChange(fn: () => void): () => void };
 type Summary = { title: string; tone: string };
 const record = (value: any) => value && typeof value === 'object' && !Array.isArray(value);
 const text = (value: unknown) => typeof value === 'string' ? truncateToWidth(value.slice(0, 512).replace(/[\p{Cc}\p{Cf}]/gu, ' '), 90, '…') : '';
@@ -81,7 +81,7 @@ function* content(source: any, entry: boolean): Generator<PaneContent> {
 }
 
 /** Display only. Native execution, Fleet, messages, entries and wake routing stay authoritative. */
-export function registerModernSubagentMessages(pi: ExtensionAPI, mode: Mode): () => void {
+export function registerModernSubagentMessages(pi: ExtensionAPI, mode: DisplayMode): () => void {
   const owner = Symbol.for('compact-renderer:subagent-message-registration:v1'), shared = globalThis as any;
   shared[owner]?.();
   const subagents = acquireSubagentProjection(pi), spacing = installSubagentSpacingAdapter();

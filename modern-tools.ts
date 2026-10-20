@@ -1,3 +1,4 @@
+import type { DisplayMode } from './display-mode.ts';
 import { Text, truncateToWidth, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
 import { getLanguageFromPath, type ExtensionAPI, type ToolRenderers } from "@earendil-works/pi-coding-agent";
 import { NativeToolOwner, nativeToolsSupported, nativeToolContextSupported, nativeTextFallback } from "./modern-native-tools.ts";
@@ -10,7 +11,6 @@ import { compactSubagent, subagentDecision, subagentTitle } from "./modern-subag
 import { groupIntent } from "./action-intent.ts";
 import { compactToolImages, installModernToolImages, type ToolImageView } from "./modern-tool-images.ts";
 
-type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
 type Context = Parameters<NonNullable<ToolRenderers["renderCall"]>>[2];
 type Status = "pending" | "running" | "success" | "failed" | "cancelled" | "unavailable" | "unanswered" | "answered" | "notice";
 type Node = { id: string; name: string; args: any; epoch: number; status: Status; result?: any; images: number; note?: string; pane?: ToolPane; code?: CodePane; group?: Group; native: NativeToolOwner; invalidate?: () => void; nativeExpanded?: boolean; rendererAttached?: boolean; revision: number; lastPartial?: boolean; lastError?: boolean };
@@ -224,7 +224,7 @@ class DynamicComponent {
 }
 
 /** Display-only tools: public renderer/event/input APIs; no messages or tool execution are changed. */
-export function registerModernTools(pi: ExtensionAPI, mode: Mode): () => void {
+export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => void {
   if (!nativeToolsSupported) return () => {};
   const subagents = acquireSubagentProjection(pi);
   let disposed = false;

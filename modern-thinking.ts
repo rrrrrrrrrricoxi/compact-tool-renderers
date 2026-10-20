@@ -1,10 +1,10 @@
+import type { DisplayMode } from './display-mode.ts';
 import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import { hiddenThinkingShape, mixedThinkingRegion, installModernThinkingAdapter } from "./modern-thinking-adapter.ts";
 import { recordedPaneHeight } from "./modern-recorded-pane.ts";
 import { ToolPane, type PaneAction } from "./modern-tool-pane.ts";
 
-type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
 type Round = { id: number; sources?: string[]; action?: PaneAction; message: any; hasThinking: boolean; component?: any; kind: "round" | "bridge" | "boundary"; group?: ThinkingGroup };
 type ThinkingGroup = { members: Round[]; pane: ToolPane; activeEpoch?: number; activeResult?: boolean };
 /** The label is an extract from recorded text, never a generated summary.
@@ -186,7 +186,7 @@ export class ModernThinkingGroups {
   }
 }
 
-export function registerModernThinking(pi: ExtensionAPI, mode: Mode): () => void {
+export function registerModernThinking(pi: ExtensionAPI, mode: DisplayMode): () => void {
   const owner = Symbol.for("compact-renderer:thinking-registration:v1"), shared = globalThis as any;
   shared[owner]?.();
   let groups: ModernThinkingGroups | undefined, adapter: (() => void) | undefined, input: (() => void) | undefined;

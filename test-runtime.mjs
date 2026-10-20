@@ -9,10 +9,14 @@ export const agentRoot = path.resolve(process.env.PI_INSTALL_ROOT || path.join(r
 export const tuiRoot = path.join(path.dirname(agentRoot), 'pi-tui');
 const require = createRequire(path.join(agentRoot, 'package.json'));
 const { createJiti } = require('jiti');
-export const jiti = createJiti(import.meta.url, { fsCache: false, moduleCache: false, alias: {
+const sourceOptions = { fsCache: false, alias: {
   '@earendil-works/pi-coding-agent': path.join(agentRoot, 'dist/index.js'),
   '@earendil-works/pi-tui': path.join(tuiRoot, 'dist/index.js'),
-} });
+} };
+export const jiti = createJiti(import.meta.url, { ...sourceOptions, moduleCache: false });
+const sharedJiti = createJiti(import.meta.url, { ...sourceOptions, moduleCache: true });
+// Use one module graph when testing extension-wide singleton ownership.
+export const loadSharedSource = file => sharedJiti.import(new URL(file, import.meta.url).pathname);
 export const loadSource = (file) => jiti.import(new URL(file, import.meta.url).pathname);
 export const loadAgent = (file) => import(pathToFileURL(path.join(agentRoot, 'dist', file)).href);
 export const tui = await import(pathToFileURL(path.join(tuiRoot, 'dist/index.js')).href);

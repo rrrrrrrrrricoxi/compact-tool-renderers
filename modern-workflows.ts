@@ -1,3 +1,4 @@
+import type { DisplayMode } from './display-mode.ts';
 import { AssistantMessageComponent, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, Markdown, MouseRegion, Spacer, Text, matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
 import { activityRow, cardContentWidth } from './display-card.ts';
@@ -5,7 +6,6 @@ import { richTextRows } from './modern-rich-text.ts';
 import { recordedPaneHeight } from './modern-recorded-pane.ts';
 import { chainNativeMethod } from './native-method-chain.ts';
 
-type Mode = { isEnabled(): boolean; onChange(fn: () => void): () => void };
 export type WorkflowFence = { start: number; end: number; source: string; summary: string };
 const summaryText = (value: string) => truncateToWidth(value.slice(0, 1024).replace(/[\p{Cc}\p{Cf}]/gu, ' ').replace(/\s+/g, ' ').trim(), 90, '…');
 
@@ -99,7 +99,7 @@ type Card = { id: number; component: any; sources: string[]; fences: WorkflowFen
 /** The public Markdown transformer cannot return components or identify a card.
  * This isolated 1.3.0 seam substitutes display children only during native render.
  * Native messages, Markdown sources, updateContent, and execution remain untouched. */
-export function registerModernWorkflows(pi: ExtensionAPI, mode: Mode, version = VERSION): () => void {
+export function registerModernWorkflows(pi: ExtensionAPI, mode: DisplayMode, version = VERSION): () => void {
   const owner = Symbol.for('compact-renderer:workflow-registration:v1'), shared = globalThis as any;
   shared[owner]?.();
   const proto = AssistantMessageComponent.prototype as any;

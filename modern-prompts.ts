@@ -1,9 +1,9 @@
+import type { DisplayMode } from './display-mode.ts';
 import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Markdown, matchesKey, stripTerminalSequences, truncateToWidth } from "@earendil-works/pi-tui";
 import { readFileSync } from "node:fs";
 import { installModernPromptAdapter, invalidateModernPrompt } from "./modern-prompts-adapter.ts";
 
-type Mode = { isEnabled(): boolean; onChange(callback: () => void): () => void };
 type Template = { name: string; parts: string[]; description?: string };
 type PromptCard = { component: any; original: string; name?: string; open: boolean; eligible: boolean; revision: number; controlStart?: number; controlEnd?: number };
 const promptLabel = (card: PromptCard) => card.name ? `/${card.name}` : "Submitted prompt";
@@ -61,7 +61,7 @@ export function modernPromptSummary(original: string, description?: string): str
 
 /** Display only: the public transformer sees the original Markdown. Its output
  * does not replace messages, prompt expansion, transcript entries, or model input. */
-export function registerModernPrompts(pi: ExtensionAPI, mode: Mode): () => void {
+export function registerModernPrompts(pi: ExtensionAPI, mode: DisplayMode): () => void {
   const owner = Symbol.for("compact-renderer:prompt-registration:v1"), shared = globalThis as any;
   shared[owner]?.();
   let templates: Template[] = [], cards = new Map<any, PromptCard>();
