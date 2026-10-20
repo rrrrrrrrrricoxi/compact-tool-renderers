@@ -1,9 +1,8 @@
 {
   "name": "pi-compact-renderer",
-  "version": "2.5.0",
-  "private": true,
+  "version": "2.5.1",
   "type": "module",
-  "description": "Display-only successful action groups, recorded thinking, prompt cards, and permission presentation for Pi",
+  "description": "Compact Pi transcripts with collapsible work strips, grouped tool calls, prompt folding, and readable final replies",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -28,5 +27,23 @@
     "README.md",
     "CHANGELOG.md",
     "IMPLEMENTATION.md"
-  ]
+  ],
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "terminal",
+    "tui",
+    "compact-renderer"
+  ],
+  "homepage": "https://github.com/rrrrrrrrrricoxi/compact-tool-renderers#readme",
+  "bugs": {
+    "url": "https://github.com/rrrrrrrrrricoxi/compact-tool-renderers/issues"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }

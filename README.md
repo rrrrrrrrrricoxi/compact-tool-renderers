@@ -1,12 +1,54 @@
 # Pi compact renderer
 
-Display-only action groups, recorded thinking, prompt cards, and permission presentation for Pi 1.3.0. The package does not execute tools, call a model, change approval rules, or rewrite session messages. Collapsing text does not save model tokens.
+Make the conversation easier to scan. Keep intermediate work visible while Pi runs, fold completed work behind a **Worked for …** strip, and give the final reply a clear surface.
+
+- Group completed tool calls and inspect their original output on demand.
+- Keep questions, decisions, and unresolved errors visible under their work section.
+- Fold long prompts, skill text, recorded thinking, and codemode without losing the original content.
+- Expand recorded images when the terminal supports them; retain a readable fallback elsewhere.
+
+This is a **display extension**, not a context-compaction tool. It does not execute tools, call a model, change approval rules, or rewrite original messages. Collapsing text does not reduce model token usage. Work-strip completion metadata is display-only.
 
 ## Install
 
-Install the published Git package once. Pi Config pins the reviewed commit and installs it under `runtime/node_modules/pi-compact-renderer`; its startup label is `pi-compact-renderer`. Do not also load an older local copy.
+**Supported runtime: Pi 1.3.0, Node.js 22.19.0 or later.** Version-sensitive adapters retain native rendering on unsupported versions. Other Pi versions are not certified.
 
-This repository is the authoritative source. The npm manifest stays `private: true` to prevent accidental npm publication. Releases use Git tags, beginning with `v2.0.0` for this implementation.
+Install the pinned npm release:
+
+```sh
+pi install npm:pi-compact-renderer@2.5.1
+```
+
+Or install the same release from Git:
+
+```sh
+pi install git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.1
+```
+
+Restart Pi, or run `/reload` in an idle session after its background work finishes. Open `/inspect` to expand a block. Use `/compact-rendering off` to return to native display.
+
+Pi Config is not required. If Pi Config already manages this renderer, update through that configuration instead of installing a second copy. Avoid loading multiple extensions that replace the same transcript components; interoperability with other renderers is not established.
+
+Remove the source you installed:
+
+```sh
+pi remove npm:pi-compact-renderer@2.5.1
+# Or, for the Git installation:
+pi remove git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.1
+```
+
+## Quick controls
+
+| Action | Control |
+| --- | --- |
+| Inspect or expand a recorded block | `/inspect`, or click its disclosure |
+| Return to typing | Esc |
+| Collapse completed work sections | `/work collapse` or Ctrl+Alt+W |
+| Expand completed work sections | `/work expand` |
+| Disable the collapse shortcut | `/work shortcut off` |
+| Switch compact rendering on or off | `/compact-rendering` |
+
+Active and waiting work sections remain open. The final reply stays visible. Mouse and image support depend on the terminal and transport; keyboard inspection remains available.
 
 ## Display
 
