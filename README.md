@@ -15,7 +15,7 @@ Replies without tool or subagent activity skip the work strip.
 Tested with **Pi 1.3.0** and **Node.js 22.19.0 or later**. Other Pi versions are not verified; version-sensitive features fall back to native rendering.
 
 ```sh
-pi install npm:pi-compact-renderer@2.5.1
+pi install npm:pi-compact-renderer@2.5.2
 ```
 
 Restart Pi, or run `/reload` when the session and its background work are idle.
@@ -44,10 +44,16 @@ Compact thinking groups need Pi's `hideThinkingBlock: true` setting. Ctrl+T stil
 
 For detailed behavior, all keyboard controls, and test/preview instructions, see the [renderer reference](https://github.com/rrrrrrrrrricoxi/compact-tool-renderers/blob/main/docs/renderer-reference.md).
 
+## Performance
+
+In a synthetic 400-turn transcript, median warm layout took **4.9 ms on Mac and 3.3 ms on CCC**, down from 12.6 and 9.5 ms. Added layout time versus compact rendering disabled was **4.6 ms and 3.1 ms**; retained fixture memory increased by about **0.14 MiB** versus the prior renderer.
+
+Measured with Pi 1.3.0, Node 26.11.1, and a 100-column layout. These are layout benchmarks, not live typing or terminal latency. See [methods, cache limits, and results](https://github.com/rrrrrrrrrricoxi/compact-tool-renderers/blob/main/PERFORMANCE.md).
+
 ## Uninstall
 
 ```sh
-pi remove npm:pi-compact-renderer@2.5.1
+pi remove npm:pi-compact-renderer@2.5.2
 ```
 
 [MIT license](LICENSE) · [Report an issue](https://github.com/rrrrrrrrrricoxi/compact-tool-renderers/issues)

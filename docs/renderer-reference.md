@@ -7,13 +7,13 @@ Detailed display behavior, keyboard controls, integration notes, and development
 As an alternative to npm:
 
 ```sh
-pi install git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.1
+pi install git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.2
 ```
 
 Remove it with the matching source:
 
 ```sh
-pi remove git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.1
+pi remove git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.2
 ```
 
 ## Display

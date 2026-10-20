@@ -1,5 +1,12 @@
 # Release notes
 
+## 2.5.2 — Less work on redraw
+
+- Cache repeated formatted lines within entry and accounting limits; clear the shared cache at extension lifecycle boundaries.
+- Avoid repeated completed-work summaries and temporary arrays during redraw. Share the display-mode contract across renderers.
+- Keep the concise README and add measured layout overhead. Include the performance report and reproduction scripts in the package.
+- Preserve the existing UI behavior; the live-commentary alignment change remains separate.
+
 ## 2.5.1 — Public npm package
 
 - Add npm publication metadata and the Pi gallery discovery keyword.

@@ -1,6 +1,6 @@
 {
   "name": "pi-compact-renderer",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "type": "module",
   "description": "Compact Pi transcripts with collapsible work strips, grouped tool calls, prompt folding, and readable final replies",
   "license": "MIT",
@@ -26,7 +26,10 @@
     "LICENSE",
     "README.md",
     "CHANGELOG.md",
-    "IMPLEMENTATION.md"
+    "IMPLEMENTATION.md",
+    "PERFORMANCE.md",
+    "renderer/*.mjs",
+    "docs/renderer-reference.md"
   ],
   "keywords": [
     "pi-package",
