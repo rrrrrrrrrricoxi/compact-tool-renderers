@@ -1,5 +1,11 @@
 # Release notes
 
+## 2.5.1 — Public package preparation
+
+- Add npm publication metadata and the Pi gallery discovery keyword.
+- Document standalone Git installation, removal, compatibility, and quick controls.
+- Keep renderer behavior identical to 2.5.0. npm publication remains pending publisher authentication.
+
 ## 2.5.0 — Clearer conversation hierarchy
 
 - Keep work children indented, including visible questions, decisions, failures and DDD notices. Use quieter routine headings and collapse-all controls.
