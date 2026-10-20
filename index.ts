@@ -1,15 +1,15 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { clearDisplayLineCache } from './display-card.ts';
-import { createDisplayMode } from './display-mode.ts';
-import { registerModernTools } from './modern-tools.ts';
-import { registerModernThinking } from './modern-thinking.ts';
-import { registerModernPrompts } from './modern-prompts.ts';
-import { registerModernSkillPrompts } from './modern-skill-prompts.ts';
-import { registerModernWorkflows } from './modern-workflows.ts';
-import { registerModernSubagentMessages } from './modern-subagent-messages.ts';
-import { registerInspection } from './inspection.ts';
-import { registerPermissionPresentation } from './permission-presentation.ts';
-import { registerWorkStrip } from './work-strip.ts';
+import { clearDisplayLineCache } from './src/display-card.ts';
+import { createDisplayMode } from './src/display-mode.ts';
+import { registerModernTools } from './src/modern-tools.ts';
+import { registerModernThinking } from './src/modern-thinking.ts';
+import { registerModernPrompts } from './src/modern-prompts.ts';
+import { registerModernSkillPrompts } from './src/modern-skill-prompts.ts';
+import { registerModernWorkflows } from './src/modern-workflows.ts';
+import { registerModernSubagentMessages } from './src/modern-subagent-messages.ts';
+import { registerInspection } from './src/inspection.ts';
+import { registerPermissionPresentation } from './src/permission-presentation.ts';
+import { registerWorkStrip } from './src/work-strip.ts';
 
 export default function compactRenderer(pi: ExtensionAPI): void {
   clearDisplayLineCache();

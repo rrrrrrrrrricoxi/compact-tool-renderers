@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createPreview } from './preview.mjs';
+import { createPreview } from '../scripts/preview.mjs';
 
 const hostHome = process.env.HOME, hostFetch = globalThis.fetch;
 const preview = await createPreview();

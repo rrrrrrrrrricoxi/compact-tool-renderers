@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-const directory = path.dirname(fileURLToPath(import.meta.url));
+const directory = fileURLToPath(new URL('../tests/', import.meta.url));
 const required = ['action-intent.test.mjs', 'modern-workflows.test.mjs', 'display-mode.test.mjs', 'modern-tools.test.mjs', 'modern-subagent-messages.test.mjs', 'subagent-spacing.test.mjs', 'modern-subagent-groups.test.mjs', 'modern-thinking.test.mjs', 'modern-prompts.test.mjs', 'permission-presentation.test.mjs', 'input-focus.test.mjs', 'inspection.test.mjs', 'codemode.test.mjs', 'preview-example.test.mjs'];
 required.push('reload-lifecycle.test.mjs', 'ordinary-prompts.test.mjs', 'work-strip-hierarchy.test.mjs', 'work-strip-final-surface.test.mjs');
 required.push('modern-skill-prompts.test.mjs');

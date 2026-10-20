@@ -2,7 +2,7 @@
 // Retained heap after GC, not temporary allocations. Synthetic sessions only.
 import { createHash } from 'node:crypto';
 import { makeProjectionFixture, disposePerformanceReview } from './performance-review.mjs';
-import { loadSharedSource as loadSource, themeModule } from '../test-runtime.mjs';
+import { loadSharedSource as loadSource, themeModule } from '../tests/test-runtime.mjs';
 
 if (!globalThis.gc) throw new Error('Run with node --expose-gc');
 const { fillBackground, clearDisplayLineCache } = await loadSource('./display-card.ts');

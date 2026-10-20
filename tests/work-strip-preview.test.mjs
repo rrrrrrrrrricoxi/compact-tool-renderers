@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {createWorkStripPreview} from './preview-work-strip.mjs';
+import {createWorkStripPreview} from '../scripts/preview-work-strip.mjs';
 const preview=await createWorkStripPreview({stepMs:20});
 const {core,runtime,manager}=preview;
 const {visibleWidth}=await import(pathToFileURL(path.join(preview.runtimePath,'node_modules/@earendil-works/pi-tui/dist/index.js')));

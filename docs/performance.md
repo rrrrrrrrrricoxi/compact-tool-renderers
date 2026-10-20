@@ -78,13 +78,12 @@ startup. It also verifies reuse of the same shared cache between redraws. Synthe
 Run:
 
 ```sh
-node test.mjs
-node --expose-gc renderer/performance-review.mjs --samples 7 --scales 48,400
-node --expose-gc renderer/retained-memory-review.mjs
+npm test
+node --expose-gc scripts/performance-review.mjs --samples 7 --scales 48,400
+node --expose-gc scripts/retained-memory-review.mjs
 ```
 
-For baseline memory comparison, copy both measurement scripts and `test-runtime.mjs` into a separate
-checkout of `848a4a5`; use the baseline production sources without modification.
+For baseline comparison, use the measurement scripts in `renderer/` and the root `test-runtime.mjs` from tag `v2.5.2`. Copy those files into a separate checkout of `848a4a5`; that helper matches the baseline’s flat source layout. Keep baseline production sources unchanged. The commands above run the current layout.
 
 ## Limits and deferred work
 

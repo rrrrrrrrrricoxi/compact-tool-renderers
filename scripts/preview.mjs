@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const source = path.dirname(fileURLToPath(import.meta.url));
+const source = fileURLToPath(new URL('../', import.meta.url));
 export async function createPreview() {
   const hostHome = os.homedir();
   const runtimePath = path.resolve(process.env.PI_RUNTIME || path.join(hostHome, '.local/state/pi-config/current/runtime'));
@@ -50,7 +50,7 @@ export async function createPreview() {
     await fs.writeFile(path.join(skillDir, 'SKILL.md'), `---\nname: fixture-review\ndescription: Review invented sample records for a display exercise.\n---\n${skillBody}\n`);
     await fs.writeFile(path.join(agentDir, 'settings.json'), JSON.stringify({
       packages: [source, ...(promptJump ? [promptJump] : [])],
-      extensions: [path.join(source, 'preview-fixture.ts'), ...(questionsPath ? [questionsPath] : []), ...(process.env.PI_PREVIEW_STATUSLINE ? [path.resolve(process.env.PI_PREVIEW_STATUSLINE)] : [])],
+      extensions: [path.join(source, 'tests/fixtures/preview-fixture.ts'), ...(questionsPath ? [questionsPath] : []), ...(process.env.PI_PREVIEW_STATUSLINE ? [path.resolve(process.env.PI_PREVIEW_STATUSLINE)] : [])],
       hideThinkingBlock: true, theme: 'dark', compaction: { enabled: false }, terminal: { showImages: true },
     }));
     const manager = core.SessionManager.inMemory(cwd);

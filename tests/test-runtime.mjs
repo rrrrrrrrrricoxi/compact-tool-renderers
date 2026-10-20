@@ -16,8 +16,8 @@ const sourceOptions = { fsCache: false, alias: {
 export const jiti = createJiti(import.meta.url, { ...sourceOptions, moduleCache: false });
 const sharedJiti = createJiti(import.meta.url, { ...sourceOptions, moduleCache: true });
 // Use one module graph when testing extension-wide singleton ownership.
-export const loadSharedSource = file => sharedJiti.import(new URL(file, import.meta.url).pathname);
-export const loadSource = (file) => jiti.import(new URL(file, import.meta.url).pathname);
+export const loadSharedSource = file => sharedJiti.import(new URL(file, new URL('../src/', import.meta.url)).pathname);
+export const loadSource = (file) => jiti.import(new URL(file, new URL('../src/', import.meta.url)).pathname);
 export const loadAgent = (file) => import(pathToFileURL(path.join(agentRoot, 'dist', file)).href);
 export const tui = await import(pathToFileURL(path.join(tuiRoot, 'dist/index.js')).href);
 export const core = await loadAgent('index.js');

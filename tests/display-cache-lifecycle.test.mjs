@@ -3,7 +3,7 @@ import { loadSharedSource, themeModule } from './test-runtime.mjs';
 
 const { DisplayLineCache } = await loadSharedSource('./display-line-cache.ts');
 const { fillBackground } = await loadSharedSource('./display-card.ts');
-const { default: register } = await loadSharedSource('./index.ts');
+const { default: register } = await loadSharedSource('../index.ts');
 const nativeGet = DisplayLineCache.prototype.get;
 let formats = 0;
 DisplayLineCache.prototype.get = function(key, render) {

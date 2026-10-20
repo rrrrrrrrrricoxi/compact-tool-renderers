@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
-import { loadAgent, loadSharedSource as loadSource, core, runtime, themeModule, tui } from '../test-runtime.mjs';
+import { loadAgent, loadSharedSource as loadSource, core, runtime, themeModule, tui } from '../tests/test-runtime.mjs';
 
 const { ToolExecutionComponent } = await loadAgent('modes/interactive/components/tool-execution.js');
 const { createShellRenderers } = await loadAgent('core/tools/renderers/bash.js');
@@ -30,7 +30,7 @@ function options(argv) {
     else if (key === '--nested-calls') result.nestedCalls = Number(value);
     else if (key === '--width') result.width = Number(value);
     else if (key === '--help') {
-      console.log('Usage: node renderer/performance-review.mjs [--samples N] [--warm N] [--scales 8,48,160] [--long-chars N] [--nested-calls N] [--width N]');
+      console.log('Usage: node scripts/performance-review.mjs [--samples N] [--warm N] [--scales 8,48,160] [--long-chars N] [--nested-calls N] [--width N]');
       process.exit(0);
     } else throw new Error(`Unknown option: ${key}`);
   }
