@@ -4,6 +4,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { pathToFileURL } from 'node:url';
 import { loadAgent, loadSource, core, runtime, themeModule, tui } from '../test-runtime.mjs';
 
 const { ToolExecutionComponent } = await loadAgent('modes/interactive/components/tool-execution.js');
@@ -147,7 +148,7 @@ function scenarioForMode(modeName, enabled, scale) {
   return [cold, warm, workHeader, expanded];
 }
 
-function makeProjectionFixture(turnCount, enabled) {
+export function makeProjectionFixture(turnCount, enabled) {
   const manager = core.SessionManager.inMemory('/synthetic-work-strip-performance');
   const hooks = new Map(), bus = new Map(), commands = new Map(), inputs = new Set();
   const subscribe = (map, name, fn) => { const set = map.get(name) || new Set(); map.set(name, set); set.add(fn); return () => set.delete(fn); };
@@ -230,6 +231,11 @@ function longResultScenario(modeName, enabled) {
   return [collapsed, expanded];
 }
 
+export function disposePerformanceReview() {
+  mode.setEnabled(true); emit('session_shutdown'); disposeRenderer(); mode.dispose();
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
 const results = [];
 try {
   emit('session_start');
@@ -257,7 +263,6 @@ try {
     ],
   }, null, 2));
 } finally {
-  mode.setEnabled(true);
-  emit('session_shutdown');
-  disposeRenderer(); mode.dispose();
+  disposePerformanceReview();
+}
 }

@@ -1,4 +1,11 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { DisplayLineCache } from "./display-line-cache.ts";
+
+const lines = new DisplayLineCache();
+export const clearDisplayLineCache = () => lines.clear();
+// Key the actual styling bytes, not theme identity: themes can change in place.
+const memoLine = (kind: string, line: string, width: number, style: string, render: () => string) =>
+  line.length > 4096 ? render() : lines.get(JSON.stringify([kind, width, style, line]), render);
 
 export const cardPadding = (width: number) => width >= 4 ? 1 : 0;
 export const cardContentWidth = (width: number) => Math.max(1, width - cardPadding(width) * 2);
@@ -20,10 +27,14 @@ export function cardBlock(rows: string[], width: number, theme: any, background:
 /** The legacy card fill: keep the base surface after nested ANSI resets.
  * Extended color payloads are data, not SGR reset codes. */
 export function fillBackground(line: string, width: number, theme: any, background: string): string {
+  const base = typeof theme?.bg === "function" ? theme.bg(background, "").replace(/\x1b\[49m$/, "") : undefined;
+  return memoLine(base === undefined ? "pad" : "fill", line, width, base ?? "", () => paintBackground(line, width, base));
+}
+
+function paintBackground(line: string, width: number, base: string | undefined): string {
   const content = truncateToWidth(line, width, "");
   const padded = content + " ".repeat(Math.max(0, width - visibleWidth(content)));
-  if (typeof theme?.bg !== "function") return padded;
-  const base = theme.bg(background, "").replace(/\x1b\[49m$/, "");
+  if (base === undefined) return padded;
   const restored = padded.replace(/\x1b\[([0-9;:]*)m/g, (escape, parameters: string) => {
     const codes = parameters.split(";");
     let reset = false;
@@ -48,6 +59,6 @@ export function cardRow(line: string, width: number, theme: any, background: str
 
 /** Compact activity stays on the terminal surface; only keyboard selection is filled. */
 export function activityRow(line: string, width: number, theme: any, selected = false): string {
-  const row = " ".repeat(cardPadding(width)) + truncateToWidth(line, cardContentWidth(width), "");
+  const row = memoLine("activity", line, width, "", () => " ".repeat(cardPadding(width)) + truncateToWidth(line, cardContentWidth(width), ""));
   return selected ? fillBackground(row, width, theme, "selectedBg") : row;
 }

@@ -1,5 +1,6 @@
 import { AssistantMessageComponent, CustomMessageComponent, InteractiveMode, SkillInvocationMessageComponent, ToolExecutionComponent, UserMessageComponent, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, Spacer, matchesKey } from '@earendil-works/pi-tui';
+import { clearDisplayLineCache } from './display-card.ts';
 import { chainNativeMethod } from './native-method-chain.ts';
 import { ToolPane } from './modern-tool-pane.ts';
 import { recordedPaneHeight } from './modern-recorded-pane.ts';
@@ -101,7 +102,8 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
     return entry?.id;
   };
   const follow = () => host?.ui?.isFollowingOutput === true;
-  const current = () => [...turns.values()].at(-1);
+  let latestTurn: Turn | undefined;
+  const current = () => latestTurn;
   const monitor = monitorWorkStripSubagents(pi, () => { scheduleFinish(); redraw(); });
   const select = (item: WorkStripHeader | ToolPane, target: any) => {
     release(); selected = item; item.focused = true;
@@ -180,6 +182,7 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
         }
       }
     }
+    latestTurn = turn;
     for (const key of turns.keys()) if (!present.has(key)) turns.delete(key);
     for (const turn of turns.values()) turn.activity = turn.children.size > 0 || turn.rows.some(isWorkActivity);
     publishOwnership();
@@ -189,8 +192,7 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
     const starts = new Map<any, Turn>();
     for (const turn of turns.values()) if (turn.rows.length) {
       starts.set(turn.rows[0], turn);
-      const lastAssistant = [...turn.rows].reverse().find(r => r instanceof AssistantMessageComponent);
-      turn.final = turn.evidence ? turn.rows.find(r => r instanceof AssistantMessageComponent && idFor(r.lastMessage) === turn.evidence!.finalId) : lastAssistant;
+      turn.final = turn.evidence ? turn.rows.find(r => r instanceof AssistantMessageComponent && idFor(r.lastMessage) === turn.evidence!.finalId) : turn.rows.findLast(r => r instanceof AssistantMessageComponent);
       // Replayed terminal replies can use their native turn boundary. Live
       // replies wait for settlement; a text-bearing tool call is still work.
       const settled = !!turn.evidence || (turn.startedAt ? turn.settled && (current() !== turn || !running) : true);
@@ -214,10 +216,13 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
         const h = turn.header, saved = turn.evidence;
         h.theme = ctx?.ui?.theme;
         h.state = turn.completedAt ? turn.noFinal ? 'stopped' : turn.outcome || 'completed' : turn.startedAt ? turn.outcome === 'interrupted' ? 'interrupted' : running && current() === turn ? 'working' : 'waiting' : saved?.outcome || 'history';
-        const lastAssistant = [...turn.rows].reverse().find(r => r instanceof AssistantMessageComponent);
-        h.summary = workSummary(visibleText(lastAssistant?.lastMessage));
-        const lastOperation = [...turn.rows].reverse().find(r => r instanceof ToolExecutionComponent || r instanceof AssistantMessageComponent && visibleText(r.lastMessage));
-        if (lastOperation instanceof ToolExecutionComponent) h.summary = actionIntent(lastOperation.toolName, lastOperation.args);
+        // Completed/history titles do not display a summary. Live titles follow
+        // the last operation without copying and reversing the turn twice.
+        if (h.state !== 'completed' && h.state !== 'history') {
+          const operation = turn.rows.findLast(r => r instanceof ToolExecutionComponent || r instanceof AssistantMessageComponent && visibleText(r.lastMessage));
+          const assistant = turn.rows.findLast(r => r instanceof AssistantMessageComponent);
+          h.summary = operation instanceof ToolExecutionComponent ? actionIntent(operation.toolName, operation.args) : workSummary(visibleText(assistant?.lastMessage));
+        }
         h.elapsedMs = saved ? saved.endedAt - saved.startedAt : turn.startedAt ? (turn.completedAt ?? Date.now()) - turn.startedAt : 0;
         h.finish(follow());
         output.push(h);
@@ -297,7 +302,7 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
   const reset = (_event: any, context: any) => {
     release(); input?.(); input = undefined; ctx = context.mode === 'tui' ? context : undefined;
     running = false; pendingStart = undefined;
-    turns.clear(); hooks.clear(); liveStarts = new WeakMap(); readRecords(); monitor.reset();
+    turns.clear(); latestTurn = undefined; clearDisplayLineCache(); hooks.clear(); liveStarts = new WeakMap(); readRecords(); monitor.reset();
     if (timer) clearTimeout(timer); timer = undefined;
     if (ticker) clearInterval(ticker); ticker = undefined;
     if (ctx) {
@@ -407,7 +412,7 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: Mode, version = VERSIO
     monitor.dispose(); subscriptions.forEach(off => off?.());
     if (attached) delete attached[projectedChildren];
     detachChat?.(); detachEvent(); detachReplay(); detachAdd();
-    publishOwnership(true); redraw(); turns.clear(); hooks.clear(); ctx = undefined;
+    publishOwnership(true); redraw(); turns.clear(); latestTurn = undefined; clearDisplayLineCache(); hooks.clear(); ctx = undefined;
     if (shared[owner] === dispose) delete shared[owner];
   };
   subscriptions.push(pi.on('session_shutdown', dispose));
