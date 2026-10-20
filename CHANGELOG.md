@@ -1,10 +1,10 @@
 # Release notes
 
-## 2.5.1 — Public package preparation
+## 2.5.1 — Public npm package
 
 - Add npm publication metadata and the Pi gallery discovery keyword.
 - Document standalone Git installation, removal, compatibility, and quick controls.
-- Keep renderer behavior identical to 2.5.0. npm publication remains pending publisher authentication.
+- Keep renderer behavior identical to 2.5.0.
 
 ## 2.5.0 — Clearer conversation hierarchy
 

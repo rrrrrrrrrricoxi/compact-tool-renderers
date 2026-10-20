@@ -13,20 +13,28 @@ This is a **display extension**, not a context-compaction tool. It does not exec
 
 **Supported runtime: Pi 1.3.0, Node.js 22.19.0 or later.** Version-sensitive adapters retain native rendering on unsupported versions. Other Pi versions are not certified.
 
-The public Git release is available now:
+Install the pinned npm release:
 
 ```sh
-pi install git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.0
+pi install npm:pi-compact-renderer@2.5.1
+```
+
+Or install the same release from Git:
+
+```sh
+pi install git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.1
 ```
 
 Restart Pi, or run `/reload` in an idle session after its background work finishes. Open `/inspect` to expand a block. Use `/compact-rendering off` to return to native display.
 
-The npm package and Pi gallery listing are being prepared. Until publication is confirmed, use the Git command above. Pi Config is not required. If Pi Config already manages this renderer, update through that configuration instead of installing a second copy. Avoid loading multiple extensions that replace the same transcript components; interoperability with other renderers is not established.
+Pi Config is not required. If Pi Config already manages this renderer, update through that configuration instead of installing a second copy. Avoid loading multiple extensions that replace the same transcript components; interoperability with other renderers is not established.
 
-To remove a Git installation:
+Remove the source you installed:
 
 ```sh
-pi remove git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.0
+pi remove npm:pi-compact-renderer@2.5.1
+# Or, for the Git installation:
+pi remove git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.1
 ```
 
 ## Quick controls
