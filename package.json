@@ -1,8 +1,8 @@
 {
   "name": "pi-compact-renderer",
-  "version": "2.5.3",
+  "version": "3.0.0",
   "type": "module",
-  "description": "Compact Pi transcripts with collapsible work strips, grouped tool calls, prompt folding, and readable final replies",
+  "description": "Pi Fold: readable agent transcripts with collapsible work, inspectable details, and clear final replies",
   "license": "MIT",
   "repository": {
     "type": "git",

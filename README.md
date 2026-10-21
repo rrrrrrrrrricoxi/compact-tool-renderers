@@ -1,6 +1,6 @@
-# Pi compact renderer
+# Pi Fold
 
-Less scrolling. More room for the answer.
+Follow the work. Unfold the details.
 
 A Pi extension that keeps progress visible while the agent works, then folds the steps into a **Worked for …** strip. The final reply stays in view, and you can expand the strip whenever you want the details.
 
@@ -15,7 +15,7 @@ Replies without tool or subagent activity skip the work strip.
 Tested with **Pi 1.3.0** and **Node.js 22.19.0 or later**. Other Pi versions are not verified; version-sensitive features fall back to native rendering.
 
 ```sh
-pi install npm:pi-compact-renderer@2.5.3
+pi install npm:pi-compact-renderer@3.0.0
 ```
 
 Restart Pi, or run `/reload` when the session and its background work are idle.
@@ -26,13 +26,19 @@ If a configuration manager already installs this extension, update it there to a
 
 | To… | Use… |
 | --- | --- |
+| Open the Pi Fold menu | `/fold` |
+| Enable Pi Fold | `/fold on` |
 | Open a block | Click its arrow, or use `/inspect` |
 | Return to typing | Esc |
-| Collapse work sections | `/work collapse` or Ctrl+Alt+W |
-| Expand work sections | `/work expand` |
-| Turn compact rendering off | `/compact-rendering off` |
+| Collapse work sections | `/fold collapse` or Ctrl+Alt+W |
+| Expand work sections | `/fold expand` |
+| Show native Pi rendering | `/fold off` |
 
-Active and waiting work stays open. To disable the collapse shortcut, use `/work shortcut off`.
+Use `/fold status` to check the mode. `/fold toggle` switches between Pi Fold and native display.
+
+Active and waiting work stays open. To disable the collapse shortcut, use `/fold shortcut off`.
+
+Version 3 replaces `/compact-rendering` and `/work` with `/fold`; the old commands are removed. The npm install name remains `pi-compact-renderer`.
 
 ## A few things to know
 
@@ -59,7 +65,7 @@ Run `npm test`, `npm run preview:work`, or `npm run benchmark`. See the [rendere
 ## Uninstall
 
 ```sh
-pi remove npm:pi-compact-renderer@2.5.3
+pi remove npm:pi-compact-renderer@3.0.0
 ```
 
 [MIT license](LICENSE) · [Report an issue](https://github.com/rrrrrrrrrricoxi/compact-tool-renderers/issues)

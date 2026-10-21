@@ -1,5 +1,11 @@
 # Release notes
 
+## 3.0.0 — Pi Fold commands
+
+- Rename the public interface to Pi Fold and combine display mode, collapse/expand, and shortcut controls under `/fold`.
+- Remove `/compact-rendering` and `/work` without aliases. Use `/fold on|off|toggle|status`, `/fold collapse|expand`, and `/fold shortcut on|off`. `/inspect` and Ctrl+Alt+W remain available.
+- Use neutral machine labels in the README and benchmark report. The npm package name remains `pi-compact-renderer`.
+
 ## 2.5.3 — Stable live alignment and clearer source layout
 
 - Keep live work commentary indented until the turn settles; place confirmed final replies at the main margin.

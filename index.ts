@@ -10,6 +10,7 @@ import { registerModernSubagentMessages } from './src/modern-subagent-messages.t
 import { registerInspection } from './src/inspection.ts';
 import { registerPermissionPresentation } from './src/permission-presentation.ts';
 import { registerWorkStrip } from './src/work-strip.ts';
+import { registerFoldCommand } from './src/fold-command.ts';
 
 export default function compactRenderer(pi: ExtensionAPI): void {
   clearDisplayLineCache();
@@ -40,34 +41,13 @@ export default function compactRenderer(pi: ExtensionAPI): void {
     disposers.push(registerModernWorkflows(pi, mode));
     disposers.push(registerPermissionPresentation(pi, mode));
     disposers.push(registerModernSubagentMessages(pi, mode));
-    disposers.push(registerWorkStrip(pi, mode));
+    const work = registerWorkStrip(pi, mode);
+    disposers.push(work.dispose);
+    disposers.push(registerFoldCommand(pi, mode, work));
     disposers.push(registerInspection(pi, mode));
   } catch (error) {
     dispose();
     throw error;
   }
   pi.on('session_shutdown', dispose);
-  pi.registerCommand('compact-rendering', {
-    description: 'Choose compact display or set on/off/toggle/status',
-    async handler(args, ctx) {
-      let choice = args.trim().toLowerCase();
-      if (!choice && ctx.hasUI) {
-        const current = mode.isEnabled() ? 'on' : 'off';
-        const other = current === 'on' ? 'off' : 'on';
-        const choices = [current, other].map(value => `${value}${value === current ? ' (current)' : ''} — ${value === 'on' ? 'group completed actions and recorded thinking; expand inline' : 'native display'}`);
-        const selected = await ctx.ui.select('Compact rendering — this session', choices);
-        if (selected === undefined || selected === choices[0]) return;
-        if (selected !== choices[1]) return;
-        choice = other;
-      }
-      if (!['', 'status', 'on', 'off', 'toggle'].includes(choice)) {
-        ctx.ui.notify('Use /compact-rendering [on|off|toggle|status]', 'info');
-        return;
-      }
-      if (choice === 'on' || choice === 'off' || choice === 'toggle') {
-        mode.setEnabled(choice === 'toggle' ? !mode.isEnabled() : choice === 'on');
-      }
-      ctx.ui.notify(`Compact rendering ${mode.isEnabled() ? 'on' : 'off'}`, 'info');
-    },
-  });
 }

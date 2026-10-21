@@ -10,6 +10,7 @@ required.push('reload-lifecycle.test.mjs', 'ordinary-prompts.test.mjs', 'work-st
 required.push('modern-skill-prompts.test.mjs');
 required.push('display-line-cache.test.mjs');
 required.push('display-cache-lifecycle.test.mjs');
+required.push('fold-command.test.mjs');
 required.push('mixed-thinking.test.mjs', 'work-strip.test.mjs', 'work-strip-subagents.test.mjs', 'work-strip-preview.test.mjs', 'work-strip-spacing.test.mjs');
 for (const name of required) {
   if (!fs.existsSync(path.join(directory, name))) throw new Error(`Missing required regression suite: ${name}`);

@@ -25,7 +25,7 @@ function fixture() {
     appendEntry: (kind, data) => manager.appendCustomEntry(kind, data),
   };
   const mode = createDisplayMode();
-  const dispose = registerWorkStrip(pi, mode);
+  const dispose = registerWorkStrip(pi, mode).dispose;
   const ui = { isFollowingOutput: true, requestRender() {}, theme: themeModule.theme };
   const ctx = { mode: 'tui', hasUI: true, ui, sessionManager: manager, isIdle: () => true };
   const display = {

@@ -56,13 +56,20 @@ export function keepWorkRowVisible(row: any, completed: boolean): boolean {
   return !(row instanceof Spacer);
 }
 
+export interface WorkStripControls {
+  dispose(): void;
+  setExpanded(open: boolean): boolean;
+  isShortcutEnabled(): boolean;
+  setShortcutEnabled(enabled: boolean): void;
+}
+
 /** Pi 1.3 display seam. The native tree, transcript, execution and Fleet remain
  * authoritative. Only chatContainer's rendered child list is projected. */
-export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version = VERSION): () => void {
+export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version = VERSION): WorkStripControls {
   const owner = Symbol.for('compact-renderer:work-registration:v1'), shared = globalThis as any;
   shared[owner]?.();
   const proto = InteractiveMode.prototype as any;
-  if (version !== '1.3.0' || !['addMessageToChat', 'handleEvent', 'renderSessionItems'].every(k => typeof proto[k] === 'function')) return () => {};
+  if (version !== '1.3.0' || !['addMessageToChat', 'handleEvent', 'renderSessionItems'].every(k => typeof proto[k] === 'function')) return { dispose() {}, setExpanded: () => false, isShortcutEnabled: () => false, setShortcutEnabled() {} };
   let disposed = false, ctx: any, host: any, attached: any, detachChat: (() => void) | undefined;
   let turns = new Map<any, Turn>(), sources = new WeakMap<any, any>(), hooks = new Map<any, ToolPane>();
   let selected: WorkStripHeader | ToolPane | undefined, input: (() => void) | undefined, timer: ReturnType<typeof setTimeout> | undefined;
@@ -368,9 +375,9 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
   ];
   // Use native shortcut dispatch so dialogs and editor input keep their owners.
   // The command remains available on terminals that do not send modified keys.
-  let shortcut = 'on';
+  let shortcut = true;
   const setAll = (open: boolean) => {
-    if (disposed || !ctx || !mode.isEnabled() || !attached) return;
+    if (disposed || !ctx || !mode.isEnabled() || !attached) return false;
     project(attached.children);
     release();
     for (const turn of turns.values()) {
@@ -379,32 +386,11 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
     }
     pi.events.emit('compact-renderer:inspection-ended:v1', {});
     redraw();
+    return true;
   };
-  pi.registerCommand?.('work', {
-    description: 'Collapse or expand work sections; choose a session shortcut',
-    async handler(args: string, context: any) {
-      if (disposed || !context.hasUI || !ctx || !mode.isEnabled()) return;
-      let action = args.trim().toLowerCase();
-      if (!action) {
-        const choices = ['Collapse all work', 'Expand all work', 'Choose shortcut'];
-        const choice = await context.ui.select('Work sections', choices);
-        action = choice === choices[0] ? 'collapse' : choice === choices[1] ? 'expand' : choice === choices[2] ? 'shortcut' : '';
-      }
-      if (action === 'collapse' || action === 'expand') { setAll(action === 'expand'); return; }
-      if (action === 'shortcut' || action.startsWith('shortcut ')) {
-        let key = action.slice(8).trim();
-        const options = ['on', 'off'];
-        if (!key) key = await context.ui.select(`Ctrl+Alt+W — ${shortcut}`, options) || '';
-        if (options.includes(key)) { shortcut = key; context.ui.notify(`Collapse work shortcut: ${shortcut}`, 'info'); }
-        else if (key) context.ui.notify('Use /work shortcut [on|off]', 'info');
-        return;
-      }
-      if (action) context.ui.notify('Use /work [collapse|expand|shortcut]', 'info');
-    },
-  });
   pi.registerShortcut?.('ctrl+alt+w', {
-    description: 'Collapse work sections (enabled with /work shortcut)',
-    handler: () => { if (shortcut === 'on') setAll(false); },
+    description: 'Collapse work sections (enabled with /fold shortcut)',
+    handler: () => { if (shortcut) setAll(false); },
   });
   const dispose = () => {
     if (disposed) return; disposed = true;
@@ -417,5 +403,10 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
   };
   subscriptions.push(pi.on('session_shutdown', dispose));
   shared[owner] = dispose;
-  return dispose;
+  return {
+    dispose,
+    setExpanded: setAll,
+    isShortcutEnabled: () => shortcut,
+    setShortcutEnabled: enabled => { if (!disposed) shortcut = enabled; },
+  };
 }

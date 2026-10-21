@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { core, loadSource, themeModule, tui, stripAnsi } from './test-runtime.mjs';
 
 const { registerWorkStrip } = await loadSource('./work-strip.ts');
+const { registerFoldCommand } = await loadSource('./fold-command.ts');
 const { createDisplayMode } = await loadSource('./display-mode.ts');
 const { projectedChildren, workEvidenceType, recordedWorkEvidence } = await loadSource('./work-strip-view.ts');
 assert.equal(core.VERSION, '1.3.0', 'hierarchy integration runs against the supported native runtime');
@@ -21,7 +22,8 @@ function fixture() {
     registerShortcut: (name, definition) => shortcuts.set(name, definition),
   };
   pi.events.on('compact-renderer:work-strip:v1', value => { ownership = value.ownsExecutionStatus; });
-  const mode = createDisplayMode(), dispose = registerWorkStrip(pi, mode);
+  const mode = createDisplayMode(), workControls = registerWorkStrip(pi, mode), dispose = workControls.dispose;
+  registerFoldCommand(pi, mode, workControls);
   const ui = {
     isFollowingOutput: true, theme: themeModule.theme, requestRender() {},
     onTerminalInput(fn) { inputs.add(fn); return () => inputs.delete(fn); },
@@ -59,7 +61,7 @@ function fixture() {
     return { rows: display.chatContainer[projectedChildren], lines: rendered.map(stripAnsi), text: stripAnsi(rendered.join('\n')) };
   };
   const choices = () => { const items = []; pi.events.emit('compact-renderer:inspect:v1', { add: item => items.push(item) }); return items; };
-  const work = args => commands.get('work').handler(args, ctx);
+  const work = args => commands.get('fold').handler(args, ctx);
   return { manager, mode, dispose, display, event, add, assistant, tool, save, paint, choices, work, shortcuts, notices, get ownership() { return ownership; } };
 }
 
@@ -84,7 +86,7 @@ for (const saved of [false, true]) for (const thought of ['none', 'separate', 'm
     assert.ok(!projected.rows.some(row => row.constructor.name === 'WorkStripHeader'), 'response and thinking alone receive no work strip');
     assert.equal(f.choices().filter(item => item.kind === 'Work').length, 0, 'nonactivity does not enter Work inspection');
     assert.equal(f.ownership, false, 'nonactivity leaves execution-status ownership native');
-    await f.work('collapse'); assert.deepEqual(f.paint().lines, padded, '/work cannot fold a direct response');
+    await f.work('collapse'); assert.deepEqual(f.paint().lines, padded, '/fold cannot fold a direct response');
   } finally { f.dispose(); f.mode.dispose(); }
 }
 

@@ -16,7 +16,7 @@ const pi = {
 pi.events.on('compact-renderer:work-strip:v1', value => { ownership = value.ownsExecutionStatus; });
 pi.events.on('subagents:rpc:v1:request', request => pi.events.emit(`subagents:rpc:v1:reply:${request.requestId}`, {version:1, requestId:request.requestId, method:'status', success:true, data:{fleet:{totalActive:childrenActive}}}));
 const mode = createDisplayMode();
-let dispose = registerWorkStrip(pi, mode);
+let dispose = registerWorkStrip(pi, mode).dispose;
 const ui = { isFollowingOutput: true, requestRender() {}, theme: themeModule.theme, onTerminalInput(fn) { inputs.add(fn); return () => inputs.delete(fn); } };
 const ctx = {mode:'tui', hasUI:true, ui, get sessionManager(){return manager;}, isIdle:()=>true};
 const event = (name, value={}) => { for (const fn of [...(hooks.get(name) || [])]) fn(value, ctx); };
@@ -125,7 +125,7 @@ try {
   dispose(); assert.equal(paint(),native); assert.equal(ownership,false);
   assert.equal(display.chatContainer[projectedChildren],undefined);
   assert.equal(inputs.size,0);
-  dispose=registerWorkStrip(pi,mode); event('session_start');
+  dispose=registerWorkStrip(pi,mode).dispose; event('session_start');
   // Fresh adapter mounts on the first replay callback; not stale rows from previous session.
   core.InteractiveMode.prototype.addMessageToChat.call(display,{role:'custom',display:false});
   assert.match(paint(),/FINAL_VISIBLE_RESULT/);

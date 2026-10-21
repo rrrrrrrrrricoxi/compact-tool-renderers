@@ -21,7 +21,7 @@ The companion Pi Statusline change temporarily masks only execution state and el
 - [x] Concise permission presentation, exact Details, Allow once/Deny, unchanged policies.
 - [x] Collapsed recorded thinking groups across tools, reset at visible replies/questions/errors; bounded expansion and native fallback.
 - [x] Display-only prompt-template collapse through public markdown transformer.
-- [x] Native /compact-rendering selector and typed controls; no model/history mutations.
+- [x] Native /fold selector and typed controls; no model/history mutations.
 - [x] Native lifecycle regression coverage: redraw/re-registration, stock component ownership, running-shell timer disposal, toggles, refresh/reload/resume/switch/compaction.
 - [x] Unicode/narrow layouts, bounded painting, focus/scroll and native fullscreen input checks. Human terminal appearance acceptance remains below.
 - [x] Publish standalone version and pin it in Pi Config; remove competing embedded implementation.

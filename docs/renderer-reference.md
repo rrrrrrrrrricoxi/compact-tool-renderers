@@ -49,7 +49,7 @@ Explicit skill invocations use one blue prompt card. A muted, expandable `/skill
 
 Completion is saved as a display-only custom entry, separate from original messages and model context. Resume and reload restore validated completion records. Older turns without this evidence remain open under **Work details**, with no invented duration. Unsupported runtimes retain native rendering.
 
-Run `/work collapse` or press Ctrl+Alt+W to collapse completed and historical work sections. Active or waiting work stays visible. `/work expand` opens all sections. `/work shortcut off` disables the session shortcut; `/work` opens these choices.
+Run `/fold collapse` or press Ctrl+Alt+W to collapse completed and historical work sections. Active or waiting work stays visible. `/fold expand` opens all sections. `/fold shortcut off` disables the session shortcut; `/fold` opens these choices.
 
 When the current turn has a supported work strip, Pi Statusline can omit duplicate execution state and elapsed time through the `compact-renderer:work-strip:v1` event. Its Execution display preference supports Automatic (follow strip ownership), Show (honor enabled execution fields even with a strip), and Hide (omit both state and elapsed time). Other footer fields and native Fleet controls remain unchanged. Compact-off and renderer disposal release this temporary ownership without changing saved preferences.
 
@@ -59,7 +59,7 @@ Run `PI_RUNTIME=/path/to/runtime node scripts/preview-work-strip.mjs`. Optionall
 
 ## Controls
 
-`/compact-rendering` opens a native selector. Typed `on`, `off`, `toggle`, and `status` remain available. This display mode is session-local and starts enabled.
+`/fold` opens the Pi Fold menu for display mode, collapse/expand, and shortcut settings. Typed `on`, `off`, `toggle`, `status`, `collapse`, `expand`, and `shortcut on|off` are available. Version 3 removes the old `/compact-rendering` and `/work` commands without aliases. This display mode is session-local and starts enabled.
 
 `/inspect` opens a native picker for tool groups, subagent notices, thinking groups, and prompt cards. Selection brings the block into view, highlights its header and selected item, and shows an inspection status in the footer.
 
