@@ -1,10 +1,11 @@
-import { matchesKey, truncateToWidth, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
+import { matchesKey, truncateToWidth, visibleWidth, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
+import { suppressRepeatedSummary } from "./recorded-summary.ts";
 import { richTextRows, type TextFormat } from "./modern-rich-text.ts";
 import { activityRow, cardContentWidth } from "./display-card.ts";
 
 type RowKind = "section" | "field" | "answer";
 export type PaneContent = string | { text: string; kind?: RowKind; indent?: number; label?: string } & TextFormat;
-export type PaneAction = { id: string; label: string; sections: () => Iterable<PaneContent>; details?: () => Iterable<PaneContent> };
+export type PaneAction = { id: string; label: string; repeatedSummary?: string; sections: () => Iterable<PaneContent>; details?: () => Iterable<PaneContent> };
 // Render only visited text chunks. Never split/highlight an entire result to paint a viewport.
 export function* textRows(text: string, width: number): Generator<string> {
   yield* richTextRows(text, width);
@@ -21,8 +22,6 @@ export class ToolPane {
   headingTone = "mdLink";
   itemName = "action";
   directContent = false;
-  // Narrative blocks separate each expanded body from its disclosure heading.
-  separateContent = false;
   selected = 0;
   private anchor = 0;
   offset = 0;
@@ -45,6 +44,7 @@ export class ToolPane {
   constructor(public actions: PaneAction[], public title: string, private height = () => 12) {}
   private get directDetails() { return this.directContent || this.itemName === "action" && this.actions.length === 1; }
   reset() { this.anchor = Math.min(this.anchor, Math.max(0, this.actions.length - 1)); this.key = ""; this.rows = []; this.iterator = undefined; this.done = false; this.actionRows.clear(); this.detailsRows.clear(); this.rowKinds.clear(); }
+  collapse() { this.open = false; this.focused = false; this.selected = 0; this.anchor = 0; this.offset = 0; this.expanded.clear(); this.detailsExpanded.clear(); this.detailsFocused = false; this.reset(); }
   releaseInspection() { if (this.detailsFocused) { this.detailsFocused = false; this.offset = 0; this.reset(); } }
   handle(data: string): boolean {
     if (matchesKey(data, "home")) { this.open = true; this.selected = 0; this.detailsFocused = false; this.anchor = 0; this.offset = 0; this.reset(); return true; }
@@ -89,14 +89,16 @@ export class ToolPane {
       }
       const detailsIndent = this.directDetails ? indent : width >= 12 ? " ".repeat(Math.min(prefix.length, width - 1)) : "";
       if (this.directDetails || this.expanded.has(action.id)) {
-        if (this.separateContent) yield "";
-        const sectionRows = function* (this: ToolPane, sections: Iterable<PaneContent>) {
+        const sectionRows = function* (this: ToolPane, sections: Iterable<PaneContent>, summary?: string) {
+          let firstSection = true;
           for (const section of sections) {
             const content = typeof section === "string" ? { text: section } : section;
             const indent = detailsIndent + " ".repeat(Math.min(content.indent || 0, Math.max(0, width - detailsIndent.length - 1)));
             const label = content.label ? `${content.label} ` : "";
+            const text = firstSection && summary ? suppressRepeatedSummary(content.text, summary) : content.text;
+            firstSection = false;
             let first = true;
-            for (const row of richTextRows(content.text, Math.max(1, width - indent.length - label.length), content)) {
+            for (const row of richTextRows(text, Math.max(1, width - indent.length - label.length), content)) {
               yield { text: indent + (first && label ? this.theme ? this.theme.fg("muted", label) : label : " ".repeat(label.length)) + row, kind: content.kind };
               first = false;
             }
@@ -105,15 +107,17 @@ export class ToolPane {
         const emitRows = function* (this: ToolPane, rows: Iterable<{ text: string; kind?: RowKind }>) {
           for (const row of rows) { if (row.kind) this.rowKinds.set(this.rows.length, row.kind); yield row.text; }
         }.bind(this);
+        const fullLabel = this.directDetails ? `▾ ${this.expandedTitle ?? this.title}${this.focused ? " · focused" : ""}` : prefix + action.label;
+        const summary = visibleWidth(fullLabel) <= width ? action.repeatedSummary : undefined;
         if (this.detailsFocused && index === this.selected) {
           // Keep short output inline; probe at most one viewport before anchoring at Details.
-          const primary = sectionRows(action.sections()), preview = [];
+          const primary = sectionRows(action.sections(), summary), preview = [];
           const budget = Math.max(1, Math.min(20, this.height()) - (this.focused ? 2 : 1) - (this.directDetails ? 0 : 1) - 1);
           let complete = false;
           while (preview.length <= budget) { const row = primary.next(); if (row.done) { complete = true; break; } preview.push(row.value); }
           if (complete) yield* emitRows(preview);
           else { this.contentAnchoredAbove = true; yield detailsIndent + (this.theme ? this.theme.fg("dim", "content above ↑") : "content above ↑"); }
-        } else yield* emitRows(sectionRows(action.sections()));
+        } else yield* emitRows(sectionRows(action.sections(), summary));
         if (action.details) {
           this.detailsRows.set(this.rows.length, index);
           yield detailsIndent + `${this.detailsExpanded.has(action.id) ? "▾" : "▸"} Details`;
@@ -134,7 +138,7 @@ export class ToolPane {
     const header = this.styleHeader(`${this.open ? "▾" : "▸"} ${this.open ? this.expandedTitle ?? this.title : this.title}${this.focused ? " · focused" : ""}`);
     if (!this.open) { this.lastHeight = 1; this.lastBodyHeight = 0; return [paint(truncateToWidth(header, width), this.focused && !this.detailsFocused)]; }
     const height = Math.max(5, Math.min(20, this.height()));
-    const key = `${width}:${this.directDetails}:${this.separateContent}:${this.anchor}:${this.selected}:${[...this.expanded].join("|")}:${[...this.detailsExpanded].join("|")}:${this.detailsFocused}`;
+    const key = `${width}:${this.focused}:${this.expandedTitle ?? this.title}:${this.directDetails}:${this.anchor}:${this.selected}:${[...this.expanded].join("|")}:${[...this.detailsExpanded].join("|")}:${this.detailsFocused}`;
     if (key !== this.key) { this.reset(); this.key = key; this.iterator = this.body(width); }
     let bodyHeight = height - (this.focused ? 2 : 1);
     // Clamp a seek to one viewport beyond visited content; a key press cannot scan unbounded data.

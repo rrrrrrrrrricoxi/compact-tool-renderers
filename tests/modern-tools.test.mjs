@@ -628,21 +628,47 @@ assert.match(stripAnsi(singleRound.render(80).join('\n')), /1\. Recorded first l
 assert.doesNotMatch(stripAnsi(singleRound.render(80).join('\n')), /Full recorded round/);
 singleRound.handle('\r');
 assert.match(stripAnsi(singleRound.render(80).join('\n')), /Full recorded round/, 'single thinking rounds keep independent expansion');
-// Narrative gaps are viewport rows, so later disclosure hit targets keep their coordinates.
+// Thinking uses the same compact expansion and disclosure coordinates as tools.
 const narrative = new ToolPane([
   { id: 'first', label: 'First round', sections: () => ['First body'] },
   { id: 'second', label: 'Second round', sections: () => ['Second body'] },
 ], 'Thinking', () => 12);
-narrative.itemName = 'round'; narrative.separateContent = true; narrative.open = true; narrative.expanded.add('first');
+narrative.itemName = 'round'; narrative.open = true; narrative.expanded.add('first');
 const narrativeRows = narrative.render(80).map(stripAnsi);
-assert.equal(narrativeRows[2].trim(), '', 'expanded narrative body has one leading gap');
-assert.match(narrativeRows[3], /First body/);
+assert.match(narrativeRows[2], /First body/, 'expanded round body immediately follows its heading');
 const clickNarrative = y => narrative.handleMouse({ type: 'click', button: 'left', x: 3, y });
 clickNarrative(2);
-assert.deepEqual([...narrative.expanded], ['first'], 'clicking the gap does not toggle an action');
+assert.deepEqual([...narrative.expanded], ['first'], 'clicking the body does not toggle an action');
 clickNarrative(narrativeRows.findIndex(line => line.includes('Second round')));
-assert.ok(narrative.expanded.has('second'), 'later round disclosure uses its shifted rendered row');
+assert.ok(narrative.expanded.has('second'), 'later round disclosure uses its compact rendered row');
 assert.match(narrative.render(80).map(stripAnsi).join('\n'), /Second body/);
+narrative.detailsExpanded.add('first'); narrative.offset = 4; narrative.focused = true;
+narrative.collapse();
+assert.equal(narrative.open, false); assert.equal(narrative.focused, false); assert.equal(narrative.offset, 0);
+assert.equal(narrative.expanded.size, 0); assert.equal(narrative.detailsExpanded.size, 0);
+narrative.open = true;
+assert.doesNotMatch(narrative.render(80).map(stripAnsi).join('\n'), /First body|Second body/, 'explicit reset reopens with all actions closed');
+const { suppressRepeatedSummary } = await loadSource('./recorded-summary.ts');
+const originalSummary = '# **Check inputs**\n\nFirst paragraph.\n\nSecond paragraph.';
+assert.equal(suppressRepeatedSummary(originalSummary, 'Check inputs'), 'First paragraph.\n\nSecond paragraph.');
+assert.equal(originalSummary, '# **Check inputs**\n\nFirst paragraph.\n\nSecond paragraph.', 'presentation helper preserves recorded source');
+for (const [source, summary] of [
+  ['Different title\nBody', 'Check inputs'],
+  ['Check inputs. More content in this paragraph.\nBody', 'Check inputs.'],
+  ['# Check inputs\n\n', 'Check inputs'],
+  ['A long complete title\nBody', 'A long…'],
+  ['Exact title\n' + '\n'.repeat(100000) + 'Distant body', 'Exact title'],
+]) assert.equal(suppressRepeatedSummary(source, summary), source, 'nonmatch, paragraph prefix, sole content and clipped summary stay exact');
+const summaryPane = new ToolPane([{ id: 'summary', label: 'Exact title', repeatedSummary: 'Exact title', sections: () => [{text: '# Exact title\n\nVisible body\n\nNext paragraph', format: 'markdown'}] }], 'Thinking · Exact title');
+summaryPane.directContent = true; summaryPane.open = true;
+assert.doesNotMatch(summaryPane.render(80).map(stripAnsi).slice(1).join('\n'), /Exact title/, 'full repeated heading is omitted from compact body');
+assert.match(summaryPane.render(12).map(stripAnsi).slice(1).join('\n'), /Exact/, 'clipped display summary keeps the recorded heading in the body');
+summaryPane.focused = false;
+assert.doesNotMatch(summaryPane.render(30).map(stripAnsi).slice(1).join('\n'), /Exact title/);
+summaryPane.focused = true;
+assert.match(summaryPane.render(30).map(stripAnsi).slice(1).join('\n'), /Exact title/, 'focus suffix clipping restores the repeated heading after a cached render');
+summaryPane.focused = false;
+assert.doesNotMatch(summaryPane.render(30).map(stripAnsi).slice(1).join('\n'), /Exact title/, 'removing focus updates suppression without a width change');
 const exactValues = { command: 'printf "hello"\nnext exact line', options: { paths: ['a', 'b'], empty: '', nullable: null } };
 const valueRows = [...recordedValues(exactValues)];
 assert.ok(valueRows.some(row => row.text === exactValues.command), 'multiline string values remain exact');

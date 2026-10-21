@@ -125,12 +125,19 @@ export class ModernThinkingGroups {
       const sources = record.message.content.filter((block: any) => block.type === "thinking" && typeof block.thinking === "string" && block.thinking.trim()).map((block: any) => block.thinking);
       if (!record.sources || sources.length !== record.sources.length || sources.some((source: string, index: number) => source !== record.sources![index])) {
         record.sources = sources;
-        record.action = { id: String(record.id), label: recordedThinkingLabel(sources), sections: () => record.sources!.map(text => ({ text, format: "markdown" as const })) };
+        record.action = { id: String(record.id), label: recordedThinkingLabel(sources), repeatedSummary: recordedThinkingLabel(sources), sections: () => record.sources!.map(text => ({ text, format: "markdown" as const })) };
         changed = true;
       }
       return record.action!;
     });
     if (changed) group.pane.reset();
+  }
+  disclosures(request: any) {
+    this.regroup();
+    for (const group of this.groups) if (this.active(group)) request?.add?.((component: any) => group.members.some(record => record.component === component), group.pane.open, () => {
+      if (this.selected === group) { this.selected = undefined; this.focused = false; }
+      group.pane.collapse();
+    });
   }
   inspectionChoices() {
     this.regroup();
@@ -153,7 +160,6 @@ export class ModernThinkingGroups {
     this.sources(group);
     pane.title = group.members.length === 1 ? `Thinking · ${pane.actions[0]?.label || "Recorded thinking"}` : `Thinking · ${group.members.length} rounds`;
     pane.directContent = group.members.length === 1;
-    pane.separateContent = true;
     pane.focused = this.focused && this.selected === group;
     pane.theme = theme; pane.headingTone = "thinkingText"; pane.itemName = "round";
     pane.styleHeader = text => theme.fg("thinkingText", text);
@@ -220,6 +226,7 @@ export function registerModernThinking(pi: ExtensionAPI, mode: DisplayMode): () 
   for (const [event, phase] of [["message_start", "start"], ["message_update", "update"], ["message_end", "end"]] as const) subscriptions.push(pi.on(event, (event: any) => groups?.observe(phase, event.message)));
   subscriptions.push(pi.on("ui_prompt_start", () => { if (groups) groups.focused = false; }));
   subscriptions.push(pi.on("session_shutdown", stop));
+  subscriptions.push(pi.events.on("compact-renderer:disclosures:v1", (request: any) => groups?.disclosures(request)));
   subscriptions.push(pi.events.on("compact-renderer:inspect:v1", (event: any) => { for (const choice of groups?.inspectionChoices() || []) event?.add?.(choice); }));
   subscriptions.push(pi.events.on("compact-renderer:focus:v1", (event: any) => { if (event?.owner !== "thinking" && groups) groups.focused = false; }));
   subscriptions.push(mode.onChange(() => { if (groups) groups.focused = false; redraw?.(); }));

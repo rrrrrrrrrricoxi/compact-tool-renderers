@@ -79,6 +79,55 @@ try {
   }
   assert.deepEqual(errors, []);
 
+  const plain = rows => rows.map(line => line.replace(/\x1b\[[0-9;]*m/g, '')).join('\n');
+  const click = (component, match) => {
+    const rows = component.render(110);
+    const y = rows.findIndex(line => match.test(plain([line])));
+    assert.ok(y >= 0, `mouse target exists: ${match}`);
+    assert.equal(component.handleMouse({ type: 'click', button: 'left', x: 6, y, width: 110, height: rows.length, shift: false, alt: false, ctrl: false })?.handled, true);
+    ui.renderer.renderNow();
+  };
+  const disclosures = () => {
+    const result = [];
+    preview.eventBus.emit('compact-renderer:disclosures:v1', { add(target, open) { result.push({ target, open }); } });
+    return result;
+  };
+  // Open through native component mouse routing, without inspection focus().
+  await expand();
+  let mouseOpened = 0;
+  for (const row of ui.chatContainer.children) {
+    if (!['ToolExecutionComponent', 'AssistantMessageComponent'].includes(row.constructor.name)) continue;
+    const pattern = /▸ (?:codemode|Thinking|Subagent workflow|\d+ actions|read|Read|bash|Run|Question)/;
+    if (row.render(110).some(line => pattern.test(plain([line])))) { click(row, pattern); mouseOpened++; }
+  }
+  assert.ok(mouseOpened >= 3, 'native mouse routing opens tool, thinking, and workflow/codemode fixture panes');
+  assert.ok(disclosures().some(pane => pane.open), 'mouse opens owner-managed panes');
+  await fold.handler('collapse', context); ui.renderer.renderNow();
+  assert.ok(disclosures().every(pane => !pane.open), '/fold collapse resets every eligible nested owner');
+  await expand();
+  assert.ok(disclosures().every(pane => !pane.open), 'reopening work starts with nested panes closed');
+
+  // The DDD attention row remains visible while its completed strip is closed.
+  await fold.handler('collapse', context); ui.renderer.renderNow();
+  const projected = ui.chatContainer[Symbol.for('compact-renderer:projected-children:v1')];
+  const ddd = projected.find(row => row.render(110).some(line => /▸ DDD ·/.test(plain([line]))));
+  assert.ok(ddd, 'retained DDD attention row is visible under collapsed work');
+  click(ddd, /▸ DDD ·/);
+  assert.match(plain(ddd.render(110)), /▾ DDD ·/);
+  assert.ok(headers().every(header => !header.open), 'mouse opening DDD leaves outer work collapsed');
+  await collapse('\x1b[119;7u', 'visible nested DDD makes shortcut choose collapse');
+  assert.match(plain(ddd.render(110)), /▸ DDD ·/, 'shortcut closes retained nested attention pane');
+  const decision = ui.chatContainer[Symbol.for('compact-renderer:projected-children:v1')].find(row => row.render(110).some(line => /▸ Subagent.*scout.*decision/.test(plain([line]))));
+  assert.ok(decision, 'retained subagent decision row is visible under collapsed work');
+  click(decision, /▸ Subagent.*scout.*decision/);
+  assert.match(plain(decision.render(110)), /▾ Subagent.*scout.*decision/);
+  assert.ok(headers().every(header => !header.open));
+  await collapse('\x1b[119;7u', 'visible subagent decision makes shortcut choose collapse');
+  assert.match(plain(decision.render(110)), /▸ Subagent.*scout.*decision/);
+  assert.ok(disclosures().every(pane => !pane.open), 'subagent disclosure owner resets along with the other completed panes');
+  receive('\x1b[119;7u'); await Promise.resolve();
+  assert.ok(headers().every(header => header.open), 'next shortcut expands after nested reset');
+
   await expand();
   const dialog = context.ui.select('Choose a fixture', ['A', 'B']);
   await new Promise(resolve => setTimeout(resolve, 0));

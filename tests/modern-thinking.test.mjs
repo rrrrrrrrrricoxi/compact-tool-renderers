@@ -91,8 +91,20 @@ try {
   assert.match(plain(cards[0].render(70)),/▸ Thinking · Updated exact recorded text/);
   key('\x1bt');key('\r');assert.match(plain(cards[0].render(70)),/▾ Thinking · Updated exact recorded text/);
   const singleRows = cards[0].render(70).map(stripAnsi);
-  assert.equal(singleRows[2].trim(), '', 'expanded thinking separates its summary from recorded content');
-  assert.match(singleRows[3], /^   Updated exact recorded text/, 'thinking content keeps its existing inset after one blank row');
+  assert.match(singleRows[2], /^   Updated exact recorded text/, 'thinking content follows its header without an added gap; sole content remains visible');
+  const repeatedSource = '# Exact thinking title\n\nFirst thinking paragraph.\n\nSecond thinking paragraph.';
+  const repeated = {...round(12), content:[{type:'thinking', thinking:repeatedSource}, round(12).content[1]]};
+  branch=[entry(repeated)]; cards.length=0; emit('session_start');
+  cards.push(new AssistantMessageComponent(repeated,true,themeModule.getMarkdownTheme()));
+  cards[0].render(100); key('\x1bt'); key('\r');
+  const deduplicated = cards[0].render(100).map(stripAnsi);
+  assert.equal(deduplicated.filter(line => line.includes('Exact thinking title')).length, 1);
+  assert.match(deduplicated[2], /First thinking paragraph/);
+  assert.equal(deduplicated[3].trim(), '');
+  assert.equal(repeated.content[0].thinking, repeatedSource, 'compact suppression preserves the recorded thinking source');
+  mode.setEnabled(false); cards[0].setHideThinkingBlock(false);
+  assert.match(plain(cards[0].render(100)), /Exact thinking title/, 'native thinking keeps the repeated title');
+  mode.setEnabled(true);
   // A very large recorded block still paints a bounded native assistant surface.
   const hugeRound={...round(11),content:[{type:'thinking',thinking:'Large exact recorded line 行🙂\n'.repeat(100000)},round(11).content[1]]};
   branch=[entry(hugeRound)];cards.length=0;emit('session_start',{type:'session_start',reason:'resume'});cards.push(new AssistantMessageComponent(hugeRound,true,themeModule.getMarkdownTheme()));

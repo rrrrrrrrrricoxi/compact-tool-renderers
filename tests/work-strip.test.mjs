@@ -16,7 +16,10 @@ const pi = {
 pi.events.on('compact-renderer:work-strip:v1', value => { ownership = value.ownsExecutionStatus; });
 pi.events.on('subagents:rpc:v1:request', request => pi.events.emit(`subagents:rpc:v1:reply:${request.requestId}`, {version:1, requestId:request.requestId, method:'status', success:true, data:{fleet:{totalActive:childrenActive}}}));
 const mode = createDisplayMode();
-let dispose = registerWorkStrip(pi, mode).dispose;
+let controls = registerWorkStrip(pi, mode);
+let dispose = controls.dispose;
+let ownedRow, nestedOpen = true, nestedResets = 0;
+pi.events.on('compact-renderer:disclosures:v1', request => request.add(component => component === ownedRow, nestedOpen, () => { nestedOpen = false; nestedResets++; }));
 const ui = { isFollowingOutput: true, requestRender() {}, theme: themeModule.theme, onTerminalInput(fn) { inputs.add(fn); return () => inputs.delete(fn); } };
 const ctx = {mode:'tui', hasUI:true, ui, get sessionManager(){return manager;}, isIdle:()=>true};
 const event = (name, value={}) => { for (const fn of [...(hooks.get(name) || [])]) fn(value, ctx); };
@@ -51,6 +54,10 @@ try {
   const question = tool('ask_user_question','CHOSEN_BETA',{question:'Choose a sample.'});
   assistant('FINAL_VISIBLE_RESULT');
   assert.match(paint(),/Working/); assert.match(paint(),/Checking the sample names/);
+  ownedRow = read; controls.setExpanded(false);
+  assert.equal(nestedOpen, true, 'explicit collapse preserves a manually opened working pane');
+  assert.equal(nestedResets, 0);
+  assert.match(paint(), /Working/);
   const original = display.chatContainer.children.slice();
   const messages = JSON.stringify(manager.getBranch().filter(e=>e.type==='message'));
   event('agent_settled'); await wait();
@@ -61,6 +68,9 @@ try {
   assert.equal(JSON.stringify(manager.getBranch().filter(e=>e.type==='message')),messages,'messages untouched');
   assert.equal(ownership,true);
   assert.equal(recordedWorkEvidence(manager.getBranch()).size,1);
+  assert.equal(nestedOpen, true, 'automatic completion folding preserves nested manual state');
+  controls.setExpanded(false); assert.equal(nestedOpen, false, 'explicit collapse resets the completed owner');
+  assert.equal(nestedResets, 1);
   choices().find(c=>c.kind==='Work').focus();
   assert.match(paint(),/▾ Worked for/); assert.match(paint(),/EXACT_HIDDEN_RESULT/);
   assert.equal(keys('\r'),true); assert.doesNotMatch(paint(),/EXACT_HIDDEN_RESULT/);
@@ -82,9 +92,13 @@ try {
   assert.match(paint(),/THIRD_INTERMEDIATE/);
   // Background children keep the current turn open after parent settlement.
   provider=true; childrenActive=1;
-  event('agent_start'); add({role:'user',content:'Fourth sample.'}); assistant('FOURTH_INTERMEDIATE'); tool('read','FOURTH_TOOL'); assistant('FOURTH_FINAL'); paint();
+  event('agent_start'); add({role:'user',content:'Fourth sample.'}); assistant('FOURTH_INTERMEDIATE'); ownedRow = tool('read','FOURTH_TOOL'); nestedOpen = true; assistant('FOURTH_FINAL'); paint();
   pi.events.emit('subagent:async-started',{id:'fourth-root'});
   event('agent_settled'); await wait(); assert.match(paint(),/Waiting/); assert.match(paint(),/FOURTH_INTERMEDIATE/);
+  const waitingResets = nestedResets; controls.setExpanded(false);
+  assert.equal(nestedOpen, true, 'explicit collapse preserves a manually opened waiting pane');
+  assert.equal(nestedResets, waitingResets);
+  assert.match(paint(), /Waiting/);
   childrenActive=0; pi.events.emit('subagent:async-complete',{runId:'fourth-root',state:'complete',success:true}); await wait(); await wait();
   assert.doesNotMatch(paint(),/FOURTH_INTERMEDIATE/); assert.match(paint(),/FOURTH_FINAL/);
   // An earlier turn can finish after a later prompt. Unrelated children cannot hold the later reply open.

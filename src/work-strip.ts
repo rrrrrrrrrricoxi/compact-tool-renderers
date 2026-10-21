@@ -121,8 +121,9 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
     let pane = hooks.get(row);
     if (!pane) {
       const content = text(row.message);
-      pane = new ToolPane([{ id: 'notice', label: 'DDD', sections: () => [{ text: content, format: 'markdown' }] }], `DDD · ${workSummary(content) || 'Recorded notice'}`, recordedPaneHeight);
-      pane.directContent = true; pane.separateContent = true; pane.headingTone = row.message.details?.severity === 'blocking' ? 'error' : 'muted';
+      const summary = workSummary(content);
+      pane = new ToolPane([{ id: 'notice', label: 'DDD', repeatedSummary: summary, sections: () => [{ text: content, format: 'markdown' }] }], `DDD · ${summary || 'Recorded notice'}`, recordedPaneHeight);
+      pane.directContent = true; pane.headingTone = row.message.details?.severity === 'blocking' ? 'error' : 'muted';
       hooks.set(row, pane);
     }
     pane.theme = ctx?.ui?.theme;
@@ -376,10 +377,26 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
   // Use native shortcut dispatch so dialogs and editor input keep their owners.
   // The command remains available on terminals that do not send modified keys.
   let shortcut = true;
+  const nestedDisclosures = (eligible: Turn[]) => {
+    const resets = new Set<() => void>();
+    let visibleOpen = false;
+    const add = (target: (component: any) => boolean, open: boolean, collapse: () => void) => {
+      for (const turn of eligible) for (const row of turn.rows) if (descendant(row, target)) {
+        resets.add(collapse);
+        if (open && (turn.header.open || row === turn.final || keepWorkRowVisible(row, turn.header.state === 'completed'))) visibleOpen = true;
+      }
+    };
+    // Owners identify and reset their own panes. Never alter native disclosure properties.
+    pi.events.emit('compact-renderer:disclosures:v1', { add });
+    for (const [row, pane] of hooks) add(component => component === row, pane.open, () => pane.collapse());
+    return { visibleOpen, collapse: () => resets.forEach(reset => reset()) };
+  };
   const setAll = (open: boolean) => {
     if (disposed || !ctx || !mode.isEnabled() || !attached) return false;
     project(attached.children);
     release();
+    const eligible = [...turns.values()].filter(turn => turn.activity && !['working', 'waiting'].includes(turn.header.state));
+    if (!open) nestedDisclosures(eligible).collapse();
     for (const turn of turns.values()) {
       if (!turn.activity || !open && ['working', 'waiting'].includes(turn.header.state)) continue;
       turn.header.manual = true; turn.header.open = open;
@@ -393,8 +410,10 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
     project(attached.children);
     const eligible = [...turns.values()].filter(turn => turn.activity && !['working', 'waiting'].includes(turn.header.state));
     if (!eligible.length) return true;
-    const open = !eligible.some(turn => turn.header.open);
+    const nested = nestedDisclosures(eligible);
+    const open = !eligible.some(turn => turn.header.open) && !nested.visibleOpen;
     release();
+    if (!open) nested.collapse();
     for (const turn of eligible) { turn.header.manual = true; turn.header.open = open; }
     pi.events.emit('compact-renderer:inspection-ended:v1', {});
     redraw();

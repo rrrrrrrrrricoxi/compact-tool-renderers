@@ -37,7 +37,7 @@ If a configuration manager already installs this extension, update it there to a
 
 Use `/fold status` to check the mode. `/fold toggle` switches between Pi Fold and native display.
 
-Ctrl+Alt+W collapses completed work if any section is expanded; otherwise it expands completed work. Active and waiting sections stay unchanged. To disable the shortcut, use `/fold shortcut off`.
+Ctrl+Alt+W collapses completed work if any section or retained detail pane is expanded; otherwise it expands completed work. Collapse also closes manually opened actions and details. After collapse, expanding a work section starts with its detail panes closed. Active and waiting sections stay unchanged by collapse and the shortcut. To disable the shortcut, use `/fold shortcut off`.
 
 Upgrading from `pi-compact-renderer`? Remove its existing install source before installing `@notrico/pi-fold` so Pi loads one copy. Version 3 replaces `/compact-rendering` and `/work` with `/fold`; the old commands are removed.
 
