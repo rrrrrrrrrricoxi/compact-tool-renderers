@@ -1,7 +1,7 @@
 # Renderer performance pass
 
 Evaluated against renderer 2.5.0, commit `848a4a5`, with Pi 1.3.0 and Node
-26.11.1 on two Darwin arm64 hosts. No installed configuration was changed.
+26.11.1 on two macOS arm64 machines, labeled A and B below. No installed configuration was changed.
 
 ## Changes
 
@@ -33,14 +33,14 @@ ownership. Both baseline and optimized source use the same measurement scripts.
 
 | Host | Turns | Before | After | Compact disabled, after |
 | --- | ---: | ---: | ---: | ---: |
-| Mac | 48 | 1.642 | 0.479 | 0.054 |
-| Mac | 400 | 12.649 | 4.904 | 0.301 |
-| CCC | 48 | 1.093 | 0.411 | 0.031 |
-| CCC | 400 | 9.514 | 3.295 | 0.207 |
+| Machine A | 48 | 1.642 | 0.479 | 0.054 |
+| Machine A | 400 | 12.649 | 4.904 | 0.301 |
+| Machine B | 48 | 1.093 | 0.411 | 0.031 |
+| Machine B | 400 | 9.514 | 3.295 | 0.207 |
 
-At 400 turns, added median layout time is 4.603 ms on Mac and 3.088 ms on CCC.
+At 400 turns, added median layout time is 4.603 ms on Machine A and 3.088 ms on Machine B.
 Both meet the initial 5 ms target in this fixture. The largest of seven optimized
-batch samples, divided by eight, was 5.294 ms on Mac and 3.664 ms on CCC. These
+batch samples, divided by eight, was 5.294 ms on Machine A and 3.664 ms on Machine B. These
 are batch measurements, not individual-frame latency percentiles.
 
 ## Retained memory
@@ -51,10 +51,10 @@ source. Figures include native fixture components and renderer state.
 
 | Host | Compact fixture | Before | After | Added |
 | --- | --- | ---: | ---: | ---: |
-| Mac | 48 turns | 0.736 MiB | 0.757 MiB | 0.021 MiB |
-| Mac | 400 turns | 5.663 MiB | 5.806 MiB | 0.143 MiB |
-| CCC | 48 turns | 0.736 MiB | 0.757 MiB | 0.021 MiB |
-| CCC | 400 turns | 5.663 MiB | 5.805 MiB | 0.142 MiB |
+| Machine A | 48 turns | 0.736 MiB | 0.757 MiB | 0.021 MiB |
+| Machine A | 400 turns | 5.663 MiB | 5.806 MiB | 0.143 MiB |
+| Machine B | 48 turns | 0.736 MiB | 0.757 MiB | 0.021 MiB |
+| Machine B | 400 turns | 5.663 MiB | 5.805 MiB | 0.142 MiB |
 
 A separate warmed formatting stress case retained approximately 2.16 MiB after
 10,000 distinct lines and remained approximately 2.16 MiB after another 20,000.

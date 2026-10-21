@@ -20,7 +20,7 @@ pi install npm:pi-compact-renderer@2.5.3
 
 Restart Pi, or run `/reload` when the session and its background work are idle.
 
-If Pi Config already manages your renderer, update through Pi Config. You do not need a second copy.
+If a configuration manager already installs this extension, update it there to avoid duplicate copies.
 
 ## Everyday controls
 
@@ -46,9 +46,9 @@ For detailed behavior, all keyboard controls, and test/preview instructions, see
 
 ## Performance
 
-In a synthetic 400-turn transcript, median warm layout took **4.9 ms on Mac and 3.3 ms on CCC**, down from 12.6 and 9.5 ms. Added layout time versus compact rendering disabled was **4.6 ms and 3.1 ms**; retained fixture memory increased by about **0.14 MiB** versus the prior renderer.
+Across two benchmark machines, median warm layout for a synthetic 400-turn transcript fell from **9.5–12.6 ms to 3.3–4.9 ms**. Added layout time versus compact rendering disabled was **3.1–4.6 ms**; retained fixture memory increased by about **0.14 MiB** versus the prior renderer.
 
-Measured with Pi 1.3.0, Node 26.11.1, and a 100-column layout. These are layout benchmarks, not live typing or terminal latency. See [methods, cache limits, and results](https://github.com/rrrrrrrrrricoxi/compact-tool-renderers/blob/main/docs/performance.md).
+Measured on macOS arm64 with Pi 1.3.0, Node 26.11.1, and a 100-column layout. These are layout benchmarks, not live typing or terminal latency. See [methods, cache limits, and results](https://github.com/rrrrrrrrrricoxi/compact-tool-renderers/blob/main/docs/performance.md).
 
 ## Development
 
