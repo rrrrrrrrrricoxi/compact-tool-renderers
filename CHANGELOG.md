@@ -3,6 +3,7 @@
 ## 3.0.1 — Inspection paging and final thinking
 
 - Make `more ↓` advance expanded tool, codemode, workflow, and thinking panes by one visible page. Preserve prompt typing after mouse inspection.
+- Keep the overflow footer in place at the end as `more ↑`, so upward scrolling stays inside the pane. Clicking it pages backward.
 - Keep leading thinking on a final answer with the preceding thinking rounds. Preserve visible-reply, error, and question boundaries.
 - Preserve compact thinking while painting the final answer background and padding.
 

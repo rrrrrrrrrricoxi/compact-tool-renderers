@@ -660,6 +660,13 @@ assert.equal(narrative.open, false); assert.equal(narrative.focused, false); ass
 assert.equal(narrative.expanded.size, 0); assert.equal(narrative.detailsExpanded.size, 0);
 narrative.open = true;
 assert.doesNotMatch(narrative.render(80).map(stripAnsi).join('\n'), /First body|Second body/, 'explicit reset reopens with all actions closed');
+// Content that already fits must not lose a row just because the user wheels down.
+const fittingPane = new ToolPane([{ id: 'fits', label: 'Read', sections: () => Array.from({ length: 7 }, (_, n) => `Fitting row ${n}`) }], 'Read', () => 8);
+fittingPane.open = true;
+const fittingRows = fittingPane.render(80);
+fittingPane.handleMouse({ type: 'wheel', button: 'none', x: 3, y: 2, wheelDelta: 1 });
+assert.deepEqual(fittingPane.render(80), fittingRows, 'a fully visible result does not create artificial overflow');
+assert.equal(fittingPane.offset, 0);
 // The rendered overflow footer pages the existing inline viewport and preserves Details state.
 const overflowPane = new ToolPane([{ id: 'overflow', label: 'Read', sections: function* () {
   for (let n = 0; n < 60; n++) yield `Recorded output ${n}`;
@@ -677,7 +684,13 @@ for (let n = 0; n < 20 && overflowRows.some(row => row.includes('more ↓')); n+
   clickOverflow(); overflowRows = overflowPane.render(80).map(stripAnsi);
 }
 assert.match(overflowRows.join('\n'), /Recorded output 59/);
-assert.doesNotMatch(overflowRows.join('\n'), /more ↓/, 'the footer disappears at the end');
+assert.doesNotMatch(overflowRows.join('\n'), /more ↓/, 'downward paging stops at the end');
+const overflowEndOffset = overflowPane.offset, overflowEndHeight = overflowRows.length;
+assert.match(overflowRows.at(-1), /more ↑/);
+overflowPane.handleMouse({ type: 'click', button: 'left', x: 3, y: overflowRows.length - 1 });
+overflowRows = overflowPane.render(80).map(stripAnsi);
+assert.ok(overflowPane.offset < overflowEndOffset, 'the final footer pages back');
+assert.equal(overflowRows.length, overflowEndHeight, 'tool and thinking panes retain their height at the end');
 assert.ok(overflowPane.paintedRows < 80, 'paging only formats the bounded visited output');
 const { suppressRepeatedSummary } = await loadSource('./recorded-summary.ts');
 const originalSummary = '# **Check inputs**\n\nFirst paragraph.\n\nSecond paragraph.';

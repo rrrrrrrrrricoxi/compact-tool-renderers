@@ -80,7 +80,7 @@ export class WorkflowPane {
       rows.push(...this.rows.slice(this.offset, this.offset + height).map(row => activityRow(indent + row, width, theme)));
       const more = !this.done || this.offset + height < this.rows.length;
       this.lastBodyHeight = rows.length - 1; this.lastMore = more;
-      const hint = [more ? 'more ↓' : '', this.focused ? 'Enter collapse · ↑/↓ scroll · Home start · Esc release' : ''].filter(Boolean).join(' · ');
+      const hint = [more ? 'more ↓' : this.offset > 0 ? 'more ↑' : '', this.focused ? 'Enter collapse · ↑/↓ scroll · Home start · Esc release' : ''].filter(Boolean).join(' · ');
       if (hint) rows.push(activityRow(theme ? theme.fg('muted', hint) : hint, width, theme));
     }
     this.lastHeight = rows.length;
@@ -93,7 +93,7 @@ export class WorkflowPane {
     }
     if (event.type === 'click' && event.button === 'left' && !event.ctrl && !event.alt && !event.shift) {
       if (event.y === 0) { this.release(); this.open = !this.open; this.offset = 0; return { handled: true }; }
-      if (this.open && this.lastMore && event.y === this.lastHeight - 1) { this.release(); this.offset += Math.max(1, this.lastBodyHeight); return { handled: true }; }
+      if (this.open && (this.lastMore || this.offset > 0) && event.y === this.lastHeight - 1) { this.release(); this.offset = Math.max(0, this.offset + (this.lastMore ? 1 : -1) * Math.max(1, this.lastBodyHeight)); return { handled: true }; }
     }
   }
 }

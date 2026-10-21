@@ -139,7 +139,12 @@ try {
   assert.doesNotMatch(paint(code), /focused/); assert.equal(input('\r'), undefined, 'overflow click releases inspection');
   for (let index = 0; index < 120; index++) { mouse(code, 'wheel', 2, 20); code.render(140); }
   assert.match(paint(code), /Recorded script output/, 'bounded viewport can reach full native output');
-  assert.doesNotMatch(paint(code), /more ↓/, 'codemode removes the overflow footer at its final rows');
+  assert.doesNotMatch(paint(code), /more ↓/, 'codemode stops offering downward paging at its final rows');
+  const endRows = code.render(140).map(stripAnsi), endOffset = pane.offset;
+  assert.match(endRows.at(-1), /more ↑/, 'the final footer retains its hit area');
+  mouse(code, 'click', endRows.length - 1); code.render(140);
+  assert.ok(pane.offset < endOffset, 'the upward footer pages back through the output');
+  assert.equal(code.render(140).length, endRows.length, 'paging back keeps the pane height');
   assert.equal(JSON.stringify(final), before);
   const running = create('codemode', 'code-clear', { code: 'text(1);' }, codemodeRenderers); running.markExecutionStarted(); running.updateResult({ ...result(''), details: { calls: [] } }, true);
   assert.equal(intervals.size, 1); event('session_before_switch'); assert.equal(intervals.size, 0, 'session switch clears native owned timer');

@@ -85,7 +85,7 @@ export class CodePane {
     // heading so a narrow terminal does not lose the timing information.
     if (!this.partial && this.durationMs !== undefined && visibleWidth(title) > contentWidth) timer = `Took ${duration(this.durationMs)}`;
     else if (this.durationMs === undefined && this.startedAt !== undefined) timer = `${this.partial ? "Elapsed" : "Took"} ${duration((this.endedAt ?? Date.now()) - this.startedAt)}`;
-    const footer = [more ? "more ↓" : "", timer, this.focused ? "Enter collapse · ↑/↓ scroll · Home start · Esc release" : ""].filter(Boolean).join(" · ");
+    const footer = [more ? "more ↓" : this.offset > 0 ? "more ↑" : "", timer, this.focused ? "Enter collapse · ↑/↓ scroll · Home start · Esc release" : ""].filter(Boolean).join(" · ");
     const visible = [header, ...body, ...(footer ? [activityRow(this.theme ? this.theme.fg("muted", truncateToWidth(footer, contentWidth)) : truncateToWidth(footer, contentWidth), width, this.theme)] : [])];
     this.lastBodyHeight = body.length; this.lastMore = more;
     this.lastHeight = visible.length; return visible;
@@ -96,7 +96,7 @@ export class CodePane {
     if (event.type !== "click" || event.button !== "left") return undefined;
     if (event.shift || event.alt || event.ctrl) return { handled: true, render: false };
     if (event.y === 0) { this.open = !this.open; this.offset = 0; return { handled: true }; }
-    if (this.open && this.lastMore && event.y === this.lastHeight - 1) { this.offset += Math.max(1, this.lastBodyHeight); return { handled: true }; }
+    if (this.open && (this.lastMore || this.offset > 0) && event.y === this.lastHeight - 1) { this.offset = Math.max(0, this.offset + (this.lastMore ? 1 : -1) * Math.max(1, this.lastBodyHeight)); return { handled: true }; }
     return { handled: true, render: false };
   }
   invalidate() { this.reset(); }

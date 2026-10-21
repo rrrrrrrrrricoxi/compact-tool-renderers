@@ -155,14 +155,16 @@ export class ToolPane {
       if (next.done) this.done = true;
       else { this.rows.push(truncateToWidth(next.value, width)); this.paintedRows++; }
     }
+    // Keep the footer and body height stable after paging to the end. Otherwise
+    // the pointer can leave the pane when the downward control disappears.
+    if (!this.focused && (!this.done || this.rows.length > bodyHeight)) bodyHeight--;
     if (this.done) this.offset = Math.min(this.offset, Math.max(0, this.rows.length - bodyHeight));
-    let more = !this.done || this.offset + bodyHeight < this.rows.length;
-    if (!this.focused && more) { bodyHeight--; more = !this.done || this.offset + bodyHeight < this.rows.length; }
+    const more = !this.done || this.offset + bodyHeight < this.rows.length;
     const selectedAction = this.actions[this.selected];
     const detailsTarget = this.detailsFocused && !!selectedAction?.details;
     const isExpanded = detailsTarget ? this.detailsExpanded.has(selectedAction.id) : this.directDetails || this.expanded.has(selectedAction?.id);
     const controls = detailsTarget ? `Enter ${isExpanded ? "collapse" : "expand"} Details · Tab action` : `${this.directDetails ? "Enter collapse" : `←/→ ${this.itemName} · Enter ${isExpanded ? "collapse" : "expand"}`}${selectedAction?.details ? " · Tab Details" : ""}`;
-    const footer = [more ? "more ↓" : "", this.focused ? `${controls} · ↑/↓ scroll · Esc release` : ""].filter(Boolean).join(" · ");
+    const footer = [more ? "more ↓" : this.offset > 0 ? "more ↑" : "", this.focused ? `${controls} · ↑/↓ scroll · Esc release` : ""].filter(Boolean).join(" · ");
     const body = this.rows.slice(this.offset, this.offset + bodyHeight).map((line, index) => {
       const action = this.actionRows.get(this.offset + index);
       const details = this.detailsRows.get(this.offset + index);
@@ -192,7 +194,7 @@ export class ToolPane {
     // Keep text selection gestures and output clicks from falling through to native whole-row expansion.
     if (event.shift || event.alt || event.ctrl) return { handled: true, render: false };
     if (event.y === 0) { this.preserveFocusLayout = false; this.detailsFocused = false; this.open = !this.open; return { handled: true }; }
-    if (this.open && this.lastMore && event.y === this.lastHeight - 1) { this.preserveFocusLayout = true; this.offset += Math.max(1, this.lastBodyHeight); return { handled: true }; }
+    if (this.open && (this.lastMore || this.offset > 0) && event.y === this.lastHeight - 1) { this.preserveFocusLayout = true; this.offset = Math.max(0, this.offset + (this.lastMore ? 1 : -1) * Math.max(1, this.lastBodyHeight)); return { handled: true }; }
     const details = this.detailsRows.get(this.offset + event.y - 1);
     if (this.open && event.y >= 1 && event.y < 1 + this.lastBodyHeight && details !== undefined) {
       const id = this.actions[details]?.id;

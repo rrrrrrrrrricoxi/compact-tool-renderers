@@ -176,7 +176,13 @@ try {
     assert.ok(pagedWorkflow.paintedRows - before <= 12, 'one overflow click formats at most one source viewport');
   }
   assert.match(pageRows.join('\n'), /const page30/);
-  assert.doesNotMatch(pageRows.join('\n'), /more ↓/, 'the source footer disappears after the final rows');
+  assert.doesNotMatch(pageRows.join('\n'), /more ↓/, 'downward paging stops after the final rows');
+  const workflowEndOffset = pagedWorkflow.offset, workflowEndHeight = pageRows.length;
+  assert.match(pageRows.at(-1), /more ↑/);
+  pagedWorkflow.handleMouse({ type: 'click', button: 'left', x: 3, y: pageRows.length - 1 });
+  pageRows = pagedWorkflow.render(80).map(stripAnsi);
+  assert.ok(pagedWorkflow.offset < workflowEndOffset, 'upward footer pages back through the source');
+  assert.equal(pageRows.length, workflowEndHeight, 'workflow footer remains in place');
   const longLine = new WorkflowPane('const value = "' + '🙂'.repeat(200000) + '";', 'Long line'); longLine.open = true;
   assert.ok(longLine.render(12).length <= 15); assert.ok(longLine.paintedRows <= 15);
   console.log('modern workflows: exact executor source, bounded native syntax, surrounding prose, independent fences, native thinking, mouse/editor/inspection, lifecycle, and fallback passed');
