@@ -90,6 +90,9 @@ try {
   const update={...start,content:[{type:'thinking',thinking:'Updated exact recorded text'},start.content[1]]};emit('message_update',{message:update});cards[0].updateContent(update);emit('message_end',{message:update});
   assert.match(plain(cards[0].render(70)),/▸ Thinking · Updated exact recorded text/);
   key('\x1bt');key('\r');assert.match(plain(cards[0].render(70)),/▾ Thinking · Updated exact recorded text/);
+  const singleRows = cards[0].render(70).map(stripAnsi);
+  assert.equal(singleRows[2].trim(), '', 'expanded thinking separates its summary from recorded content');
+  assert.match(singleRows[3], /^   Updated exact recorded text/, 'thinking content keeps its existing inset after one blank row');
   // A very large recorded block still paints a bounded native assistant surface.
   const hugeRound={...round(11),content:[{type:'thinking',thinking:'Large exact recorded line 行🙂\n'.repeat(100000)},round(11).content[1]]};
   branch=[entry(hugeRound)];cards.length=0;emit('session_start',{type:'session_start',reason:'resume'});cards.push(new AssistantMessageComponent(hugeRound,true,themeModule.getMarkdownTheme()));

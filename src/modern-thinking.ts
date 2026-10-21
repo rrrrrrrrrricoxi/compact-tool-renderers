@@ -153,6 +153,7 @@ export class ModernThinkingGroups {
     this.sources(group);
     pane.title = group.members.length === 1 ? `Thinking · ${pane.actions[0]?.label || "Recorded thinking"}` : `Thinking · ${group.members.length} rounds`;
     pane.directContent = group.members.length === 1;
+    pane.separateContent = true;
     pane.focused = this.focused && this.selected === group;
     pane.theme = theme; pane.headingTone = "thinkingText"; pane.itemName = "round";
     pane.styleHeader = text => theme.fg("thinkingText", text);

@@ -175,6 +175,15 @@ for (const kind of ['custom', 'custom-entry', 'user-bash', 'question']) {
     assert.ok(replacement.children[0] instanceof tui.Container, 'DDD replacement retains a host wrapper');
     assert.ok(replacement.children[0].children[0] instanceof tui.Spacer, 'DDD wrapper restores its native internal leading gap');
     assert.ok(!(rows[rows.indexOf(replacement) - 1] instanceof tui.Spacer), 'DDD receives no extra outside gap');
+    const pane = replacement.children[0].children.at(-1);
+    pane.open = true;
+    const expanded = replacement.render(100).map(stripAnsi);
+    assert.equal(expanded[2].trim(), '', 'expanded DDD separates its summary from recorded content');
+    assert.match(expanded[3], /^     DDD_NOTICE/, 'DDD body keeps the work and content insets');
+    assert.equal(expanded.length, 4, 'DDD adds only its header/content gap; the next block owns the outer gap');
+    pane.open = false;
+    assert.equal(replacement.render(100).length, 2, 'collapsed DDD keeps only the native gap and summary');
+
   } finally { f.dispose(); }
 }
 

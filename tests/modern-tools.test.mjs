@@ -628,6 +628,21 @@ assert.match(stripAnsi(singleRound.render(80).join('\n')), /1\. Recorded first l
 assert.doesNotMatch(stripAnsi(singleRound.render(80).join('\n')), /Full recorded round/);
 singleRound.handle('\r');
 assert.match(stripAnsi(singleRound.render(80).join('\n')), /Full recorded round/, 'single thinking rounds keep independent expansion');
+// Narrative gaps are viewport rows, so later disclosure hit targets keep their coordinates.
+const narrative = new ToolPane([
+  { id: 'first', label: 'First round', sections: () => ['First body'] },
+  { id: 'second', label: 'Second round', sections: () => ['Second body'] },
+], 'Thinking', () => 12);
+narrative.itemName = 'round'; narrative.separateContent = true; narrative.open = true; narrative.expanded.add('first');
+const narrativeRows = narrative.render(80).map(stripAnsi);
+assert.equal(narrativeRows[2].trim(), '', 'expanded narrative body has one leading gap');
+assert.match(narrativeRows[3], /First body/);
+const clickNarrative = y => narrative.handleMouse({ type: 'click', button: 'left', x: 3, y });
+clickNarrative(2);
+assert.deepEqual([...narrative.expanded], ['first'], 'clicking the gap does not toggle an action');
+clickNarrative(narrativeRows.findIndex(line => line.includes('Second round')));
+assert.ok(narrative.expanded.has('second'), 'later round disclosure uses its shifted rendered row');
+assert.match(narrative.render(80).map(stripAnsi).join('\n'), /Second body/);
 const exactValues = { command: 'printf "hello"\nnext exact line', options: { paths: ['a', 'b'], empty: '', nullable: null } };
 const valueRows = [...recordedValues(exactValues)];
 assert.ok(valueRows.some(row => row.text === exactValues.command), 'multiline string values remain exact');

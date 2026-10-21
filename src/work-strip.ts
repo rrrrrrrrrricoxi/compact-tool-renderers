@@ -122,7 +122,7 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
     if (!pane) {
       const content = text(row.message);
       pane = new ToolPane([{ id: 'notice', label: 'DDD', sections: () => [{ text: content, format: 'markdown' }] }], `DDD · ${workSummary(content) || 'Recorded notice'}`, recordedPaneHeight);
-      pane.directContent = true; pane.headingTone = row.message.details?.severity === 'blocking' ? 'error' : 'muted';
+      pane.directContent = true; pane.separateContent = true; pane.headingTone = row.message.details?.severity === 'blocking' ? 'error' : 'muted';
       hooks.set(row, pane);
     }
     pane.theme = ctx?.ui?.theme;

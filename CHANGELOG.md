@@ -7,6 +7,7 @@
 - Rename the npm package to `@notrico/pi-fold` and the repository to `pi-fold`. Remove the old package installation before installing the new name.
 - Make Ctrl+Alt+W toggle completed work: collapse if any section is expanded, otherwise expand. Active and waiting sections stay unchanged.
 - Refresh public documentation and remove private deployment history.
+- Separate expanded thinking and DDD notice content from their headers with one blank row; keep ordinary tool output compact.
 
 ## 2.5.3 — Stable live alignment and clearer source layout
 

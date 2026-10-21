@@ -21,6 +21,8 @@ export class ToolPane {
   headingTone = "mdLink";
   itemName = "action";
   directContent = false;
+  // Narrative blocks separate each expanded body from its disclosure heading.
+  separateContent = false;
   selected = 0;
   private anchor = 0;
   offset = 0;
@@ -87,6 +89,7 @@ export class ToolPane {
       }
       const detailsIndent = this.directDetails ? indent : width >= 12 ? " ".repeat(Math.min(prefix.length, width - 1)) : "";
       if (this.directDetails || this.expanded.has(action.id)) {
+        if (this.separateContent) yield "";
         const sectionRows = function* (this: ToolPane, sections: Iterable<PaneContent>) {
           for (const section of sections) {
             const content = typeof section === "string" ? { text: section } : section;
@@ -131,7 +134,7 @@ export class ToolPane {
     const header = this.styleHeader(`${this.open ? "▾" : "▸"} ${this.open ? this.expandedTitle ?? this.title : this.title}${this.focused ? " · focused" : ""}`);
     if (!this.open) { this.lastHeight = 1; this.lastBodyHeight = 0; return [paint(truncateToWidth(header, width), this.focused && !this.detailsFocused)]; }
     const height = Math.max(5, Math.min(20, this.height()));
-    const key = `${width}:${this.directDetails}:${this.anchor}:${this.selected}:${[...this.expanded].join("|")}:${[...this.detailsExpanded].join("|")}:${this.detailsFocused}`;
+    const key = `${width}:${this.directDetails}:${this.separateContent}:${this.anchor}:${this.selected}:${[...this.expanded].join("|")}:${[...this.detailsExpanded].join("|")}:${this.detailsFocused}`;
     if (key !== this.key) { this.reset(); this.key = key; this.iterator = this.body(width); }
     let bodyHeight = height - (this.focused ? 2 : 1);
     // Clamp a seek to one viewport beyond visited content; a key press cannot scan unbounded data.
