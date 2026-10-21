@@ -23,7 +23,7 @@ function fixture() {
     appendEntry: (kind, data) => manager.appendCustomEntry(kind, data), registerCommand: (name, definition) => commands.set(name, definition),
   };
   const mode = createDisplayMode();
-  const disposers = [registerModernPrompts(pi, mode), registerModernSkillPrompts(pi, mode), registerWorkStrip(pi, mode)];
+  const disposers = [registerModernPrompts(pi, mode), registerModernSkillPrompts(pi, mode), registerWorkStrip(pi, mode).dispose];
   const ui = { theme: themeModule.theme, isFollowingOutput: true, requestRender() {}, setHiddenThinkingLabel() {}, onTerminalInput(fn) { inputs.add(fn); return () => inputs.delete(fn); } };
   const ctx = { mode: 'tui', hasUI: true, ui, sessionManager: manager, isIdle: () => true };
   const display = {

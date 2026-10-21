@@ -25,7 +25,7 @@ function fixture() {
     appendEntry: (kind, data) => manager.appendCustomEntry(kind, data),
   };
   const mode = createDisplayMode();
-  const dispose = registerWorkStrip(pi, mode);
+  const dispose = registerWorkStrip(pi, mode).dispose;
   const ui = { isFollowingOutput: true, requestRender() {}, theme: themeModule.theme };
   const ctx = { mode: 'tui', hasUI: true, ui, sessionManager: manager, isIdle: () => true };
   const display = {
@@ -175,6 +175,33 @@ for (const kind of ['custom', 'custom-entry', 'user-bash', 'question']) {
     assert.ok(replacement.children[0] instanceof tui.Container, 'DDD replacement retains a host wrapper');
     assert.ok(replacement.children[0].children[0] instanceof tui.Spacer, 'DDD wrapper restores its native internal leading gap');
     assert.ok(!(rows[rows.indexOf(replacement) - 1] instanceof tui.Spacer), 'DDD receives no extra outside gap');
+    const pane = replacement.children[0].children.at(-1);
+    pane.open = true;
+    const expanded = replacement.render(100).map(stripAnsi);
+    assert.match(expanded[2], /^     DDD_NOTICE/, 'DDD body follows its header and keeps the work and content insets');
+    assert.equal(expanded.length, 3, 'DDD retains only its native outer gap; sole content stays visible');
+    pane.open = false;
+    assert.equal(replacement.render(100).length, 2, 'collapsed DDD keeps only the native gap and summary');
+
+  } finally { f.dispose(); }
+}
+
+{
+  const f = fixture();
+  try {
+    const source = 'DDD reminder.\n\nFirst paragraph.\n\nSecond paragraph.';
+    const recorded = f.add({ role: 'custom', customType: 'ddd', display: true, content: source }).at(-1);
+    const { rows } = f.start();
+    const replacement = rows.find(row => row.render(100).some(line => stripAnsi(line).includes('DDD · DDD reminder.')));
+    const pane = replacement.children[0].children.at(-1); pane.open = true;
+    const compact = replacement.render(100).map(stripAnsi);
+    assert.equal(compact.filter(line => line.includes('DDD reminder.')).length, 1, 'exact DDD opening summary appears only in its header');
+    assert.match(compact[2], /First paragraph/);
+    assert.equal(compact[3].trim(), '', 'recorded paragraph spacing stays intact');
+    assert.match(compact[4], /Second paragraph/);
+    assert.equal(recorded.message.content, source, 'DDD source is not rewritten');
+    f.mode.setEnabled(false);
+    assert.match(f.paint().text, /DDD reminder\./, 'native mode retains the original DDD text');
   } finally { f.dispose(); }
 }
 

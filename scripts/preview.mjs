@@ -20,7 +20,7 @@ export async function createPreview() {
     if (await fs.stat(candidate).then(stat => stat.isFile(), () => false)) { questionsPath = candidate; break; }
   }
   if (process.env.PI_QUESTIONS_PATH && !questionsPath) throw new Error('PI_QUESTIONS_PATH must point to an existing pi-questions/index.ts.');
-  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-renderer-preview-'));
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-fold-preview-'));
   const agentDir = path.join(temporary, '.pi/agent'), cwd = path.join(temporary, 'fixture');
   const savedEnv = new Map();
   const setEnv = (key, value) => { savedEnv.set(key, process.env[key]); if (value === undefined) delete process.env[key]; else process.env[key] = value; };
@@ -148,7 +148,7 @@ export async function createPreview() {
     // This is the same envelope Pi writes for /skill:fixture-review, including its optional user message.
     append({ role: 'user', content: `<skill name="fixture-review" location="${path.join(skillDir, 'SKILL.md')}">\nReferences are relative to ${skillDir}.\n\n${skillBody}\n</skill>\n\nShow the native skill card and one final successful action.` });
     call('read-2', 'read', { path: '/fixture/last.txt' }, 'Recorded final output.');
-    assistant([{ type: 'text', text: 'Preview controls: /inspect selects a compact block. Left/Right selects an action or thinking round; Enter expands it; Up/Down scrolls. Esc or typing returns to the editor. Ctrl+O expands native codemode and [skill] cards. /fixture-question opens the existing question UI; /fixture-question text opens free text. /fixture-permission opens a harmless approval dialog. /compact-rendering switches display. Ctrl+D exits. All records and prices are invented; no script or model ran.' }]);
+    assistant([{ type: 'text', text: 'Preview controls: /inspect selects a compact block. Left/Right selects an action or thinking round; Enter expands it; Up/Down scrolls. Esc or typing returns to the editor. Ctrl+O expands native codemode and [skill] cards. /fixture-question opens the existing question UI; /fixture-question text opens free text. /fixture-permission opens a harmless approval dialog. /fold switches display. Ctrl+D exits. All records and prices are invented; no script or model ran.' }]);
     if (!questionsPath) assistant([{ type: 'text', text: 'Native question UI is unavailable on this host. Recorded question cards still show schema-shaped examples. Set PI_QUESTIONS_PATH to an existing pi-questions/index.ts to enable /fixture-question.' }]);
     if (promptJump) assistant([{ type: 'text', text: 'Prompt navigation: /prompt-jump list selects one of the three invented user prompts; /prompt-jump back returns; /prompt-jump end follows the latest output.' }]);
     assistant([{ type: 'text', text: 'Subagent display examples follow. These records are invented. No child or workflow was launched.' }]);
@@ -191,7 +191,7 @@ export async function createPreview() {
     ], { calls: ['sample-a.png', 'sample-b.png', 'sample-c.png', 'result.json'].map(name => ({ name: 'read', args: JSON.stringify({ path: '/fixture/' + name }), status: 'ok', durationMs: 1 })) }, false, '', 1900);
     assistant([{ type: 'text', text: 'Separate image read: expand this row to inspect the recorded content and Details. Esc should return to normal prompt typing.' }]);
     call('read-image', 'read', { path: sampleImagePath }, [{ type: 'text', text: 'Read image file [image/png]' }, { ...pixel }]);
-    manager.appendSessionInfo('compact-renderer-preview');
+    manager.appendSessionInfo('pi-fold-preview');
     const eventBus = core.createEventBus();
     assistant([
       { type: 'thinking', thinking: '**Compare the recorded samples**\n\nSynthetic preview only: compare the two recorded sample labels and retain their units. This text is invented, not model reasoning.' },

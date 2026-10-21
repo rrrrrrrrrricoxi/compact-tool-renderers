@@ -19,6 +19,7 @@ export class CodePane {
   adoptClock(clock: { startedAt?: number; endedAt?: number }) { this.startedAt ??= clock.startedAt; this.endedAt ??= clock.endedAt; }
   suspend() { if (this.interval !== undefined) clearInterval(this.interval); this.interval = undefined; }
   dispose() { this.suspend(); this.rows = []; this.iterator = undefined; }
+  collapse() { this.open = false; this.focused = false; this.offset = 0; this.reset(); }
   private reset() { this.rows = []; this.iterator = undefined; this.done = false; this.width = 0; }
   setTheme(theme: any) {
     const tokens = ["text", "toolTitle", "toolOutput", "mdCodeBlock", "muted", "dim", "warning", "error", "success", "syntaxKeyword", "syntaxString", "syntaxComment", "syntaxNumber", "syntaxFunction", "syntaxOperator", "syntaxPunctuation", "syntaxType", "syntaxVariable", "toolDiffAdded", "toolDiffRemoved"];

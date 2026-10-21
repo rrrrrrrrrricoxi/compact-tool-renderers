@@ -148,6 +148,19 @@ export function registerModernSubagentMessages(pi: ExtensionAPI, mode: DisplayMo
   for (const event of ['session_start', 'session_tree', 'session_compact'] as const) subscriptions.push(pi.on(event, reset));
   subscriptions.push(pi.on('session_before_switch', stop), pi.on('session_shutdown', stop), pi.on('ui_prompt_start', () => release()));
   subscriptions.push(pi.events.on('compact-renderer:focus:v1', (event: any) => { if (event?.owner !== 'subagents') release(); }));
+  subscriptions.push(pi.events.on('compact-renderer:disclosures:v1', (request: any) => {
+    if (disposed || !active || !mode.isEnabled()) return;
+    for (const card of cards.values()) {
+      const projected = view(card.source);
+      if (projected?.hidden) continue;
+      const pane = projected?.pane || card.pane;
+      request?.add?.((component: any) => component === card.component, pane.open, () => {
+        if (selected === card) { release(); selected = undefined; }
+        pane.collapse();
+        if (pane !== card.pane) card.pane.collapse();
+      });
+    }
+  }));
   subscriptions.push(pi.events.on('compact-renderer:inspect:v1', (request: any) => {
     if (disposed || !active || !mode.isEnabled()) return;
     [...cards.values()].filter(card => !view(card.source)?.hidden).forEach((card, index) => request?.add?.({ id: `subagent-${index}`, kind: 'Subagent', label: view(card.source)?.pane.title || card.summary.title, focus() {

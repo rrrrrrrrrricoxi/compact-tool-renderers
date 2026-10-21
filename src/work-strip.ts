@@ -56,13 +56,20 @@ export function keepWorkRowVisible(row: any, completed: boolean): boolean {
   return !(row instanceof Spacer);
 }
 
+export interface WorkStripControls {
+  dispose(): void;
+  setExpanded(open: boolean): boolean;
+  isShortcutEnabled(): boolean;
+  setShortcutEnabled(enabled: boolean): void;
+}
+
 /** Pi 1.3 display seam. The native tree, transcript, execution and Fleet remain
  * authoritative. Only chatContainer's rendered child list is projected. */
-export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version = VERSION): () => void {
+export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version = VERSION): WorkStripControls {
   const owner = Symbol.for('compact-renderer:work-registration:v1'), shared = globalThis as any;
   shared[owner]?.();
   const proto = InteractiveMode.prototype as any;
-  if (version !== '1.3.0' || !['addMessageToChat', 'handleEvent', 'renderSessionItems'].every(k => typeof proto[k] === 'function')) return () => {};
+  if (version !== '1.3.0' || !['addMessageToChat', 'handleEvent', 'renderSessionItems'].every(k => typeof proto[k] === 'function')) return { dispose() {}, setExpanded: () => false, isShortcutEnabled: () => false, setShortcutEnabled() {} };
   let disposed = false, ctx: any, host: any, attached: any, detachChat: (() => void) | undefined;
   let turns = new Map<any, Turn>(), sources = new WeakMap<any, any>(), hooks = new Map<any, ToolPane>();
   let selected: WorkStripHeader | ToolPane | undefined, input: (() => void) | undefined, timer: ReturnType<typeof setTimeout> | undefined;
@@ -114,7 +121,8 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
     let pane = hooks.get(row);
     if (!pane) {
       const content = text(row.message);
-      pane = new ToolPane([{ id: 'notice', label: 'DDD', sections: () => [{ text: content, format: 'markdown' }] }], `DDD · ${workSummary(content) || 'Recorded notice'}`, recordedPaneHeight);
+      const summary = workSummary(content);
+      pane = new ToolPane([{ id: 'notice', label: 'DDD', repeatedSummary: summary, sections: () => [{ text: content, format: 'markdown' }] }], `DDD · ${summary || 'Recorded notice'}`, recordedPaneHeight);
       pane.directContent = true; pane.headingTone = row.message.details?.severity === 'blocking' ? 'error' : 'muted';
       hooks.set(row, pane);
     }
@@ -368,43 +376,52 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
   ];
   // Use native shortcut dispatch so dialogs and editor input keep their owners.
   // The command remains available on terminals that do not send modified keys.
-  let shortcut = 'on';
+  let shortcut = true;
+  const nestedDisclosures = (eligible: Turn[]) => {
+    const resets = new Set<() => void>();
+    let visibleOpen = false;
+    const add = (target: (component: any) => boolean, open: boolean, collapse: () => void) => {
+      for (const turn of eligible) for (const row of turn.rows) if (descendant(row, target)) {
+        resets.add(collapse);
+        if (open && (turn.header.open || row === turn.final || keepWorkRowVisible(row, turn.header.state === 'completed'))) visibleOpen = true;
+      }
+    };
+    // Owners identify and reset their own panes. Never alter native disclosure properties.
+    pi.events.emit('compact-renderer:disclosures:v1', { add });
+    for (const [row, pane] of hooks) add(component => component === row, pane.open, () => pane.collapse());
+    return { visibleOpen, collapse: () => resets.forEach(reset => reset()) };
+  };
   const setAll = (open: boolean) => {
-    if (disposed || !ctx || !mode.isEnabled() || !attached) return;
+    if (disposed || !ctx || !mode.isEnabled() || !attached) return false;
     project(attached.children);
     release();
+    const eligible = [...turns.values()].filter(turn => turn.activity && !['working', 'waiting'].includes(turn.header.state));
+    if (!open) nestedDisclosures(eligible).collapse();
     for (const turn of turns.values()) {
       if (!turn.activity || !open && ['working', 'waiting'].includes(turn.header.state)) continue;
       turn.header.manual = true; turn.header.open = open;
     }
     pi.events.emit('compact-renderer:inspection-ended:v1', {});
     redraw();
+    return true;
   };
-  pi.registerCommand?.('work', {
-    description: 'Collapse or expand work sections; choose a session shortcut',
-    async handler(args: string, context: any) {
-      if (disposed || !context.hasUI || !ctx || !mode.isEnabled()) return;
-      let action = args.trim().toLowerCase();
-      if (!action) {
-        const choices = ['Collapse all work', 'Expand all work', 'Choose shortcut'];
-        const choice = await context.ui.select('Work sections', choices);
-        action = choice === choices[0] ? 'collapse' : choice === choices[1] ? 'expand' : choice === choices[2] ? 'shortcut' : '';
-      }
-      if (action === 'collapse' || action === 'expand') { setAll(action === 'expand'); return; }
-      if (action === 'shortcut' || action.startsWith('shortcut ')) {
-        let key = action.slice(8).trim();
-        const options = ['on', 'off'];
-        if (!key) key = await context.ui.select(`Ctrl+Alt+W — ${shortcut}`, options) || '';
-        if (options.includes(key)) { shortcut = key; context.ui.notify(`Collapse work shortcut: ${shortcut}`, 'info'); }
-        else if (key) context.ui.notify('Use /work shortcut [on|off]', 'info');
-        return;
-      }
-      if (action) context.ui.notify('Use /work [collapse|expand|shortcut]', 'info');
-    },
-  });
+  const toggleCompleted = () => {
+    if (disposed || !ctx || !mode.isEnabled() || !attached) return false;
+    project(attached.children);
+    const eligible = [...turns.values()].filter(turn => turn.activity && !['working', 'waiting'].includes(turn.header.state));
+    if (!eligible.length) return true;
+    const nested = nestedDisclosures(eligible);
+    const open = !eligible.some(turn => turn.header.open) && !nested.visibleOpen;
+    release();
+    if (!open) nested.collapse();
+    for (const turn of eligible) { turn.header.manual = true; turn.header.open = open; }
+    pi.events.emit('compact-renderer:inspection-ended:v1', {});
+    redraw();
+    return true;
+  };
   pi.registerShortcut?.('ctrl+alt+w', {
-    description: 'Collapse work sections (enabled with /work shortcut)',
-    handler: () => { if (shortcut === 'on') setAll(false); },
+    description: 'Toggle completed work sections (enabled with /fold shortcut)',
+    handler: () => { if (shortcut) toggleCompleted(); },
   });
   const dispose = () => {
     if (disposed) return; disposed = true;
@@ -417,5 +434,10 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
   };
   subscriptions.push(pi.on('session_shutdown', dispose));
   shared[owner] = dispose;
-  return dispose;
+  return {
+    dispose,
+    setExpanded: setAll,
+    isShortcutEnabled: () => shortcut,
+    setShortcutEnabled: enabled => { if (!disposed) shortcut = enabled; },
+  };
 }

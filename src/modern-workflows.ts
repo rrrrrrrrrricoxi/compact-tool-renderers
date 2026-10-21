@@ -47,6 +47,7 @@ export class WorkflowPane {
   private rows: string[] = []; private iterator?: Iterator<string>; private done = false;
   private width = 0; private themeKey = ''; private lastWidth = 0; private lastHeight = 0;
   constructor(readonly source: string, readonly summary: string, private release: () => void = () => {}) {}
+  collapse() { this.open = false; this.focused = false; this.offset = 0; this.invalidate(); }
   invalidate() { this.rows = []; this.iterator = undefined; this.done = false; this.width = 0; }
   handle(data: string) {
     if (matchesKey(data, 'enter')) { this.open = !this.open; this.offset = 0; return true; }
@@ -182,6 +183,13 @@ export function registerModernWorkflows(pi: ExtensionAPI, mode: DisplayMode, ver
   for (const event of ['session_start', 'session_tree', 'session_compact'] as const) subscriptions.push(pi.on(event, reset));
   subscriptions.push(pi.on('session_before_switch', clear), pi.on('session_shutdown', clear), pi.on('ui_prompt_start', release));
   subscriptions.push(pi.events.on('compact-renderer:focus:v1', (event: any) => { if (event?.owner !== 'workflows') release(); }));
+  subscriptions.push(pi.events.on('compact-renderer:disclosures:v1', (request: any) => {
+    if (disposed || !active || !mode.isEnabled()) return;
+    for (const card of cards.values()) for (const pane of card.panes.values()) request?.add?.((component: any) => component === card.component, pane.open, () => {
+      if (selected === pane) release();
+      pane.collapse();
+    });
+  }));
   subscriptions.push(pi.events.on('compact-renderer:inspect:v1', (request: any) => {
     if (disposed || !active || !mode.isEnabled()) return;
     for (const card of cards.values()) card.panes.forEach((pane, index) => request?.add?.({ id: `workflow-${card.id}-${index}`, kind: 'Workflow', label: pane.summary, focus() {

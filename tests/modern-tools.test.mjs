@@ -226,14 +226,14 @@ assertDecision(ask);
 assert.ok(ask.render(100)[1].includes(themeModule.theme.getFgAnsi('accent')), 'question heading uses purple accent');
 assert.notEqual(themeModule.theme.getFgAnsi('accent'), themeModule.theme.getFgAnsi('mdLink'), 'questions and actions have distinct native tones');
 capture('Question pending with aligned purple heading', ask);
-ask.updateResult(result('User answered: MacBook', { question: 'Which host?', status: 'answered', answers: [{ label: 'MacBook', value: 'mac' }] }));
-assert.match(paint(ask), /Question · Answered · Which host\? · MacBook/);
+ask.updateResult(result('User answered: Laptop', { question: 'Which host?', status: 'answered', answers: [{ label: 'Laptop', value: 'local' }] }));
+assert.match(paint(ask), /Question · Answered · Which host\? · Laptop/);
 assertDecision(ask);
 assert.equal((paint(ask).match(/Question ·/g) || []).length, 1);
 ask.setExpanded(true);
-assert.match(paint(ask), /✓ MacBook/);
+assert.match(paint(ask), /✓ Laptop/);
 assert.equal((paint(ask).match(/Which host\?/g) || []).length, 1, 'expanded question shows its prompt once');
-assert.equal((paint(ask).match(/MacBook/g) || []).length, 1, 'expanded question shows its answer once');
+assert.equal((paint(ask).match(/Laptop/g) || []).length, 1, 'expanded question shows its answer once');
 assert.doesNotMatch(paint(ask), /^ +(?:Question|Options|Answer)\s*$/m);
 assert.doesNotMatch(paint(ask), /1\. ask_user_question/);
 capture('Answered question opened directly with readable answer', ask);
@@ -241,11 +241,11 @@ ask.setExpanded(false);
 for (const [status, expected, isError] of [['unavailable', 'Unavailable', false], ['cancelled', 'Cancelled', false], ['answered', 'Unanswered', false], ['failed', 'Failed', true]]) {
   ask.updateResult({ ...result('No recorded answer', { question: 'Which host?', status, answers: [] }), isError });
   assert.match(paint(ask), new RegExp(`Question · ${expected}`));
-  assert.doesNotMatch(paint(ask), /MacBook/, 'prior answers cannot leak into a later unresolved interaction');
+  assert.doesNotMatch(paint(ask), /Laptop/, 'prior answers cannot leak into a later unresolved interaction');
   ask.setExpanded(true);
   assert.equal((paint(ask).match(new RegExp(expected, 'g')) || []).length, 1, 'unresolved state appears in the header once');
   assert.doesNotMatch(paint(ask), /✓|^ +Answer\s*$/m, 'unresolved states cannot imply a recorded answer');
-  assert.doesNotMatch(paint(ask), /MacBook|Arguments|Details|Output/);
+  assert.doesNotMatch(paint(ask), /Laptop|Arguments|Details|Output/);
   assert.match(paint(ask), /No recorded answer/, 'unresolved question retains its readable recorded message');
   ask.setExpanded(false);
 }
@@ -255,21 +255,21 @@ assert.match(paint(ask), /Question UI is unavailable in this session/);
 assert.doesNotMatch(paint(ask), /unnecessary raw output|Arguments|Details|Output/);
 ask.setExpanded(false);
 const detailedArgs = { question: 'Choose a host?', details: 'Use the machine that owns the checkout.', options: [
-  { label: 'MacBook (Recommended)', value: 'mac', description: 'Use the local checkout.' },
-  { label: 'CCC', value: 'ccc' },
+  { label: 'Laptop (Recommended)', value: 'local', description: 'Use the local checkout.' },
+  { label: 'Server', value: 'remote' },
 ] };
-const detailedResult = result('User selected: 1. MacBook (Recommended)', { status: 'answered', question: detailedArgs.question, context: detailedArgs.details, mode: 'single-select', answers: [{ type: 'option', index: 1, label: 'MacBook (Recommended)', value: 'mac' }] });
+const detailedResult = result('User selected: 1. Laptop (Recommended)', { status: 'answered', question: detailedArgs.question, context: detailedArgs.details, mode: 'single-select', answers: [{ type: 'option', index: 1, label: 'Laptop (Recommended)', value: 'local' }] });
 const detailedSource = JSON.stringify({ args: detailedArgs, result: detailedResult });
 const detailedAsk = make('ask_user_question', 'q-details', detailedArgs);
 detailedAsk.updateResult(detailedResult); detailedAsk.setExpanded(true);
 assert.match(paint(detailedAsk), /\n +Choose a host\?/);
-assert.match(paint(detailedAsk), /✓ 1\. MacBook \(Recommended\) — Use the local checkout\./);
-assert.match(paint(detailedAsk), /\n +2\. CCC/);
+assert.match(paint(detailedAsk), /✓ 1\. Laptop \(Recommended\) — Use the local checkout\./);
+assert.match(paint(detailedAsk), /\n +2\. Server/);
 assert.doesNotMatch(paint(detailedAsk), /^ +(?:Question|Options|Answer)\s*$/m);
 assert.ok(detailedAsk.render(120).map(stripAnsi).slice(2).every(row => row.trim()), 'compact question body adds no blank section gaps');
 assert.doesNotMatch(paint(detailedAsk), /1\. ask_user_question/);
 capture('Detailed question with recorded options and descriptions', detailedAsk);
-assert.equal((paint(detailedAsk).match(/✓ 1\. MacBook/g) || []).length, 1, 'selected option is the answer, without a duplicate answer section');
+assert.equal((paint(detailedAsk).match(/✓ 1\. Laptop/g) || []).length, 1, 'selected option is the answer, without a duplicate answer section');
 assertDecision(detailedAsk);
 const questionChoices = []; pi.events.emit('compact-renderer:inspect:v1', { add: entry => questionChoices.push(entry) });
 questionChoices.find(entry => entry.label.includes('Choose a host?')).focus();
@@ -628,6 +628,47 @@ assert.match(stripAnsi(singleRound.render(80).join('\n')), /1\. Recorded first l
 assert.doesNotMatch(stripAnsi(singleRound.render(80).join('\n')), /Full recorded round/);
 singleRound.handle('\r');
 assert.match(stripAnsi(singleRound.render(80).join('\n')), /Full recorded round/, 'single thinking rounds keep independent expansion');
+// Thinking uses the same compact expansion and disclosure coordinates as tools.
+const narrative = new ToolPane([
+  { id: 'first', label: 'First round', sections: () => ['First body'] },
+  { id: 'second', label: 'Second round', sections: () => ['Second body'] },
+], 'Thinking', () => 12);
+narrative.itemName = 'round'; narrative.open = true; narrative.expanded.add('first');
+const narrativeRows = narrative.render(80).map(stripAnsi);
+assert.match(narrativeRows[2], /First body/, 'expanded round body immediately follows its heading');
+const clickNarrative = y => narrative.handleMouse({ type: 'click', button: 'left', x: 3, y });
+clickNarrative(2);
+assert.deepEqual([...narrative.expanded], ['first'], 'clicking the body does not toggle an action');
+clickNarrative(narrativeRows.findIndex(line => line.includes('Second round')));
+assert.ok(narrative.expanded.has('second'), 'later round disclosure uses its compact rendered row');
+assert.match(narrative.render(80).map(stripAnsi).join('\n'), /Second body/);
+narrative.detailsExpanded.add('first'); narrative.offset = 4; narrative.focused = true;
+narrative.collapse();
+assert.equal(narrative.open, false); assert.equal(narrative.focused, false); assert.equal(narrative.offset, 0);
+assert.equal(narrative.expanded.size, 0); assert.equal(narrative.detailsExpanded.size, 0);
+narrative.open = true;
+assert.doesNotMatch(narrative.render(80).map(stripAnsi).join('\n'), /First body|Second body/, 'explicit reset reopens with all actions closed');
+const { suppressRepeatedSummary } = await loadSource('./recorded-summary.ts');
+const originalSummary = '# **Check inputs**\n\nFirst paragraph.\n\nSecond paragraph.';
+assert.equal(suppressRepeatedSummary(originalSummary, 'Check inputs'), 'First paragraph.\n\nSecond paragraph.');
+assert.equal(originalSummary, '# **Check inputs**\n\nFirst paragraph.\n\nSecond paragraph.', 'presentation helper preserves recorded source');
+for (const [source, summary] of [
+  ['Different title\nBody', 'Check inputs'],
+  ['Check inputs. More content in this paragraph.\nBody', 'Check inputs.'],
+  ['# Check inputs\n\n', 'Check inputs'],
+  ['A long complete title\nBody', 'A long…'],
+  ['Exact title\n' + '\n'.repeat(100000) + 'Distant body', 'Exact title'],
+]) assert.equal(suppressRepeatedSummary(source, summary), source, 'nonmatch, paragraph prefix, sole content and clipped summary stay exact');
+const summaryPane = new ToolPane([{ id: 'summary', label: 'Exact title', repeatedSummary: 'Exact title', sections: () => [{text: '# Exact title\n\nVisible body\n\nNext paragraph', format: 'markdown'}] }], 'Thinking · Exact title');
+summaryPane.directContent = true; summaryPane.open = true;
+assert.doesNotMatch(summaryPane.render(80).map(stripAnsi).slice(1).join('\n'), /Exact title/, 'full repeated heading is omitted from compact body');
+assert.match(summaryPane.render(12).map(stripAnsi).slice(1).join('\n'), /Exact/, 'clipped display summary keeps the recorded heading in the body');
+summaryPane.focused = false;
+assert.doesNotMatch(summaryPane.render(30).map(stripAnsi).slice(1).join('\n'), /Exact title/);
+summaryPane.focused = true;
+assert.match(summaryPane.render(30).map(stripAnsi).slice(1).join('\n'), /Exact title/, 'focus suffix clipping restores the repeated heading after a cached render');
+summaryPane.focused = false;
+assert.doesNotMatch(summaryPane.render(30).map(stripAnsi).slice(1).join('\n'), /Exact title/, 'removing focus updates suppression without a width change');
 const exactValues = { command: 'printf "hello"\nnext exact line', options: { paths: ['a', 'b'], empty: '', nullable: null } };
 const valueRows = [...recordedValues(exactValues)];
 assert.ok(valueRows.some(row => row.text === exactValues.command), 'multiline string values remain exact');

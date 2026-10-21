@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { loadSource, core, tui, runtime, themeModule, stripAnsi } from './test-runtime.mjs';
 const { modernWorkflowFences, WorkflowPane, registerModernWorkflows } = await loadSource('./modern-workflows.ts');
 const { registerModernThinking } = await loadSource('./modern-thinking.ts');
-const { default: compactRenderer } = await loadSource('../index.ts');
+const { default: piFold } = await loadSource('../index.ts');
 const { createDisplayMode } = await loadSource('./display-mode.ts');
 const { readReplyWorkflowScript } = await import(pathToFileURL(path.join(runtime, 'node_modules/pi-subagents/src/extension/reply-workflow-script.js')).href);
 const { AssistantMessageComponent } = core;
@@ -123,7 +123,7 @@ try {
   ctx.hasUI = true; ctx.ui.setWidget = () => {}; ctx.ui.setStatus = () => {};
   const nativeContainerRender = tui.Container.prototype.render;
   for (let run = 0; run < 2; run++) {
-    compactRenderer(pi); emit('session_start');
+    piFold(pi); emit('session_start');
     for (const event of ['session_tree', 'session_compact', 'session_start']) { emit(event); assert.match(plain(card.render(100)), /Subagent workflow/); }
     emit('session_shutdown');
     assert.equal(terminal.size, 0);

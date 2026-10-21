@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { backgroundCells, core, loadSource, stripAnsi, themeModule, tui } from './test-runtime.mjs';
 
 const { registerWorkStrip } = await loadSource('./work-strip.ts');
+const { registerFoldCommand } = await loadSource('./fold-command.ts');
 const { createDisplayMode } = await loadSource('./display-mode.ts');
 const { projectedChildren, renderFinalReply, workEvidenceType } = await loadSource('./work-strip-view.ts');
 const replyText = 'FINAL **bold** and `code`\n\nSecond paragraph.\n\n- First item\n- Second item';
@@ -86,8 +87,9 @@ function fixture() {
     getAllTools: () => [], appendEntry: (kind, data) => manager.appendCustomEntry(kind, data),
     registerCommand: (name, definition) => commands.set(name, definition),
   };
-  const mode = createDisplayMode(), dispose = registerWorkStrip(pi, mode);
-  const ui = { theme: themeModule.theme, isFollowingOutput: true, requestRender() {} };
+  const mode = createDisplayMode(), workControls = registerWorkStrip(pi, mode), dispose = workControls.dispose;
+  registerFoldCommand(pi, mode, workControls);
+  const ui = { theme: themeModule.theme, isFollowingOutput: true, notify() {}, requestRender() {} };
   const ctx = { mode: 'tui', hasUI: true, ui, sessionManager: manager, isIdle: () => true };
   const display = {
     chatContainer: new tui.Container(), ui, pendingTools: new Map(), outputPad: 1,
@@ -252,7 +254,7 @@ for (const stopReason of ['stop', 'toolUse', 'error', 'aborted', 'length']) {
     const folded = f.view(final.row).render(60);
     assert.equal(folded.length, 4, 'one outer gap and a three-row final card remain after thinking folds');
     assertReplySurface(folded, f.ui.theme);
-    await f.commands.get('work').handler('expand', f.ctx);
+    await f.commands.get('fold').handler('expand', f.ctx);
     const surface = f.view(final.row), expanded = surface.render(60);
     assert.match(stripAnsi(expanded.join('\n')), /Thinking/);
     const thinkingIndex = expanded.findIndex(line => stripAnsi(line).includes('Thinking'));

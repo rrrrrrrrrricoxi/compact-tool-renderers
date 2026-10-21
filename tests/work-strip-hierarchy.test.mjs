@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { core, loadSource, themeModule, tui, stripAnsi } from './test-runtime.mjs';
 
 const { registerWorkStrip } = await loadSource('./work-strip.ts');
+const { registerFoldCommand } = await loadSource('./fold-command.ts');
 const { createDisplayMode } = await loadSource('./display-mode.ts');
 const { projectedChildren, workEvidenceType, recordedWorkEvidence } = await loadSource('./work-strip-view.ts');
 assert.equal(core.VERSION, '1.3.0', 'hierarchy integration runs against the supported native runtime');
@@ -21,7 +22,8 @@ function fixture() {
     registerShortcut: (name, definition) => shortcuts.set(name, definition),
   };
   pi.events.on('compact-renderer:work-strip:v1', value => { ownership = value.ownsExecutionStatus; });
-  const mode = createDisplayMode(), dispose = registerWorkStrip(pi, mode);
+  const mode = createDisplayMode(), workControls = registerWorkStrip(pi, mode), dispose = workControls.dispose;
+  registerFoldCommand(pi, mode, workControls);
   const ui = {
     isFollowingOutput: true, theme: themeModule.theme, requestRender() {},
     onTerminalInput(fn) { inputs.add(fn); return () => inputs.delete(fn); },
@@ -59,7 +61,7 @@ function fixture() {
     return { rows: display.chatContainer[projectedChildren], lines: rendered.map(stripAnsi), text: stripAnsi(rendered.join('\n')) };
   };
   const choices = () => { const items = []; pi.events.emit('compact-renderer:inspect:v1', { add: item => items.push(item) }); return items; };
-  const work = args => commands.get('work').handler(args, ctx);
+  const work = args => commands.get('fold').handler(args, ctx);
   return { manager, mode, dispose, display, event, add, assistant, tool, save, paint, choices, work, shortcuts, notices, get ownership() { return ownership; } };
 }
 
@@ -84,7 +86,9 @@ for (const saved of [false, true]) for (const thought of ['none', 'separate', 'm
     assert.ok(!projected.rows.some(row => row.constructor.name === 'WorkStripHeader'), 'response and thinking alone receive no work strip');
     assert.equal(f.choices().filter(item => item.kind === 'Work').length, 0, 'nonactivity does not enter Work inspection');
     assert.equal(f.ownership, false, 'nonactivity leaves execution-status ownership native');
-    await f.work('collapse'); assert.deepEqual(f.paint().lines, padded, '/work cannot fold a direct response');
+    f.shortcuts.get('ctrl+alt+w').handler();
+    assert.ok(!f.paint().rows.some(row => row.constructor.name === 'WorkStripHeader'), 'shortcut with no work sections is a no-op');
+    await f.work('collapse'); assert.deepEqual(f.paint().lines, padded, '/fold cannot fold a direct response');
   } finally { f.dispose(); f.mode.dispose(); }
 }
 
@@ -193,14 +197,49 @@ for (const saved of [false, true]) for (const thought of ['none', 'separate', 'm
     f.shortcuts.get('ctrl+alt+w').handler();
     assert.equal(header.open, true, 'disabled session shortcut leaves work expanded');
     await f.work('shortcut on'); f.shortcuts.get('ctrl+alt+w').handler();
-    assert.equal(header.open, false, 'enabled native shortcut collapses work');
-    assert.ok(f.notices.some(notice => notice.message === 'Collapse work shortcut: off'));
-    assert.ok(f.notices.some(notice => notice.message === 'Collapse work shortcut: on'));
+    assert.equal(header.open, false, 'enabled native shortcut toggles completed work closed');
+    f.shortcuts.get('ctrl+alt+w').handler();
+    assert.equal(header.open, true, 'repeated shortcut toggles completed work open');
+    assert.ok(f.notices.some(notice => notice.message === 'Toggle work shortcut: off'));
+    assert.ok(f.notices.some(notice => notice.message === 'Toggle work shortcut: on'));
+    f.shortcuts.get('ctrl+alt+w').handler();
+    assert.equal(header.open, false, 'return to the folded state before checking native thinking visibility');
     final.row.setHideThinkingBlock(false);
     assert.match(f.paint().text, /EXACT_FINAL_RECORDED_THINKING/, 'explicit native thinking expansion remains visible even when the strip is folded');
     f.mode.setEnabled(false);
     assert.equal(f.paint().text, stripAnsi(canonical.flatMap(row => row.render(100)).join('\n')), 'compact-off retains complete native rendering');
     assert.equal(JSON.stringify(f.manager.getBranch()), messages, 'hierarchy and command controls leave recorded messages and evidence unchanged');
+  } finally { f.dispose(); f.mode.dispose(); }
+}
+
+{
+  const f = fixture();
+  try {
+    f.event('session_start');
+    for (const label of ['First completed turn.', 'Second completed turn.']) {
+      const user = f.add({ role: 'user', content: label });
+      f.tool(); const final = f.assistant(`DONE ${label}`); f.save(user, final);
+    }
+    f.event('session_start');
+    const headers = f.paint().rows.filter(row => row.constructor.name === 'WorkStripHeader');
+    assert.equal(headers.length, 2, 'fixture contains two completed work sections');
+    headers[0].manual = true; headers[0].open = true;
+    headers[1].manual = true; headers[1].open = false;
+    f.shortcuts.get('ctrl+alt+w').handler();
+    assert.deepEqual(headers.map(header => header.open), [false, false], 'any expanded eligible section makes the toggle collapse all eligible sections');
+    f.shortcuts.get('ctrl+alt+w').handler();
+    assert.deepEqual(headers.map(header => header.open), [true, true], 'when all eligible sections are collapsed, the toggle expands all');
+
+    f.event('agent_start');
+    f.add({ role: 'user', content: 'Waiting work.' }); f.tool();
+    f.event('message_start', { message: { role: 'assistant' } });
+    f.event('agent_settled');
+    const waiting = f.paint().rows.findLast(row => row.constructor.name === 'WorkStripHeader');
+    assert.equal(waiting.state, 'waiting', 'fixture contains a waiting work section');
+    waiting.open = true;
+    f.shortcuts.get('ctrl+alt+w').handler();
+    assert.equal(waiting.open, true, 'toggle leaves waiting work expanded while collapsing completed sections');
+    assert.deepEqual(headers.map(header => header.open), [false, false]);
   } finally { f.dispose(); f.mode.dispose(); }
 }
 

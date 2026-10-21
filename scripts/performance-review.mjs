@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Synthetic layout benchmark for the native Pi 1.3.0 tool renderer and compact renderer.
+// Synthetic layout benchmark for the native Pi 1.3.0 tool renderer and Pi Fold.
 // It never runs an agent, model, tool, shell command, or network request.
 import os from 'node:os';
 import path from 'node:path';
@@ -15,6 +15,7 @@ const { registerModernTools } = await loadSource('./modern-tools.ts');
 const { clearDisplayLineCache } = await loadSource('./display-card.ts');
 const { createDisplayMode } = await loadSource('./display-mode.ts');
 const { registerWorkStrip } = await loadSource('./work-strip.ts');
+const { registerFoldCommand } = await loadSource('./fold-command.ts');
 const { WorkStripHeader, WorkChild, workEvidenceType, projectedChildren } = await loadSource('./work-strip-view.ts');
 const { VERSION } = core;
 
@@ -160,10 +161,11 @@ export function makeProjectionFixture(turnCount, enabled) {
     getAllTools: () => [], registerCommand: (name, definition) => commands.set(name, definition), registerShortcut() {},
   };
   const modeProjection = createDisplayMode(enabled);
-  const dispose = registerWorkStrip(piProjection, modeProjection, VERSION);
+  const workControls = registerWorkStrip(piProjection, modeProjection, VERSION), dispose = workControls.dispose;
+  registerFoldCommand(piProjection, modeProjection, workControls);
   // This partial-registration benchmark supplies the cache boundary owned by index.ts.
   clearDisplayLineCache?.();
-  const uiProjection = { isFollowingOutput: true, theme: themeModule.theme, requestRender() {}, onTerminalInput(fn) { inputs.add(fn); return () => inputs.delete(fn); } };
+  const uiProjection = { isFollowingOutput: true, theme: themeModule.theme, notify() {}, requestRender() {}, onTerminalInput(fn) { inputs.add(fn); return () => inputs.delete(fn); } };
   const context = { mode: 'tui', hasUI: true, ui: uiProjection, sessionManager: manager, isIdle: () => true };
   const display = {
     chatContainer: new tui.Container(), ui: uiProjection, pendingTools: new Map(), outputPad: 0,
@@ -191,7 +193,7 @@ export function makeProjectionFixture(turnCount, enabled) {
   // Reload/resume creates completed work strips from saved evidence.
   for (const fn of hooks.get('session_start') || []) fn({}, context);
   const paint = () => display.chatContainer.render(width).length;
-  const work = action => commands.get('work').handler(action, context);
+  const work = action => commands.get('fold').handler(action, context);
   return {
     manager, mode: modeProjection, display, paint, work,
     rows: () => display.chatContainer[projectedChildren] || display.chatContainer.children,
@@ -258,7 +260,7 @@ try {
     results,
     limits: [
       'Measures synchronous layout and painting in the native Pi renderer component tree only.',
-      'Work-strip cases use registered WorkStrip hooks, native InteractiveMode addMessageToChat and chatContainer.render projection, saved completion evidence, and the /work collapse/expand handlers; fixture construction is outside measured intervals.',
+      'Work-strip cases use registered WorkStrip hooks, native InteractiveMode addMessageToChat and chatContainer.render projection, saved completion evidence, and the /fold collapse/expand handlers; fixture construction is outside measured intervals.',
       'The native-off work-strip arm disables those handlers and measures the unprojected native transcript redraw as its comparison.',
       'Does not measure terminal transport, terminal emulator painting, input latency, model latency, tool execution, network, or full interactive-session startup.',
       'Synthetic fixtures contain no user transcript, credentials, or business data.',

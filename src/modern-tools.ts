@@ -377,6 +377,14 @@ export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => 
     if (node.status !== "success") epoch++;
     redraw();
   });
+  subscriptions.push(pi.events.on("compact-renderer:disclosures:v1", (request: any) => {
+    if (disposed || !mode.isEnabled()) return;
+    for (const pane of new Set(panes())) request?.add?.((component: any) => component instanceof DynamicComponent && !!component.owner &&
+      (subagentView(component.owner)?.pane || component.owner.group?.pane || component.owner.code || component.owner.pane) === pane, pane.open, () => {
+      if (focused === pane) release();
+      pane.collapse();
+    });
+  }));
   subscriptions.push(pi.events.on("compact-renderer:inspect:v1", (request: any) => {
     if (disposed || !mode.isEnabled()) return;
     panes().forEach((pane, index) => request?.add?.({ id: `tool-${index}`, kind: "Tools", label: pane.title, focus: () => focusPane(pane) }));

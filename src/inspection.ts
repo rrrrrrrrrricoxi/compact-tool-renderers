@@ -73,10 +73,10 @@ export function registerInspection(pi: ExtensionAPI, mode: DisplayMode): () => v
     description: 'Select tools, subagent activity, thinking, or a prompt to inspect',
     async handler(_args, ctx) {
       if (!ctx.hasUI || disposed) return;
-      if (!mode.isEnabled()) { ctx.ui.notify('Turn on /compact-rendering to inspect grouped blocks.', 'info'); return; }
+      if (!mode.isEnabled()) { ctx.ui.notify('Use /fold on to inspect grouped blocks.', 'info'); return; }
       const choices: Choice[] = [];
       pi.events.emit('compact-renderer:inspect:v1', { add(choice: Choice) { if (choice && typeof choice.focus === 'function') choices.push(choice); } });
-      if (!choices.length) { ctx.ui.notify('No compact blocks to inspect yet.', 'info'); return; }
+      if (!choices.length) { ctx.ui.notify('No Pi Fold blocks to inspect yet.', 'info'); return; }
       const labels = choices.map((choice, index) => `${index + 1}. ${choice.kind} — ${choice.label.replace(/[\x00-\x1f\x7f-\x9f]/g, ' ').slice(0, 160)}`);
       const selected = await ctx.ui.select('Inspect a block', labels);
       const index = selected === undefined ? -1 : labels.indexOf(selected);
