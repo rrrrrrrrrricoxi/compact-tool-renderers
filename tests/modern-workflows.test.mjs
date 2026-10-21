@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { loadSource, core, tui, runtime, themeModule, stripAnsi } from './test-runtime.mjs';
+import { loadSource, core, tui, runtime, themeModule, stripAnsi, backgroundCells } from './test-runtime.mjs';
 const { modernWorkflowFences, WorkflowPane, registerModernWorkflows } = await loadSource('./modern-workflows.ts');
 const { registerModernThinking } = await loadSource('./modern-thinking.ts');
+const { renderFinalReply } = await loadSource('./work-strip-view.ts');
 const { default: piFold } = await loadSource('../index.ts');
 const { createDisplayMode } = await loadSource('./display-mode.ts');
 const { readReplyWorkflowScript } = await import(pathToFileURL(path.join(runtime, 'node_modules/pi-subagents/src/extension/reply-workflow-script.js')).href);
@@ -59,6 +60,16 @@ try {
   mouse(card, header); assert.match(plain(card.render(100)), /const label/);
   assert.equal(mouse(card, header + 2, 'wheel').handled, true);
   assert.equal(key('\r'), false);
+  choices()[0].focus();
+  const beforeMore = plain(card.render(100));
+  const moreRows = card.render(100).map(stripAnsi), moreY = moreRows.findIndex(row => row.includes('more ↓'));
+  assert.ok(moreY > header);
+  assert.equal(mouse(card, moreY)?.handled, true);
+  const afterMore = plain(card.render(100));
+  assert.notEqual(afterMore, beforeMore, 'overflow click advances the rendered workflow source');
+  assert.doesNotMatch(afterMore, /const label/);
+  assert.match(afterMore, /Visible prose before/); assert.match(afterMore, /Visible prose after/);
+  assert.equal(key('\r'), false, 'overflow click releases inspection to the editor');
   choices()[0].focus(); assert.equal(key('\x1b'), true); assert.equal(key('\r'), false);
   choices()[0].focus(); emit('ui_prompt_start'); assert.equal(key('\r'), false);
   choices()[0].focus(); pi.events.emit('compact-renderer:focus:v1', { owner: 'tools' }); assert.equal(key('\r'), false);
@@ -109,6 +120,20 @@ try {
   dispose = registerModernWorkflows(pi, mode); emit('session_start'); assert.match(plain(card.render(100)), /Subagent workflow/);
   const oldDispose = dispose; dispose = registerModernWorkflows(pi, mode); emit('session_start'); oldDispose(); assert.equal(terminal.size, 2);
   assert.match(plain(card.render(100)), /Subagent workflow/);
+  // Final replies retain their native fenced source and padded neutral surface.
+  const finalWorkflow = make({ role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'Final prose before.\n\n```js workflow\n// Final native fence\nconst finalValue = 42;\n```\n\nFinal prose after.' }] });
+  mode.setEnabled(false); const nativeFinal = finalWorkflow.render(100).map(stripAnsi); mode.setEnabled(true);
+  assert.match(plain(finalWorkflow.render(100)), /Subagent workflow/);
+  const staleFinalChoice = choices().find(choice => choice.label === 'Final native fence'); staleFinalChoice.focus();
+  const finalRows = renderFinalReply(finalWorkflow, 100, themeModule.theme);
+  assert.deepEqual(finalRows.map(stripAnsi), [nativeFinal[0], ' '.repeat(100), ...nativeFinal.slice(1), ' '.repeat(100)], 'final workflow replies add exactly the native padding pair');
+  assert.match(plain(finalRows), /const finalValue = 42/); assert.doesNotMatch(plain(finalRows), /Subagent workflow/);
+  const finalBg = backgroundCells(themeModule.theme.bg('toolPendingBg', ' '))[0];
+  for (const row of finalRows.slice(1)) assert.ok(backgroundCells(row.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '')).every(cell => cell === finalBg), 'final workflow text and gaps keep the neutral fill');
+  assert.ok(!choices().some(choice => choice.label === 'Final native fence'), 'final rendering clears the old workflow inspection control');
+  staleFinalChoice.focus(); assert.equal(key('\r'), false, 'stale final workflow inspection cannot reclaim editor input');
+  assert.equal(mouse(finalWorkflow, 2), undefined, 'native fenced text cannot dispatch the old workflow disclosure');
+  assert.match(plain(card.render(100)), /Subagent workflow/, 'ordinary workflow cards remain compact after final rendering');
   dispose(); disposeThinking(); assert.deepEqual({ render: AssistantMessageComponent.prototype.render, mouse: AssistantMessageComponent.prototype.handleMouse, update: AssistantMessageComponent.prototype.updateContent }, native);
   assert.equal(JSON.stringify(branch), exactMessage, 'recorded assistant message and transcript stay exact');
   assert.deepEqual(readReplyWorkflowScript(sessionManager, 'workflow-call'), scriptBefore, 'installed workflow executor reads the same original script after display interactions');
@@ -141,6 +166,17 @@ try {
   huge.render(80); assert.equal(huge.paintedRows, 0, 'closed panes never format source');
   huge.open = true; const hugeRows = huge.render(80); assert.ok(hugeRows.length <= 15); assert.ok(huge.paintedRows <= 15);
   const firstPaint = huge.paintedRows; huge.render(80); assert.equal(huge.paintedRows, firstPaint, 'redraw reuses formatted rows');
+  const pagedWorkflow = new WorkflowPane(Array.from({ length: 31 }, (_, n) => `const page${n} = ${n};`).join('\n'), 'Paged source');
+  pagedWorkflow.open = true;
+  let pageRows = pagedWorkflow.render(80).map(stripAnsi);
+  const workflowClick = extra => pagedWorkflow.handleMouse({ type: 'click', button: 'left', x: 3, y: pageRows.findIndex(row => row.includes('more ↓')), ...extra });
+  workflowClick({ ctrl: true }); assert.equal(pagedWorkflow.offset, 0, 'modified workflow overflow click keeps source position');
+  for (let n = 0; n < 40 && pageRows.some(row => row.includes('more ↓')); n++) {
+    const before = pagedWorkflow.paintedRows; workflowClick(); pageRows = pagedWorkflow.render(80).map(stripAnsi);
+    assert.ok(pagedWorkflow.paintedRows - before <= 12, 'one overflow click formats at most one source viewport');
+  }
+  assert.match(pageRows.join('\n'), /const page30/);
+  assert.doesNotMatch(pageRows.join('\n'), /more ↓/, 'the source footer disappears after the final rows');
   const longLine = new WorkflowPane('const value = "' + '🙂'.repeat(200000) + '";', 'Long line'); longLine.open = true;
   assert.ok(longLine.render(12).length <= 15); assert.ok(longLine.paintedRows <= 15);
   console.log('modern workflows: exact executor source, bounded native syntax, surrounding prose, independent fences, native thinking, mouse/editor/inspection, lifecycle, and fallback passed');

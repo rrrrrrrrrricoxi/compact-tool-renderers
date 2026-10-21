@@ -1,5 +1,11 @@
 # Release notes
 
+## 3.0.1 — Inspection paging and final thinking
+
+- Make `more ↓` advance expanded tool, codemode, workflow, and thinking panes by one visible page. Preserve prompt typing after mouse inspection.
+- Keep leading thinking on a final answer with the preceding thinking rounds. Preserve visible-reply, error, and question boundaries.
+- Preserve compact thinking while painting the final answer background and padding.
+
 ## 3.0.0 — Pi Fold
 
 - Rename the public interface to Pi Fold and combine display mode, collapse/expand, and shortcut controls under `/fold`.

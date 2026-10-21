@@ -1,5 +1,5 @@
 import { Box, Markdown, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
-import { activityRow, cardContentWidth, fillBackground } from './display-card.ts';
+import { activityRow, cardContentWidth, fillBackground, finalReplyRendering } from './display-card.ts';
 
 /** Shared with inspection. Canonical native children stay untouched. */
 export const projectedChildren = Symbol.for('compact-renderer:projected-children:v1');
@@ -13,17 +13,25 @@ export function renderFinalReply(row: any, width: number, theme: any): string[] 
   const first = children?.findIndex((child: any) => child instanceof Markdown) ?? -1;
   if (first < 0) return row.render(width);
   const last = children.findLastIndex((child: any) => child instanceof Markdown);
-  const padding = { invalidate() {}, render: (contentWidth: number) => [fillBackground('', contentWidth, theme, 'toolPendingBg')] };
   for (const child of children) {
     if (!(child instanceof Markdown)) continue;
     const native = child.render, own = Object.getOwnPropertyDescriptor(child, 'render');
     child.render = function(contentWidth: number) {
-      return native.call(this, contentWidth).map((line: string) => line.includes('\x1b_G') || line.includes('\x1b]1337;File=') ? line : fillBackground(line, Math.max(contentWidth, visibleWidth(line)), theme, 'toolPendingBg'));
+      const lines = native.call(this, contentWidth).map((line: string) => line.includes('\x1b_G') || line.includes('\x1b]1337;File=') ? line : fillBackground(line, Math.max(contentWidth, visibleWidth(line)), theme, 'toolPendingBg'));
+      if (child === children[first]) lines.unshift(fillBackground('', contentWidth, theme, 'toolPendingBg'));
+      if (child === children[last]) lines.push(fillBackground('', contentWidth, theme, 'toolPendingBg'));
+      return lines;
     };
     restore.push(() => { if (own) Object.defineProperty(child, 'render', own); else delete (child as any).render; });
   }
-  container.children = [...children.slice(0, first), padding, ...children.slice(first, last + 1), padding, ...children.slice(last + 1)];
-  try { return row.render(width); } finally { container.children = children; restore.forEach(fn => fn()); }
+  // Add rows through Markdown rendering, preserving the native child shape
+  // used by the thinking adapter throughout this render.
+  const marker = Object.getOwnPropertyDescriptor(row, finalReplyRendering);
+  row[finalReplyRendering] = true;
+  try { return row.render(width); } finally {
+    if (marker) Object.defineProperty(row, finalReplyRendering, marker); else delete row[finalReplyRendering];
+    restore.forEach(fn => fn());
+  }
 }
 /** Native Box owns both rendering and mouse-coordinate translation. */
 export class WorkChild extends Box {

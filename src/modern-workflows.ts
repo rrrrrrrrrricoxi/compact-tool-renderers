@@ -1,7 +1,7 @@
 import type { DisplayMode } from './display-mode.ts';
 import { AssistantMessageComponent, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, Markdown, MouseRegion, Spacer, Text, matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
-import { activityRow, cardContentWidth } from './display-card.ts';
+import { activityRow, cardContentWidth, finalReplyRendering } from './display-card.ts';
 import { richTextRows } from './modern-rich-text.ts';
 import { recordedPaneHeight } from './modern-recorded-pane.ts';
 import { chainNativeMethod } from './native-method-chain.ts';
@@ -45,7 +45,7 @@ export class WorkflowPane {
   open = false; focused = false; offset = 0; paintedRows = 0;
   theme?: any;
   private rows: string[] = []; private iterator?: Iterator<string>; private done = false;
-  private width = 0; private themeKey = ''; private lastWidth = 0; private lastHeight = 0;
+  private width = 0; private themeKey = ''; private lastWidth = 0; private lastHeight = 0; private lastBodyHeight = 0; private lastMore = false;
   constructor(readonly source: string, readonly summary: string, private release: () => void = () => {}) {}
   collapse() { this.open = false; this.focused = false; this.offset = 0; this.invalidate(); }
   invalidate() { this.rows = []; this.iterator = undefined; this.done = false; this.width = 0; }
@@ -66,6 +66,7 @@ export class WorkflowPane {
     if (this.width !== sourceWidth || themeKey !== this.themeKey) { this.invalidate(); this.width = sourceWidth; this.themeKey = themeKey; this.offset = 0; }
     const label = `${this.open ? '▾' : '▸'} Subagent workflow`;
     const rows = [activityRow(theme ? theme.fg('mdLink', theme.bold(label)) + theme.fg('muted', ` · ${this.summary}`) : `${label} · ${this.summary}`, width, theme, this.focused)];
+    this.lastBodyHeight = 0; this.lastMore = false;
     if (this.open) {
       this.iterator ??= richTextRows(this.source, sourceWidth, { format: 'code', language: 'javascript' });
       const height = recordedPaneHeight();
@@ -78,7 +79,8 @@ export class WorkflowPane {
       if (this.done) this.offset = Math.min(this.offset, Math.max(0, this.rows.length - height));
       rows.push(...this.rows.slice(this.offset, this.offset + height).map(row => activityRow(indent + row, width, theme)));
       const more = !this.done || this.offset + height < this.rows.length;
-      const hint = this.focused ? `Enter collapse · ↑/↓ scroll · Home start · Esc release${more ? ' · more ↓' : ''}` : more ? 'more ↓' : '';
+      this.lastBodyHeight = rows.length - 1; this.lastMore = more;
+      const hint = [more ? 'more ↓' : '', this.focused ? 'Enter collapse · ↑/↓ scroll · Home start · Esc release' : ''].filter(Boolean).join(' · ');
       if (hint) rows.push(activityRow(theme ? theme.fg('muted', hint) : hint, width, theme));
     }
     this.lastHeight = rows.length;
@@ -89,8 +91,9 @@ export class WorkflowPane {
     if (event.type === 'wheel' && this.open && Number.isFinite(event.wheelDelta) && event.wheelDelta) {
       this.release(); this.offset = Math.max(0, this.offset + Math.max(-20, Math.min(20, Math.trunc(event.wheelDelta)))); return { handled: true };
     }
-    if (event.type === 'click' && event.button === 'left' && event.y === 0 && !event.ctrl && !event.alt && !event.shift) {
-      this.release(); this.open = !this.open; this.offset = 0; return { handled: true };
+    if (event.type === 'click' && event.button === 'left' && !event.ctrl && !event.alt && !event.shift) {
+      if (event.y === 0) { this.release(); this.open = !this.open; this.offset = 0; return { handled: true }; }
+      if (this.open && this.lastMore && event.y === this.lastHeight - 1) { this.release(); this.offset += Math.max(1, this.lastBodyHeight); return { handled: true }; }
     }
   }
 }
@@ -113,7 +116,7 @@ export function registerModernWorkflows(pi: ExtensionAPI, mode: DisplayMode, ver
   const clear = () => { release(); cards.clear(); input?.(); input = undefined; redraw = undefined; active = false; };
   const supported = (component: any): any[] | undefined => {
     const message = component.lastMessage, container = component.contentContainer;
-    if (component.isStreaming !== false || message?.role !== 'assistant' || !Array.isArray(message.content) || !Array.isArray(component.children) || component.children.length !== 1 || component.children[0] !== container || container?.constructor !== Container || !Array.isArray(container.children)) return;
+    if (component[finalReplyRendering] || component.isStreaming !== false || message?.role !== 'assistant' || !Array.isArray(message.content) || !Array.isArray(component.children) || component.children.length !== 1 || component.children[0] !== container || container?.constructor !== Container || !Array.isArray(container.children)) return;
     if (!container.children.every((child: any) => child instanceof Markdown || child instanceof Spacer || child instanceof Text || child instanceof MouseRegion && (child.child instanceof Markdown || child.child instanceof Text))) return;
     const text = message.content.filter((block: any) => block.type === 'text' && typeof block.text === 'string' && block.text.trim()).map((block: any) => block.text.trim());
     const markdown = container.children.filter((child: any) => child instanceof Markdown);

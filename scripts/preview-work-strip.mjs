@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPreview } from './preview.mjs';
 
-export async function createWorkStripPreview({ stepMs = 1000 } = {}) {
+export async function createWorkStripPreview({ stepMs = 1000, inspection = false } = {}) {
   const old = process.env.PI_PREVIEW_WORK_STRIP;
   process.env.PI_PREVIEW_WORK_STRIP = '1';
   const preview = await createPreview();
@@ -32,6 +32,23 @@ export async function createWorkStripPreview({ stepMs = 1000 } = {}) {
     'This is a display fixture. Do not execute tools or access any external data.',
   ].join('\n'),timestamp:Date.now()});
   manager.appendMessage(assistant('This direct reply has no work strip. Expand the prompt above to inspect all ten recorded requirements.'));
+  if (inspection) {
+    manager.appendMessage({role:'user',content:'Inspection regression preview: expand the work, then click more in the recorded code output and the three-round thinking group.',timestamp:Date.now()});
+    const userId = manager.getBranch().at(-1).id;
+    for (let i = 1; i <= 2; i++) {
+      const name = i === 1 ? 'read' : 'codemode';
+      const args = i === 1 ? {path:'/fixture/recorded.txt'} : {code:'text(await tools.read({ path: "/fixture/recorded.txt" }));'};
+      const call = assistant(''); call.stopReason = 'toolUse';
+      call.content = [{type:'thinking',thinking:`Review recorded sample ${i}.\n\n` + Array.from({length:45},(_,n)=>`Round ${i}, recorded line ${n+1}. This is invented fixture text.`).join('\n')}, {type:'toolCall',id:`inspection-${i}`,name,arguments:args}];
+      manager.appendMessage(call);
+      manager.appendMessage({role:'toolResult',toolCallId:`inspection-${i}`,toolName:name,content:[{type:'text',text:Array.from({length:60},(_,n)=>`Recorded output ${n+1}`).join('\n')}],details:i===2?{calls:[{name:'read',args:JSON.stringify({path:'/fixture/recorded.txt'}),status:'ok',durationMs:1}]}:{},isError:false,timestamp:Date.now()});
+    }
+    const final = assistant('Inspection result: the final thinking belongs to the same three-round group. Clicking more advances the recorded output. This answer stays outside the group. No tools or model ran.');
+    final.content.unshift({type:'thinking',thinking:'Finalize the recorded result.\n\n' + Array.from({length:45},(_,n)=>`Final round, recorded line ${n+1}. This is invented fixture text.`).join('\n')});
+    manager.appendMessage(final);
+    const finalId = manager.getBranch().at(-1).id;
+    manager.appendCustomEntry('compact-renderer:work-settled:v1',{version:1,userId,finalId,endId:finalId,startedAt:base-90000,endedAt:base,outcome:'completed'});
+  }
   const emit = async event => {
     if (stopped) return;
     runtime.session._emit(event);

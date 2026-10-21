@@ -5,7 +5,7 @@ import { hiddenThinkingShape, mixedThinkingRegion, installModernThinkingAdapter 
 import { recordedPaneHeight } from "./modern-recorded-pane.ts";
 import { ToolPane, type PaneAction } from "./modern-tool-pane.ts";
 
-type Round = { id: number; sources?: string[]; action?: PaneAction; message: any; hasThinking: boolean; component?: any; kind: "round" | "bridge" | "boundary"; group?: ThinkingGroup };
+type Round = { id: number; sources?: string[]; action?: PaneAction; message: any; hasThinking: boolean; joinsPrevious: boolean; component?: any; kind: "round" | "bridge" | "boundary"; group?: ThinkingGroup };
 type ThinkingGroup = { members: Round[]; pane: ToolPane; activeEpoch?: number; activeResult?: boolean };
 /** The label is an extract from recorded text, never a generated summary.
  * Limit work even when the first line has millions of characters. */
@@ -19,6 +19,21 @@ export function recordedThinkingLabel(sources: readonly string[]): string {
 }
 
 const hasThinking = (message: any) => (message?.content || []).some((b: any) => b.type === "thinking" && typeof b.thinking === "string" && b.thinking.trim());
+// A leading run can join earlier rounds only before the first visible reply.
+// Track this separately from the broad boundary kind during streaming updates.
+const joinsPreviousThinking = (message: any): boolean => {
+  if (["error", "aborted", "length"].includes(message?.stopReason)) return false;
+  let runs = 0, inRun = false, firstVisible: string | undefined, hasText = false;
+  for (const block of message?.content || []) {
+    if (!["thinking", "text", "toolCall"].includes(block.type) || block.type === "toolCall" && ["ask_user_question", "question"].includes(block.name)) return false;
+    if (block.type !== "thinking") inRun = false;
+    if (block.type === "thinking" && block.thinking?.trim()) {
+      firstVisible ??= "thinking";
+      if (!inRun) { runs++; inRun = true; }
+    } else if (block.type === "text" && block.text?.trim()) { firstVisible ??= "text"; hasText = true; }
+  }
+  return hasText && firstVisible === "thinking" && runs === 1;
+};
 const supportedThinking = (component: any, message: any) => hiddenThinkingShape(component, message) || !!mixedThinkingRegion(component, message);
 const classify = (message: any): Round["kind"] => {
   if (["error", "aborted", "length"].includes(message?.stopReason) || (message?.content || []).some((b: any) => b.type === "text" && b.text?.trim() || b.type === "toolCall" && ["ask_user_question", "question"].includes(b.name))) return "boundary";
@@ -57,10 +72,12 @@ export class ModernThinkingGroups {
       return;
     }
     let record = this.aliases.get(message) || (phase === "start" ? undefined : this.live);
-    if (!record) { record = { id: this.records.length, message, hasThinking: hasThinking(message), kind: classify(message) }; this.records.push(record); this.dirty = true; }
+    if (!record) { record = { id: this.records.length, message, hasThinking: hasThinking(message), joinsPrevious: joinsPreviousThinking(message), kind: classify(message) }; this.records.push(record); this.dirty = true; }
     // Native streaming messages can share a mutated content array.
     const thinking = hasThinking(message);
     if (record.hasThinking !== thinking) { record.hasThinking = thinking; this.dirty = true; }
+    const joinsPrevious = joinsPreviousThinking(message);
+    if (record.joinsPrevious !== joinsPrevious) { record.joinsPrevious = joinsPrevious; this.dirty = true; }
     record.message = message; this.aliases.set(message, record);
     const kind = classify(message);
     if (record.kind !== kind) { record.kind = kind; this.dirty = true; }
@@ -90,8 +107,13 @@ export class ModernThinkingGroups {
     for (const record of this.records) {
       if (record) record.group = undefined;
       if (!record || record.kind === "boundary") {
+        const message = record?.message;
+        const mixed = record && hasThinking(message) && message.content.some((block: any) => block.type === "text" && block.text?.trim());
+        // Leading thinking precedes this reply boundary and belongs with the
+        // previous rounds. Text-first runs and failed/question messages stay separate.
+        if (!record?.joinsPrevious) flush();
+        if (mixed) members.push(record);
         flush();
-        if (record && hasThinking(record.message) && record.message.content.some((block: any) => block.type === "text" && block.text?.trim())) { members.push(record); flush(); }
       }
       else if (record.kind === "round") members.push(record);
     }

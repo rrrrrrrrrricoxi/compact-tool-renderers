@@ -568,6 +568,18 @@ scriptFailure.setExpanded(true);
 assert.doesNotMatch(paint(scriptFailure), /name too long, lstat/);
 clickSingle(scriptFailure, 3);
 assert.match(paint(scriptFailure), /ENAMETOOLONG: name too long, lstat/);
+event('message_end', { message: { role: 'user', content: 'focused overflow fixture' } });
+const focusedOverflow = make('read', 'focused-overflow', { path: '/fixture/focused-overflow' });
+focusedOverflow.updateResult(result(Array.from({ length: 60 }, (_, n) => `Focused output ${n}`).join('\n')));
+paint(focusedOverflow);
+const overflowChoices = []; pi.events.emit('compact-renderer:inspect:v1', { add: choice => overflowChoices.push(choice) });
+overflowChoices.find(choice => choice.label.includes('/fixture/focused-overflow')).focus();
+const focusedOverflowRows = focusedOverflow.render(120).map(stripAnsi);
+assert.match(focusedOverflowRows.join('\n'), /Focused output 0\b/);
+clickSingle(focusedOverflow, focusedOverflowRows.findIndex(row => row.includes('more ↓')));
+assert.doesNotMatch(paint(focusedOverflow), /Focused output 0\b/, 'overflow paging survives mouse release of inspection');
+assert.doesNotMatch(paint(focusedOverflow), / · focused/);
+assert.equal(input('\r'), undefined, 'tool overflow returns Enter to the editor');
 const styled = new ToolPane([{ id: 'styles', label: 'read', sections: function* () {
   yield { text: '# Recorded heading\n**Emphasis** and `inline` code.\n```javascript\nconst paths = ["/fixture/a"];\n```', format: 'markdown' };
   yield { text: '-const before = 1;\n+const after = 2;', format: 'code', language: 'diff' };
@@ -648,6 +660,25 @@ assert.equal(narrative.open, false); assert.equal(narrative.focused, false); ass
 assert.equal(narrative.expanded.size, 0); assert.equal(narrative.detailsExpanded.size, 0);
 narrative.open = true;
 assert.doesNotMatch(narrative.render(80).map(stripAnsi).join('\n'), /First body|Second body/, 'explicit reset reopens with all actions closed');
+// The rendered overflow footer pages the existing inline viewport and preserves Details state.
+const overflowPane = new ToolPane([{ id: 'overflow', label: 'Read', sections: function* () {
+  for (let n = 0; n < 60; n++) yield `Recorded output ${n}`;
+}, details: () => ['Exact arguments'] }], 'Read', () => 8);
+overflowPane.open = true; overflowPane.detailsExpanded.add('overflow');
+let overflowRows = overflowPane.render(80).map(stripAnsi);
+const clickOverflow = extra => overflowPane.handleMouse({ type: 'click', button: 'left', x: 3, y: overflowRows.findIndex(row => row.includes('more ↓')), ...extra });
+assert.equal(clickOverflow({ shift: true })?.render, false); assert.equal(overflowPane.offset, 0, 'modified overflow clicks preserve text selection');
+assert.equal(clickOverflow()?.handled, true);
+overflowRows = overflowPane.render(80).map(stripAnsi);
+assert.ok(overflowPane.offset > 0 && overflowPane.offset <= 8, 'overflow click advances one bounded tool viewport');
+assert.doesNotMatch(overflowRows.join('\n'), /Recorded output 0\b/);
+assert.ok(overflowPane.detailsExpanded.has('overflow'), 'paging preserves Details expansion');
+for (let n = 0; n < 20 && overflowRows.some(row => row.includes('more ↓')); n++) {
+  clickOverflow(); overflowRows = overflowPane.render(80).map(stripAnsi);
+}
+assert.match(overflowRows.join('\n'), /Recorded output 59/);
+assert.doesNotMatch(overflowRows.join('\n'), /more ↓/, 'the footer disappears at the end');
+assert.ok(overflowPane.paintedRows < 80, 'paging only formats the bounded visited output');
 const { suppressRepeatedSummary } = await loadSource('./recorded-summary.ts');
 const originalSummary = '# **Check inputs**\n\nFirst paragraph.\n\nSecond paragraph.';
 assert.equal(suppressRepeatedSummary(originalSummary, 'Check inputs'), 'First paragraph.\n\nSecond paragraph.');
@@ -669,6 +700,15 @@ summaryPane.focused = true;
 assert.match(summaryPane.render(30).map(stripAnsi).slice(1).join('\n'), /Exact title/, 'focus suffix clipping restores the repeated heading after a cached render');
 summaryPane.focused = false;
 assert.doesNotMatch(summaryPane.render(30).map(stripAnsi).slice(1).join('\n'), /Exact title/, 'removing focus updates suppression without a width change');
+const clippedOverflow = new ToolPane([{ id: 'clipped-overflow', label: 'Exact title', repeatedSummary: 'Exact title', sections: () => [{ text: '# Exact title\n\n' + Array.from({ length: 50 }, (_, n) => `Body ${n}`).join('\n'), format: 'markdown' }] }], 'Thinking · Exact title', () => 8);
+clippedOverflow.open = true; clippedOverflow.focused = true;
+let clippedRows = clippedOverflow.render(30).map(stripAnsi);
+assert.match(clippedRows.slice(1).join('\n'), /Exact title/);
+clippedOverflow.handleMouse({ type: 'click', button: 'left', x: 3, y: clippedRows.findIndex(row => row.includes('more ↓')) });
+clippedOverflow.focused = false; clippedRows = clippedOverflow.render(30).map(stripAnsi);
+assert.ok(clippedOverflow.offset > 0, 'a focus-clipped heading also preserves the paged position');
+clippedOverflow.handle('\x1b[H');
+assert.doesNotMatch(clippedOverflow.render(30).map(stripAnsi).slice(1).join('\n'), /Exact title/, 'Home resets the cache using the current complete heading');
 const exactValues = { command: 'printf "hello"\nnext exact line', options: { paths: ['a', 'b'], empty: '', nullable: null } };
 const valueRows = [...recordedValues(exactValues)];
 assert.ok(valueRows.some(row => row.text === exactValues.command), 'multiline string values remain exact');
