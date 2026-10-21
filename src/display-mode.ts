@@ -24,7 +24,7 @@ export function createDisplayMode(initial = true) {
       for (const callback of [...listeners]) {
         try { callback(); } catch (error) { errors.push(error); }
       }
-      if (errors.length) throw new AggregateError(errors, 'Compact display refresh failed');
+      if (errors.length) throw new AggregateError(errors, 'Pi Fold display refresh failed');
       return true;
     },
     dispose() { disposed = true; listeners.clear(); },

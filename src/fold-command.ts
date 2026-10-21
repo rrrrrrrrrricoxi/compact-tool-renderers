@@ -45,13 +45,13 @@ export function registerFoldCommand(pi: ExtensionAPI, mode: FoldMode, work: Work
         if (enabled === undefined && ctx.hasUI) {
           const current = work.isShortcutEnabled() ? 'on' : 'off';
           const choices = ['on', 'off'].map(value => `${value}${value === current ? ' (current)' : ''}`);
-          const selected = await ctx.ui.select('Collapse work shortcut — Ctrl+Alt+W', choices);
+          const selected = await ctx.ui.select('Toggle work shortcut — Ctrl+Alt+W', choices);
           if (disposed || selected === undefined || !choices.includes(selected)) return;
           enabled = selected === choices[0];
           if (enabled === work.isShortcutEnabled()) return;
         }
         if (enabled !== undefined) work.setShortcutEnabled(enabled);
-        ctx.ui.notify(`Collapse work shortcut: ${work.isShortcutEnabled() ? 'on' : 'off'}`, 'info');
+        ctx.ui.notify(`Toggle work shortcut: ${work.isShortcutEnabled() ? 'on' : 'off'}`, 'info');
       } else {
         ctx.ui.notify('Use /fold [on|off|toggle|status|collapse|expand|shortcut [on|off]]', 'info');
       }

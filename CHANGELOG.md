@@ -1,10 +1,12 @@
 # Release notes
 
-## 3.0.0 — Pi Fold commands
+## 3.0.0 — Pi Fold
 
 - Rename the public interface to Pi Fold and combine display mode, collapse/expand, and shortcut controls under `/fold`.
 - Remove `/compact-rendering` and `/work` without aliases. Use `/fold on|off|toggle|status`, `/fold collapse|expand`, and `/fold shortcut on|off`. `/inspect` and Ctrl+Alt+W remain available.
-- Use neutral machine labels in the README and benchmark report. The npm package name remains `pi-compact-renderer`.
+- Rename the npm package to `@notrico/pi-fold` and the repository to `pi-fold`. Remove the old package installation before installing the new name.
+- Make Ctrl+Alt+W toggle completed work: collapse if any section is expanded, otherwise expand. Active and waiting sections stay unchanged.
+- Refresh public documentation and remove private deployment history.
 
 ## 2.5.3 — Stable live alignment and clearer source layout
 
@@ -30,7 +32,7 @@
 - Omit work strips for replies without execution activity. Preserve elapsed labels where recorded and use Work details when duration is unavailable.
 - Give settled final replies a faint neutral surface with the same vertical padding as user prompts. Preserve native content and consistent outer spacing.
 - Collapse long prompts around their original opening and ending. Combine explicit skill invocation and optional user text into one blue prompt card with inspectable skill content.
-- Preserve native fallback, prompt-jump anchors, editor controls, images, reload and resume. All 24 suites passed on Mac and CCC; the user approved both terminal previews.
+- Preserve native fallback, prompt-jump anchors, editor controls, images, reload and resume. All 24 suites passed on both test machines; the user approved both terminal previews.
 
 ## 2.4.0 — Work strips
 
@@ -39,13 +41,13 @@
 - Compact DDD notices with full inspection and conservative handling of missing severity. Retain chronological expansion, nested inspection, native-off behavior, and editor controls.
 - Preserve native outside spacing with each visible block, including skill cards and summaries. Drop gaps with hidden blocks and retain internal card spacing without adding duplicate gaps.
 - Store validated display-only completion records for resume/reload. Older turns without records remain open. Coordinate execution status with Pi Statusline without changing saved footer preferences.
-- Add isolated native-runtime playback and regressions for settlement, descendants, replay, decisions, focus, and scrollback. All 20 suites passed on MacBook and CCC. The user approved both terminal previews on 20 October 2026.
+- Add isolated native-runtime playback and regressions for settlement, descendants, replay, decisions, focus, and scrollback. All 20 suites passed on both test machines. The user approved both terminal previews on 20 October 2026.
 
 ## 2.3.3 — Single-round thinking summaries
 
 - Give a single recorded thinking round a short extractive summary and an aligned disclosure arrow. Expand directly into bounded content without a second round heading.
 - Compact one hidden thinking run beside a visible reply while preserving native reply rendering, ordering, and terminal markers. Keep native fallback for unsupported layouts, failures, and expansion overrides.
-- Track shared streaming content changes and retain grouping boundaries, mouse controls, editor focus, and lifecycle cleanup. All 16 suites passed on MacBook and CCC; the user approved both terminal previews.
+- Track shared streaming content changes and retain grouping boundaries, mouse controls, editor focus, and lifecycle cleanup. All 16 suites passed on both test machines; the user approved both terminal previews.
 
 ## 2.3.2 — Preserve compact history after reload
 
@@ -97,7 +99,7 @@
 - Render supported code-mode scripts, nested calls, errors, output, timing, and costs incrementally as the user scrolls. Retain all recorded content and metadata.
 - Preserve editor return, native-off display, and fallback for unsupported result shapes. Handle streaming updates, theme changes, and timer cleanup.
 - Aggregate result blocks/calls once per update; cache visited rows. Long multiline syntax colors can differ at chunk boundaries.
-- Verify the combined preview in local Herdr and CCC over mosh/tmux before publication.
+- Verify the combined preview in a local terminal and over mosh/tmux before publication.
 
 ## 2.0.1 — Readable inspection and concise summaries
 

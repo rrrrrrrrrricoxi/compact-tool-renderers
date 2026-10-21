@@ -10,7 +10,7 @@ required.push('reload-lifecycle.test.mjs', 'ordinary-prompts.test.mjs', 'work-st
 required.push('modern-skill-prompts.test.mjs');
 required.push('display-line-cache.test.mjs');
 required.push('display-cache-lifecycle.test.mjs');
-required.push('fold-command.test.mjs');
+required.push('fold-command.test.mjs', 'fold-shortcut.test.mjs');
 required.push('mixed-thinking.test.mjs', 'work-strip.test.mjs', 'work-strip-subagents.test.mjs', 'work-strip-preview.test.mjs', 'work-strip-spacing.test.mjs');
 for (const name of required) {
   if (!fs.existsSync(path.join(directory, name))) throw new Error(`Missing required regression suite: ${name}`);
@@ -18,4 +18,4 @@ for (const name of required) {
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
-console.log('Standalone compact renderer native regression suites passed');
+console.log('Pi Fold native regression suites passed');

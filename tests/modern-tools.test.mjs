@@ -226,14 +226,14 @@ assertDecision(ask);
 assert.ok(ask.render(100)[1].includes(themeModule.theme.getFgAnsi('accent')), 'question heading uses purple accent');
 assert.notEqual(themeModule.theme.getFgAnsi('accent'), themeModule.theme.getFgAnsi('mdLink'), 'questions and actions have distinct native tones');
 capture('Question pending with aligned purple heading', ask);
-ask.updateResult(result('User answered: MacBook', { question: 'Which host?', status: 'answered', answers: [{ label: 'MacBook', value: 'mac' }] }));
-assert.match(paint(ask), /Question · Answered · Which host\? · MacBook/);
+ask.updateResult(result('User answered: Laptop', { question: 'Which host?', status: 'answered', answers: [{ label: 'Laptop', value: 'local' }] }));
+assert.match(paint(ask), /Question · Answered · Which host\? · Laptop/);
 assertDecision(ask);
 assert.equal((paint(ask).match(/Question ·/g) || []).length, 1);
 ask.setExpanded(true);
-assert.match(paint(ask), /✓ MacBook/);
+assert.match(paint(ask), /✓ Laptop/);
 assert.equal((paint(ask).match(/Which host\?/g) || []).length, 1, 'expanded question shows its prompt once');
-assert.equal((paint(ask).match(/MacBook/g) || []).length, 1, 'expanded question shows its answer once');
+assert.equal((paint(ask).match(/Laptop/g) || []).length, 1, 'expanded question shows its answer once');
 assert.doesNotMatch(paint(ask), /^ +(?:Question|Options|Answer)\s*$/m);
 assert.doesNotMatch(paint(ask), /1\. ask_user_question/);
 capture('Answered question opened directly with readable answer', ask);
@@ -241,11 +241,11 @@ ask.setExpanded(false);
 for (const [status, expected, isError] of [['unavailable', 'Unavailable', false], ['cancelled', 'Cancelled', false], ['answered', 'Unanswered', false], ['failed', 'Failed', true]]) {
   ask.updateResult({ ...result('No recorded answer', { question: 'Which host?', status, answers: [] }), isError });
   assert.match(paint(ask), new RegExp(`Question · ${expected}`));
-  assert.doesNotMatch(paint(ask), /MacBook/, 'prior answers cannot leak into a later unresolved interaction');
+  assert.doesNotMatch(paint(ask), /Laptop/, 'prior answers cannot leak into a later unresolved interaction');
   ask.setExpanded(true);
   assert.equal((paint(ask).match(new RegExp(expected, 'g')) || []).length, 1, 'unresolved state appears in the header once');
   assert.doesNotMatch(paint(ask), /✓|^ +Answer\s*$/m, 'unresolved states cannot imply a recorded answer');
-  assert.doesNotMatch(paint(ask), /MacBook|Arguments|Details|Output/);
+  assert.doesNotMatch(paint(ask), /Laptop|Arguments|Details|Output/);
   assert.match(paint(ask), /No recorded answer/, 'unresolved question retains its readable recorded message');
   ask.setExpanded(false);
 }
@@ -255,21 +255,21 @@ assert.match(paint(ask), /Question UI is unavailable in this session/);
 assert.doesNotMatch(paint(ask), /unnecessary raw output|Arguments|Details|Output/);
 ask.setExpanded(false);
 const detailedArgs = { question: 'Choose a host?', details: 'Use the machine that owns the checkout.', options: [
-  { label: 'MacBook (Recommended)', value: 'mac', description: 'Use the local checkout.' },
-  { label: 'CCC', value: 'ccc' },
+  { label: 'Laptop (Recommended)', value: 'local', description: 'Use the local checkout.' },
+  { label: 'Server', value: 'remote' },
 ] };
-const detailedResult = result('User selected: 1. MacBook (Recommended)', { status: 'answered', question: detailedArgs.question, context: detailedArgs.details, mode: 'single-select', answers: [{ type: 'option', index: 1, label: 'MacBook (Recommended)', value: 'mac' }] });
+const detailedResult = result('User selected: 1. Laptop (Recommended)', { status: 'answered', question: detailedArgs.question, context: detailedArgs.details, mode: 'single-select', answers: [{ type: 'option', index: 1, label: 'Laptop (Recommended)', value: 'local' }] });
 const detailedSource = JSON.stringify({ args: detailedArgs, result: detailedResult });
 const detailedAsk = make('ask_user_question', 'q-details', detailedArgs);
 detailedAsk.updateResult(detailedResult); detailedAsk.setExpanded(true);
 assert.match(paint(detailedAsk), /\n +Choose a host\?/);
-assert.match(paint(detailedAsk), /✓ 1\. MacBook \(Recommended\) — Use the local checkout\./);
-assert.match(paint(detailedAsk), /\n +2\. CCC/);
+assert.match(paint(detailedAsk), /✓ 1\. Laptop \(Recommended\) — Use the local checkout\./);
+assert.match(paint(detailedAsk), /\n +2\. Server/);
 assert.doesNotMatch(paint(detailedAsk), /^ +(?:Question|Options|Answer)\s*$/m);
 assert.ok(detailedAsk.render(120).map(stripAnsi).slice(2).every(row => row.trim()), 'compact question body adds no blank section gaps');
 assert.doesNotMatch(paint(detailedAsk), /1\. ask_user_question/);
 capture('Detailed question with recorded options and descriptions', detailedAsk);
-assert.equal((paint(detailedAsk).match(/✓ 1\. MacBook/g) || []).length, 1, 'selected option is the answer, without a duplicate answer section');
+assert.equal((paint(detailedAsk).match(/✓ 1\. Laptop/g) || []).length, 1, 'selected option is the answer, without a duplicate answer section');
 assertDecision(detailedAsk);
 const questionChoices = []; pi.events.emit('compact-renderer:inspect:v1', { add: entry => questionChoices.push(entry) });
 questionChoices.find(entry => entry.label.includes('Choose a host?')).focus();

@@ -388,9 +388,21 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
     redraw();
     return true;
   };
+  const toggleCompleted = () => {
+    if (disposed || !ctx || !mode.isEnabled() || !attached) return false;
+    project(attached.children);
+    const eligible = [...turns.values()].filter(turn => turn.activity && !['working', 'waiting'].includes(turn.header.state));
+    if (!eligible.length) return true;
+    const open = !eligible.some(turn => turn.header.open);
+    release();
+    for (const turn of eligible) { turn.header.manual = true; turn.header.open = open; }
+    pi.events.emit('compact-renderer:inspection-ended:v1', {});
+    redraw();
+    return true;
+  };
   pi.registerShortcut?.('ctrl+alt+w', {
-    description: 'Collapse work sections (enabled with /fold shortcut)',
-    handler: () => { if (shortcut) setAll(false); },
+    description: 'Toggle completed work sections (enabled with /fold shortcut)',
+    handler: () => { if (shortcut) toggleCompleted(); },
   });
   const dispose = () => {
     if (disposed) return; disposed = true;

@@ -1,4 +1,4 @@
-# Renderer reference
+# Pi Fold reference
 
 Detailed display behavior, keyboard controls, integration notes, and development previews. For installation and a quick introduction, see the [README](../README.md).
 
@@ -7,13 +7,13 @@ Detailed display behavior, keyboard controls, integration notes, and development
 As an alternative to npm:
 
 ```sh
-pi install git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.3
+pi install git:github.com/rrrrrrrrrricoxi/pi-fold@v3.0.0
 ```
 
 Remove it with the matching source:
 
 ```sh
-pi remove git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.3
+pi remove git:github.com/rrrrrrrrrricoxi/pi-fold@v3.0.0
 ```
 
 ## Display
@@ -29,7 +29,7 @@ pi remove git:github.com/rrrrrrrrrricoxi/compact-tool-renderers@v2.5.3
 - Recorded thinking rounds can group across tools. Replies, questions, errors, and other visible boundaries separate groups. Each round has a short title taken from its recorded heading or first sentence and expands independently. The pane shows the full recorded text on demand; it does not generate summaries or make model calls.
 - Recognized prompt templates show their command and authored description, or a bounded excerpt when no description is available. Expansion reveals the original text inline. Ordinary submitted prompts longer than eight rendered lines show a bounded opening and ending, separated by a muted “⋯ Show more” control. The opening stops at its first paragraph break; the ending uses the last paragraph. Long paragraphs use bounded excerpts. A blank row separates each excerpt from the control. Expansion preserves all recorded text and formatting and places “▴ Show less” at the bottom; short prompts stay open. Skill invocations share the blue prompt card, with click, `/inspect`, and native Ctrl+O expansion.
 
-Thinking groups require Pi's native `hideThinkingBlock: true` preference. Pi Config seeds this preference only when absent, then preserves native changes. **Ctrl+T** still switches to Pi's full thinking display. Unsupported Pi versions or component shapes show native content instead of hiding it.
+Thinking groups require Pi's native `hideThinkingBlock: true` preference. **Ctrl+T** still switches to Pi's full thinking display. Unsupported Pi versions or component shapes show native content instead of hiding it.
 
 Completed action groups and `codemode` show short operation summaries derived from recorded tool names and bounded arguments. These phrases describe supported operations, such as reading files or checking Git changes; they do not infer an unrecorded business goal. Unknown scripts retain a generic label. No extra model call is made. Expanded codemode starts with its source instead of repeating the outer title.
 
@@ -49,7 +49,7 @@ Explicit skill invocations use one blue prompt card. A muted, expandable `/skill
 
 Completion is saved as a display-only custom entry, separate from original messages and model context. Resume and reload restore validated completion records. Older turns without this evidence remain open under **Work details**, with no invented duration. Unsupported runtimes retain native rendering.
 
-Run `/fold collapse` or press Ctrl+Alt+W to collapse completed and historical work sections. Active or waiting work stays visible. `/fold expand` opens all sections. `/fold shortcut off` disables the session shortcut; `/fold` opens these choices.
+Run `/fold collapse` to collapse completed and historical work sections. Ctrl+Alt+W toggles these sections: if any is expanded, collapse them all; otherwise expand them all. Active and waiting work stays unchanged by the shortcut. `/fold expand` opens all sections. `/fold shortcut off` disables the session shortcut; `/fold` opens these choices.
 
 When the current turn has a supported work strip, Pi Statusline can omit duplicate execution state and elapsed time through the `compact-renderer:work-strip:v1` event. Its Execution display preference supports Automatic (follow strip ownership), Show (honor enabled execution fields even with a strip), and Hide (omit both state and elapsed time). Other footer fields and native Fleet controls remain unchanged. Compact-off and renderer disposal release this temporary ownership without changing saved preferences.
 
@@ -95,7 +95,7 @@ The runtime directory contains `node_modules/@earendil-works/pi-coding-agent` an
 
 The preview runs the actual Pi TUI with invented recorded messages in a temporary home. It blocks model, shell, tool, and network requests. The fixture begins with two writes, two reads, and a separate missing-file error. It also includes a long ordinary Bash/Node script singleton, a separate long-path failure, and four grouped source/diff/Markdown/script actions. codemode uses bounded native-style JavaScript highlighting, nested calls, timing, and cost display; every recorded call and price is synthetic. Ctrl+O expands codemode and skill disclosures. `/fixture-permission` opens an inert approval example. `/fixture-question` opens the installed pi-questions choice UI; `/fixture-question text` opens its free-text UI. Answers perform no operation. The question UI uses the current Pi Config package by default; set `PI_QUESTIONS_PATH=/path/to/pi-questions/index.ts` to use another source. If unavailable, the preview reports that limit and still shows recorded question cards.
 
-The final preview examples include a codemode result with three synthetic PNGs and a long JSON output, plus a separate image read. The preview enables native images and uses a visible 640×320 cyan/purple/green test chart. It creates one image in its temporary fixture directory so the fallback path is real; cleanup removes it. No recorded tool or script executes. Check expanded images in local Herdr and the text fallback over mosh/tmux, then collapse and verify normal typing after Esc.
+The final preview examples include a codemode result with three synthetic PNGs and a long JSON output, plus a separate image read. The preview enables native images and uses a visible 640×320 cyan/purple/green test chart. It creates one image in its temporary fixture directory so the fallback path is real; cleanup removes it. No recorded tool or script executes. Check expanded images in an image-capable terminal and the text fallback over mosh/tmux, then collapse and verify normal typing after Esc.
 
 The preview does not load host credentials or change active Pi deployments. Use Ctrl+D to exit. Set `PI_PROMPT_JUMP_PATH=/path/to/pi-prompt-jump` to include the separate navigation package and inspect its behavior with the three invented user prompts.
 
@@ -105,6 +105,6 @@ The adapters for thinking, prompt component identity, viewport positioning, and 
 
 In compact mode, expanding an image read or image-bearing codemode reveals the recorded images below the text pane. Collapsing the block hides them again. Images and fallback text align with the expanded content and Details column. Standard image-read acknowledgements and MIME metadata remain in Details; the main view does not repeat them. Each preview uses Pi's native image component, keeps its aspect ratio, and is limited to 60 columns and 12 rows (or half the terminal height, if smaller). Several images can therefore add more than one preview's height. The text pane remains independently bounded.
 
-The renderer respects Pi's show-images setting and terminal capability detection. Pi 1.3.0 supports Kitty images in Herdr and disables image protocols under tmux. On that route, or when images are disabled, the expanded block shows a short fallback. A direct image read retains its recorded path; Pi makes absolute paths clickable only when native hyperlink support is available. Remote paths still refer to the remote host. codemode does not invent a file path for an in-memory image.
+The renderer respects Pi's show-images setting and terminal capability detection. Pi 1.3.0 supports Kitty images in compatible terminals and disables image protocols under tmux. On that route, or when images are disabled, the expanded block shows a short fallback. A direct image read retains its recorded path; Pi makes absolute paths clickable only when native hyperlink support is available. Remote paths still refer to the remote host. codemode does not invent a file path for an in-memory image.
 
 Compact mode off preserves native image display and sizing. The image adapter is gated to Pi 1.3.0 and restores the native component's options after each compact paint. It does not alter image data, terminal settings, tmux settings, or saved transcripts.

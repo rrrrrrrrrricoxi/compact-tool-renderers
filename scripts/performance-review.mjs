@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Synthetic layout benchmark for the native Pi 1.3.0 tool renderer and compact renderer.
+// Synthetic layout benchmark for the native Pi 1.3.0 tool renderer and Pi Fold.
 // It never runs an agent, model, tool, shell command, or network request.
 import os from 'node:os';
 import path from 'node:path';

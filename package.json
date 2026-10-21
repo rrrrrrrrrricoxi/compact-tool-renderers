@@ -1,12 +1,12 @@
 {
-  "name": "pi-compact-renderer",
+  "name": "@notrico/pi-fold",
   "version": "3.0.0",
   "type": "module",
   "description": "Pi Fold: readable agent transcripts with collapsible work, inspectable details, and clear final replies",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rrrrrrrrrricoxi/compact-tool-renderers.git"
+    "url": "git+https://github.com/rrrrrrrrrricoxi/pi-fold.git"
   },
   "scripts": {
     "test": "node scripts/test.mjs",
@@ -40,11 +40,12 @@
     "pi-extension",
     "terminal",
     "tui",
-    "compact-renderer"
+    "pi-fold",
+    "transcript"
   ],
-  "homepage": "https://github.com/rrrrrrrrrricoxi/compact-tool-renderers#readme",
+  "homepage": "https://github.com/rrrrrrrrrricoxi/pi-fold#readme",
   "bugs": {
-    "url": "https://github.com/rrrrrrrrrricoxi/compact-tool-renderers/issues"
+    "url": "https://github.com/rrrrrrrrrricoxi/pi-fold/issues"
   },
   "engines": {
     "node": ">=22.19.0"

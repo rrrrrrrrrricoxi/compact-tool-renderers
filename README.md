@@ -15,7 +15,7 @@ Replies without tool or subagent activity skip the work strip.
 Tested with **Pi 1.3.0** and **Node.js 22.19.0 or later**. Other Pi versions are not verified; version-sensitive features fall back to native rendering.
 
 ```sh
-pi install npm:pi-compact-renderer@3.0.0
+pi install npm:@notrico/pi-fold@3.0.0
 ```
 
 Restart Pi, or run `/reload` when the session and its background work are idle.
@@ -30,15 +30,16 @@ If a configuration manager already installs this extension, update it there to a
 | Enable Pi Fold | `/fold on` |
 | Open a block | Click its arrow, or use `/inspect` |
 | Return to typing | Esc |
-| Collapse work sections | `/fold collapse` or Ctrl+Alt+W |
+| Toggle completed work sections | Ctrl+Alt+W |
+| Collapse work sections | `/fold collapse` |
 | Expand work sections | `/fold expand` |
 | Show native Pi rendering | `/fold off` |
 
 Use `/fold status` to check the mode. `/fold toggle` switches between Pi Fold and native display.
 
-Active and waiting work stays open. To disable the collapse shortcut, use `/fold shortcut off`.
+Ctrl+Alt+W collapses completed work if any section is expanded; otherwise it expands completed work. Active and waiting sections stay unchanged. To disable the shortcut, use `/fold shortcut off`.
 
-Version 3 replaces `/compact-rendering` and `/work` with `/fold`; the old commands are removed. The npm install name remains `pi-compact-renderer`.
+Upgrading from `pi-compact-renderer`? Remove its existing install source before installing `@notrico/pi-fold` so Pi loads one copy. Version 3 replaces `/compact-rendering` and `/work` with `/fold`; the old commands are removed.
 
 ## A few things to know
 
@@ -48,13 +49,13 @@ Image previews depend on your terminal. When images cannot display, you get a te
 
 Compact thinking groups need Pi's `hideThinkingBlock: true` setting. Ctrl+T still switches to Pi's full thinking display. Compatibility with other transcript-rendering extensions has not been verified.
 
-For detailed behavior, all keyboard controls, and test/preview instructions, see the [renderer reference](https://github.com/rrrrrrrrrricoxi/compact-tool-renderers/blob/main/docs/renderer-reference.md).
+For detailed behavior, all keyboard controls, and test/preview instructions, see the [renderer reference](https://github.com/rrrrrrrrrricoxi/pi-fold/blob/main/docs/renderer-reference.md).
 
 ## Performance
 
 Across two benchmark machines, median warm layout for a synthetic 400-turn transcript fell from **9.5–12.6 ms to 3.3–4.9 ms**. Added layout time versus compact rendering disabled was **3.1–4.6 ms**; retained fixture memory increased by about **0.14 MiB** versus the prior renderer.
 
-Measured on macOS arm64 with Pi 1.3.0, Node 26.11.1, and a 100-column layout. These are layout benchmarks, not live typing or terminal latency. See [methods, cache limits, and results](https://github.com/rrrrrrrrrricoxi/compact-tool-renderers/blob/main/docs/performance.md).
+Measured on macOS arm64 with Pi 1.3.0, Node 26.11.1, and a 100-column layout. These are layout benchmarks, not live typing or terminal latency. See [methods, cache limits, and results](https://github.com/rrrrrrrrrricoxi/pi-fold/blob/main/docs/performance.md).
 
 ## Development
 
@@ -65,7 +66,7 @@ Run `npm test`, `npm run preview:work`, or `npm run benchmark`. See the [rendere
 ## Uninstall
 
 ```sh
-pi remove npm:pi-compact-renderer@3.0.0
+pi remove npm:@notrico/pi-fold@3.0.0
 ```
 
-[MIT license](LICENSE) · [Report an issue](https://github.com/rrrrrrrrrricoxi/compact-tool-renderers/issues)
+[MIT license](LICENSE) · [Report an issue](https://github.com/rrrrrrrrrricoxi/pi-fold/issues)

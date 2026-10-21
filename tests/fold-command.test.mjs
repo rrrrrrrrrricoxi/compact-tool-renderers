@@ -46,8 +46,8 @@ function fixture(hasUI = true) {
   await f.run('collapse'); await f.run('expand');
   assert.deepEqual(f.expansions, [false, true], 'collapse and expand route to work controls');
   await f.run('on'); assert.deepEqual(f.modeChanges, [false, true], 'setting current mode does not toggle it');
-  await f.run('shortcut off'); assert.equal(f.shortcut(), false); assert.equal(f.lastNotice(), 'Collapse work shortcut: off');
-  await f.run('shortcut\tON'); assert.equal(f.shortcut(), true); assert.equal(f.lastNotice(), 'Collapse work shortcut: on');
+  await f.run('shortcut off'); assert.equal(f.shortcut(), false); assert.equal(f.lastNotice(), 'Toggle work shortcut: off');
+  await f.run('shortcut\tON'); assert.equal(f.shortcut(), true); assert.equal(f.lastNotice(), 'Toggle work shortcut: on');
   assert.deepEqual(f.shortcutChanges, [false, true]);
   f.unavailable(); await f.run('expand'); assert.match(f.lastNotice(), /unavailable/);
   f.dispose(); f.mode.dispose();
@@ -76,7 +76,7 @@ function fixture(hasUI = true) {
   assert.equal(f.notices.length, noticesBefore, 'canceling the nested shortcut menu changes nothing');
   assert.deepEqual(f.shortcutChanges, []);
   f.choose((title, choices) => title.startsWith('Pi Fold') ? choices[4] : choices[1]);
-  await f.run(''); assert.equal(f.shortcut(), false); assert.equal(f.lastNotice(), 'Collapse work shortcut: off');
+  await f.run(''); assert.equal(f.shortcut(), false); assert.equal(f.lastNotice(), 'Toggle work shortcut: off');
   f.choose((_title, choices) => choices[1]);
   await f.run('shortcut'); assert.deepEqual(f.shortcutChanges, [false], 'choosing the current shortcut changes nothing');
   f.choose((_title, choices) => choices[0]);
@@ -101,8 +101,8 @@ function fixture(hasUI = true) {
   await f.run(''); assert.equal(f.lastNotice(), 'Pi Fold on');
   await f.run('off'); await f.run('status'); assert.equal(f.lastNotice(), 'Pi Fold off');
   await f.run('toggle'); assert.equal(f.mode.isEnabled(), true);
-  await f.run('shortcut'); assert.equal(f.lastNotice(), 'Collapse work shortcut: on');
-  await f.run('shortcut off'); await f.run('shortcut'); assert.equal(f.lastNotice(), 'Collapse work shortcut: off');
+  await f.run('shortcut'); assert.equal(f.lastNotice(), 'Toggle work shortcut: on');
+  await f.run('shortcut off'); await f.run('shortcut'); assert.equal(f.lastNotice(), 'Toggle work shortcut: off');
   await f.run('collapse'); assert.match(f.lastNotice(), /unavailable/);
   assert.deepEqual(f.menus, [], 'typed mode and shortcut settings work without a UI');
   f.dispose(); f.mode.dispose();

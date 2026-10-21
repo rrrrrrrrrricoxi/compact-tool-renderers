@@ -12,7 +12,7 @@ import { registerPermissionPresentation } from './src/permission-presentation.ts
 import { registerWorkStrip } from './src/work-strip.ts';
 import { registerFoldCommand } from './src/fold-command.ts';
 
-export default function compactRenderer(pi: ExtensionAPI): void {
+export default function piFold(pi: ExtensionAPI): void {
   clearDisplayLineCache();
   const mode = createDisplayMode();
   const disposers: Array<() => void> = [];
@@ -26,7 +26,7 @@ export default function compactRenderer(pi: ExtensionAPI): void {
     }
     mode.dispose();
     clearDisplayLineCache();
-    if (errors.length) throw new AggregateError(errors, 'Compact renderer cleanup failed');
+    if (errors.length) throw new AggregateError(errors, 'Pi Fold cleanup failed');
   };
   try {
     // All display features share the cache; its lifetime belongs to the extension.

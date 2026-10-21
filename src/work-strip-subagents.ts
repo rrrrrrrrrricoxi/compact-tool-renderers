@@ -167,7 +167,7 @@ export function monitorWorkStripSubagents(pi: ExtensionAPI, onChange: () => void
     timeout = setTimeout(() => finish('unknown'), 1000);
     timeout.unref?.();
     try {
-      pi.events.emit(requestEvent, { version: 1, requestId, method: 'status', params: {}, source: { extension: 'compact-renderer' } });
+      pi.events.emit(requestEvent, { version: 1, requestId, method: 'status', params: {}, source: { extension: 'pi-fold' } });
     } catch { finish('unknown'); }
   };
   const scheduleRefresh = (recordsChanged = false) => {

@@ -20,7 +20,7 @@ export async function createPreview() {
     if (await fs.stat(candidate).then(stat => stat.isFile(), () => false)) { questionsPath = candidate; break; }
   }
   if (process.env.PI_QUESTIONS_PATH && !questionsPath) throw new Error('PI_QUESTIONS_PATH must point to an existing pi-questions/index.ts.');
-  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-renderer-preview-'));
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'pi-fold-preview-'));
   const agentDir = path.join(temporary, '.pi/agent'), cwd = path.join(temporary, 'fixture');
   const savedEnv = new Map();
   const setEnv = (key, value) => { savedEnv.set(key, process.env[key]); if (value === undefined) delete process.env[key]; else process.env[key] = value; };
@@ -191,7 +191,7 @@ export async function createPreview() {
     ], { calls: ['sample-a.png', 'sample-b.png', 'sample-c.png', 'result.json'].map(name => ({ name: 'read', args: JSON.stringify({ path: '/fixture/' + name }), status: 'ok', durationMs: 1 })) }, false, '', 1900);
     assistant([{ type: 'text', text: 'Separate image read: expand this row to inspect the recorded content and Details. Esc should return to normal prompt typing.' }]);
     call('read-image', 'read', { path: sampleImagePath }, [{ type: 'text', text: 'Read image file [image/png]' }, { ...pixel }]);
-    manager.appendSessionInfo('compact-renderer-preview');
+    manager.appendSessionInfo('pi-fold-preview');
     const eventBus = core.createEventBus();
     assistant([
       { type: 'thinking', thinking: '**Compare the recorded samples**\n\nSynthetic preview only: compare the two recorded sample labels and retain their units. This text is invented, not model reasoning.' },

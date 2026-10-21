@@ -19,7 +19,7 @@ export function installSubagentSpacingAdapter(version = VERSION): (() => void) |
     const message = this instanceof CustomMessageComponent && this.message?.role === 'custom';
     const entry = this.constructor?.name === 'CustomEntryComponent' && this.entry?.type === 'custom' && typeof this.renderer === 'function';
     if (!disposed && (message || entry) && Array.isArray(this.children) && this.children.includes(component) && typeof component?.[hidden] === 'function') {
-      // The marker is owned by the compact renderer, not supplied by transcript data.
+      // The marker is owned by Pi Fold, not supplied by transcript data.
       try { if (component[hidden]() === true) return []; } catch { /* Preserve native layout on incompatible state. */ }
     }
     return original.call(this, width);
