@@ -3,6 +3,7 @@ import test from 'node:test';
 import { loadSource, core, tui, themeModule, stripAnsi } from './test-runtime.mjs';
 
 const { registerModernThinking } = await loadSource('./modern-thinking.ts');
+const { renderFinalReply } = await loadSource('./work-strip-view.ts');
 const { createDisplayMode } = await loadSource('./display-mode.ts');
 const { AssistantMessageComponent } = core;
 const native = Object.fromEntries(['updateContent', 'render', 'handleMouse'].map(key => [key, AssistantMessageComponent.prototype[key]]));
@@ -184,22 +185,24 @@ test('pure failed tool calls and user questions retain native thinking fallback'
   }
 });
 
-test('mixed singleton isolates neighboring pure groups', () => {
+test('leading final thinking joins preceding rounds and ends the group at visible text', () => {
   const f = fixture([
     message([thinking('Previous source'), tool('a')]),
-    message([thinking('Mixed source'), text('Visible reply')]),
+    message([thinking('Final source'), text('Visible reply')]),
     message([thinking('Following source'), tool('b')]),
   ]);
   try {
-    assert.equal(f.choices().length, 3);
-    f.cards.forEach(card => assert.match(plain(card.render(80)), /Thinking ·/));
-    assert.match(plain(f.cards[0].render(80)), /Previous source/);
-    assert.match(plain(f.cards[1].render(80)), /Mixed source/);
-    assert.match(plain(f.cards[2].render(80)), /Following source/);
+    assert.equal(f.choices().length, 2);
+    assert.equal(f.cards[0].render(80).length, 0);
+    assert.match(plain(f.cards[1].render(80)), /Thinking · 2 rounds/);
+    assert.match(plain(f.cards[2].render(80)), /Thinking · Following source/);
+    f.choices()[0].focus();
+    assert.match(plain(assertNativeReply(f.cards[1])), /Previous source/);
+    assert.match(plain(assertNativeReply(f.cards[1])), /Final source/);
   } finally { f.dispose(); }
 });
 
-test('streaming pure thinking becomes an isolated mixed singleton', () => {
+test('streaming final answer preserves its preceding thinking group', () => {
   const prior = message([thinking('Previous tool round'), tool('prior')]);
   const f = fixture([prior]);
   try {
@@ -211,9 +214,26 @@ test('streaming pure thinking becomes an isolated mixed singleton', () => {
     const update = { ...start, content: [...start.content, text('Visible streaming answer')] };
     f.emit('message_update', { message: update }); card.updateContent(update, true);
     f.emit('message_end', { message: update });
-    assert.match(plain(f.cards[0].render(80)), /Thinking · Previous tool round/);
-    assert.match(plain(assertNativeReply(card)), /Thinking · Streaming source\./);
-    assert.equal(f.choices().length, 2);
+    assert.equal(f.cards[0].render(80).length, 0);
+    assert.match(plain(assertNativeReply(card)), /Thinking · 2 rounds/);
+    assert.equal(f.choices().length, 1);
+  } finally { f.dispose(); }
+});
+
+test('final reply padding preserves compact thinking and native child identity', () => {
+  const original = message([thinking('Final thinking summary.\nRecorded final body.'), text('Final visible answer')]);
+  const f = fixture([original]);
+  try {
+    const card = f.cards[0], children = [...card.contentContainer.children];
+    const rows = renderFinalReply(card, 80, themeModule.theme);
+    assert.match(plain(rows), /Thinking · Final thinking summary/);
+    assert.doesNotMatch(plain(rows), /Thinking\.\.\./);
+    assert.deepEqual(card.contentContainer.children, children);
+    const replyIndex = rows.findIndex(row => stripAnsi(row).includes('Final visible answer'));
+    assert.equal(stripAnsi(rows[replyIndex - 1]), ' '.repeat(80));
+    assert.equal(stripAnsi(rows[replyIndex + 1]), ' '.repeat(80));
+    assert.equal(mouse(card, rows.findIndex(row => stripAnsi(row).includes('Thinking ·')))?.handled, true);
+    assert.match(plain(renderFinalReply(card, 80, themeModule.theme)), /Recorded final body/);
   } finally { f.dispose(); }
 });
 
@@ -316,4 +336,36 @@ test('large mixed thinking uses a bounded viewport across narrow widths', () => 
     assert.equal(nativeThinkingPaints, 0, 'large thinking does not use native full Markdown rendering');
     assert.equal(JSON.stringify(original), saved);
   } finally { tui.Markdown.prototype.render = render; f.dispose(); }
+});
+
+test('visible preambles and unsupported multiple runs do not absorb preceding thinking', () => {
+  for (const content of [
+    [text('Visible preamble'), thinking('Later source'), text('Answer')],
+    [thinking('First run'), text('Visible boundary'), thinking('Second run'), text('Answer')],
+  ]) {
+    const f = fixture([message([thinking('Earlier round'), tool('earlier')]), message(content)]);
+    try {
+      assert.match(plain(f.cards[0].render(80)), /Thinking · Earlier round/);
+      assert.match(plain(f.cards[1].render(80)), /Answer/);
+    } finally { f.dispose(); }
+  }
+});
+
+test('streaming boundary changes split earlier rounds even when the broad message kind is unchanged', () => {
+  for (const extra of [thinking('Second separated run'), { type: 'toolCall', id: 'question', name: 'ask_user_question', arguments: {} }]) {
+    const earlier = message([thinking('Earlier source'), tool('earlier')]);
+    const f = fixture([earlier]);
+    try {
+      const current = message([thinking('Initial leading run'), text('Visible reply')]);
+      f.emit('message_start', {message: current});
+      const card = nativeCard(current); f.cards.push(card);
+      assert.equal(f.cards[0].render(80).length, 0);
+      assert.match(plain(card.render(80)), /Thinking · 2 rounds/);
+      current.content.push(extra);
+      const update = {...current};
+      f.emit('message_update', {message:update}); card.updateContent(update, true);
+      assert.match(plain(f.cards[0].render(80)), /Thinking · Earlier source/);
+      assert.doesNotMatch(plain(card.render(80)), /Thinking · 2 rounds/);
+    } finally { f.dispose(); }
+  }
 });

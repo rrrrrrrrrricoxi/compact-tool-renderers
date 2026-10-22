@@ -4,6 +4,7 @@ import { loadSource, loadAgent, themeModule, stripAnsi, tui, backgroundCells } f
 const { registerModernTools, toolStatus } = await loadSource('./modern-tools.ts');
 const { createDisplayMode } = await loadSource('./display-mode.ts');
 const { CodePane } = await loadSource('./modern-code-pane.ts');
+const { WorkChild } = await loadSource('./work-strip-view.ts');
 const stylePane = new CodePane(() => 12);
 stylePane.heading = 'codemode · Read files';
 stylePane.title = `${stylePane.heading} · 2 nested calls · 1 nested error`;
@@ -120,8 +121,30 @@ try {
    for (const row of rows) assert.ok(tui.visibleWidth(row) <= width);
   }
   assert.match(paint(code), /text\(0\)/);
+  // Exercise native container routing, including the work group's horizontal inset.
+  const workChild = new WorkChild(code), work = new tui.Container();
+  work.addChild(new tui.Text('Work fixture', 0, 0)); work.addChild(workChild);
+  const moreRows = work.render(140).map(stripAnsi), moreY = moreRows.findIndex(row => row.includes('more ↓'));
+  assert.ok(moreY > 1); const moreX = moreRows[moreY].indexOf('more ↓'); assert.ok(moreX >= 3);
+  const beforeMore = pane.offset;
+  assert.equal(work.handleMouse({ type: 'click', button: 'left', x: moreX, y: moreY, screenX: moreX, screenY: moreY, width: 140, height: moreRows.length })?.handled, true);
+  const afterMore = work.render(140).map(stripAnsi).join('\n');
+  assert.ok(pane.offset > beforeMore, 'clicking overflow advances the rendered codemode viewport');
+  assert.ok(pane.offset - beforeMore <= 20, 'one click advances at most one bounded viewport');
+  assert.doesNotMatch(afterMore, /text\(0\)/); assert.equal(input('\r'), undefined, 'overflow click leaves Enter with the editor');
+  const focusedMore = []; pi.events.emit('compact-renderer:inspect:v1', { add: entry => focusedMore.push(entry) });
+  focusedMore.find(entry => entry.label.startsWith('codemode')).focus();
+  const rows = code.render(140).map(stripAnsi), footerY = rows.findIndex(row => row.includes('more ↓'));
+  assert.ok(footerY > 0); mouse(code, 'click', footerY);
+  assert.doesNotMatch(paint(code), /focused/); assert.equal(input('\r'), undefined, 'overflow click releases inspection');
   for (let index = 0; index < 120; index++) { mouse(code, 'wheel', 2, 20); code.render(140); }
   assert.match(paint(code), /Recorded script output/, 'bounded viewport can reach full native output');
+  assert.doesNotMatch(paint(code), /more ↓/, 'codemode stops offering downward paging at its final rows');
+  const endRows = code.render(140).map(stripAnsi), endOffset = pane.offset;
+  assert.match(endRows.at(-1), /more ↑/, 'the final footer retains its hit area');
+  mouse(code, 'click', endRows.length - 1); code.render(140);
+  assert.ok(pane.offset < endOffset, 'the upward footer pages back through the output');
+  assert.equal(code.render(140).length, endRows.length, 'paging back keeps the pane height');
   assert.equal(JSON.stringify(final), before);
   const running = create('codemode', 'code-clear', { code: 'text(1);' }, codemodeRenderers); running.markExecutionStarted(); running.updateResult({ ...result(''), details: { calls: [] } }, true);
   assert.equal(intervals.size, 1); event('session_before_switch'); assert.equal(intervals.size, 0, 'session switch clears native owned timer');

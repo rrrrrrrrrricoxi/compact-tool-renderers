@@ -3,6 +3,8 @@ import { DisplayLineCache } from "./display-line-cache.ts";
 
 const lines = new DisplayLineCache();
 export const clearDisplayLineCache = () => lines.clear();
+// Final reply projections retain native Markdown rather than workflow controls.
+export const finalReplyRendering = Symbol.for("compact-renderer:final-reply-rendering:v1");
 // Key the actual styling bytes, not theme identity: themes can change in place.
 const memoLine = (kind: string, line: string, width: number, style: string, render: () => string) =>
   line.length > 4096 ? render() : lines.get(JSON.stringify([kind, width, style, line]), render);

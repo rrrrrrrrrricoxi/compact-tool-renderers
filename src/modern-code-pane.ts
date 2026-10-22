@@ -9,7 +9,7 @@ export class CodePane {
   title = "codemode · Preparing"; theme?: any; tone = "syntaxVariable";
   content = new CodeContent();
   private rows: string[] = []; private iterator?: Iterator<string>; private done = false; private width = 0;
-  private lastWidth = 0; private lastHeight = 0;
+  private lastWidth = 0; private lastHeight = 0; private lastBodyHeight = 0; private lastMore = false;
   private startedAt?: number; private endedAt?: number; private interval?: ReturnType<typeof setInterval>;
   private themeKey = "";
   private partial = false; private isError = false; private durationMs?: number;
@@ -59,7 +59,7 @@ export class CodePane {
           this.theme.fg(this.tone === "error" ? "error" : this.tone === "warning" && /^ · \d+ nested (?:errors?|cancelled|unresolved)$/.test(part) ? "warning" : "muted", part)).join("")
       : title;
     const header = activityRow(styled, width, this.theme, this.focused);
-    if (!this.open) { this.lastHeight = 1; return [header]; }
+    if (!this.open) { this.lastHeight = 1; this.lastBodyHeight = 0; this.lastMore = false; return [header]; }
     const indent = contentWidth >= 4 ? "  " : "";
     const nativeWidth = Math.max(1, contentWidth - indent.length);
     if (this.width !== nativeWidth) { this.reset(); this.width = nativeWidth; this.offset = 0; }
@@ -85,8 +85,9 @@ export class CodePane {
     // heading so a narrow terminal does not lose the timing information.
     if (!this.partial && this.durationMs !== undefined && visibleWidth(title) > contentWidth) timer = `Took ${duration(this.durationMs)}`;
     else if (this.durationMs === undefined && this.startedAt !== undefined) timer = `${this.partial ? "Elapsed" : "Took"} ${duration((this.endedAt ?? Date.now()) - this.startedAt)}`;
-    const footer = [timer, this.focused ? `Enter collapse · ↑/↓ scroll · Home start · Esc release${more ? " · more ↓" : ""}` : more ? "more ↓" : ""].filter(Boolean).join(" · ");
+    const footer = [more ? "more ↓" : this.offset > 0 ? "more ↑" : "", timer, this.focused ? "Enter collapse · ↑/↓ scroll · Home start · Esc release" : ""].filter(Boolean).join(" · ");
     const visible = [header, ...body, ...(footer ? [activityRow(this.theme ? this.theme.fg("muted", truncateToWidth(footer, contentWidth)) : truncateToWidth(footer, contentWidth), width, this.theme)] : [])];
+    this.lastBodyHeight = body.length; this.lastMore = more;
     this.lastHeight = visible.length; return visible;
   }
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
@@ -95,6 +96,7 @@ export class CodePane {
     if (event.type !== "click" || event.button !== "left") return undefined;
     if (event.shift || event.alt || event.ctrl) return { handled: true, render: false };
     if (event.y === 0) { this.open = !this.open; this.offset = 0; return { handled: true }; }
+    if (this.open && (this.lastMore || this.offset > 0) && event.y === this.lastHeight - 1) { this.offset = Math.max(0, this.offset + (this.lastMore ? 1 : -1) * Math.max(1, this.lastBodyHeight)); return { handled: true }; }
     return { handled: true, render: false };
   }
   invalidate() { this.reset(); }

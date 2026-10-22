@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { backgroundCells, core, loadSource, stripAnsi, themeModule, tui } from './test-runtime.mjs';
 
+const { finalReplyRendering } = await loadSource('./display-card.ts');
+const { registerModernThinking } = await loadSource('./modern-thinking.ts');
 const { registerWorkStrip } = await loadSource('./work-strip.ts');
 const { registerFoldCommand } = await loadSource('./fold-command.ts');
 const { createDisplayMode } = await loadSource('./display-mode.ts');
@@ -38,6 +40,7 @@ for (const appearance of ['dark', 'light']) {
     assertReplySurface(painted, theme);
     assert.deepEqual(painted.join('\n').match(/\x1b\]133;[ABC]\x07/g), native.join('\n').match(/\x1b\]133;[ABC]\x07/g), 'native OSC zones remain exact');
     assert.equal(markdown.render, originalRender);
+    assert.equal(Object.hasOwn(row, finalReplyRendering), false, 'successful final rendering removes its scoped marker');
     assert.deepEqual(Object.getOwnPropertyDescriptor(markdown, 'render'), ownRender, 'render projection restores the native property shape');
   }
 }
@@ -55,6 +58,10 @@ for (const appearance of ['dark', 'light']) {
   const render = markdown.render;
   assert.throws(() => renderFinalReply(row, 40, themeModule.theme), /synthetic Markdown failure/);
   assert.equal(markdown.render, render, 'a failed native render also restores the method');
+  assert.equal(Object.hasOwn(row, finalReplyRendering), false, 'failed final rendering also removes its scoped marker');
+  row[finalReplyRendering] = 'outer render';
+  assert.throws(() => renderFinalReply(row, 40, themeModule.theme), /synthetic Markdown failure/);
+  assert.equal(row[finalReplyRendering], 'outer render', 'nested final rendering restores an existing marker');
 }
 
 // Multiple text blocks share one padding pair. A later thinking region keeps
@@ -75,7 +82,7 @@ for (const appearance of ['dark', 'light']) {
   assert.match(stripAnsi(renderFinalReply(row, 60, themeModule.theme).join('\n')), /CLICKED_NATIVE_THINKING/);
 }
 
-function fixture() {
+function fixture({ thinking = false } = {}) {
   const hooks = new Map(), bus = new Map(), commands = new Map();
   const subscribe = (map, name, fn) => {
     const set = map.get(name) || new Set(); map.set(name, set); set.add(fn); return () => set.delete(fn);
@@ -87,9 +94,12 @@ function fixture() {
     getAllTools: () => [], appendEntry: (kind, data) => manager.appendCustomEntry(kind, data),
     registerCommand: (name, definition) => commands.set(name, definition),
   };
-  const mode = createDisplayMode(), workControls = registerWorkStrip(pi, mode), dispose = workControls.dispose;
+  const mode = createDisplayMode(), workControls = registerWorkStrip(pi, mode);
+  const stopThinking = thinking ? registerModernThinking(pi, mode) : () => {};
+  const dispose = () => { stopThinking(); workControls.dispose(); };
   registerFoldCommand(pi, mode, workControls);
   const ui = { theme: themeModule.theme, isFollowingOutput: true, notify() {}, requestRender() {} };
+  if (thinking) ui.setHiddenThinkingLabel = () => { for (const row of display.chatContainer.children) if (row instanceof core.AssistantMessageComponent) row.setHiddenThinkingLabel('Thinking...'); };
   const ctx = { mode: 'tui', hasUI: true, ui, sessionManager: manager, isIdle: () => true };
   const display = {
     chatContainer: new tui.Container(), ui, pendingTools: new Map(), outputPad: 1,
@@ -269,3 +279,43 @@ for (const stopReason of ['stop', 'toolUse', 'error', 'aborted', 'length']) {
 }
 
 console.log('Final reply padded neutral card: native Markdown, one padding pair, outer gaps, resets, images, themes, settlement, direct replies, folding, mouse coordinates and compact-off passed');
+
+// Restored transcript: two tool rounds and leading thinking on the final answer.
+// Both adapters must cooperate while final padding and work folding are active.
+{
+  const f = fixture({ thinking: true });
+  try {
+    const user = f.add({ role: 'user', content: 'Inspect the recorded samples.' });
+    for (let n = 1; n <= 2; n++) {
+      f.add({ role: 'assistant', stopReason: 'toolUse', content: [
+        { type: 'thinking', thinking: `Round ${n} summary.\nRecorded round ${n} body.` },
+        { type: 'toolCall', id: `round-${n}`, name: 'read', arguments: {} },
+      ] });
+      f.tool();
+    }
+    const final = f.add({ role: 'assistant', stopReason: 'stop', content: [
+      { type: 'thinking', thinking: 'Final source summary.\nRecorded final body.' },
+      { type: 'text', text: 'GROUPED_FINAL_REPLY' },
+    ] });
+    f.manager.appendCustomEntry(workEvidenceType, { version: 1, userId: user.entry.id,
+      finalId: final.entry.id, endId: final.entry.id, startedAt: 1000, endedAt: 2000, outcome: 'completed' });
+    const transcript = JSON.stringify(f.manager.getBranch());
+    f.event('session_start');
+    assert.doesNotMatch(stripAnsi(f.paint().join('\n')), /Thinking/);
+    for (let repeat = 0; repeat < 3; repeat++) {
+      await f.commands.get('fold').handler('expand', f.ctx);
+      const rendered = stripAnsi(f.paint().join('\n'));
+      assert.match(rendered, /Thinking · 3 rounds/);
+      assert.doesNotMatch(rendered, /Thinking\.\.\./);
+      assert.equal((rendered.match(/Thinking ·/g) || []).length, 1);
+      const surface = f.view(final.row), rows = surface.render(60);
+      const y = rows.findIndex(line => stripAnsi(line).includes('Thinking ·'));
+      assert.equal(surface.handleMouse({ type: 'click', button: 'left', x: 2, y, width: 60, height: rows.length })?.handled, true);
+      assert.match(stripAnsi(f.paint().join('\n')), /3\. Final source summary/);
+      await f.commands.get('fold').handler('collapse', f.ctx);
+      assert.doesNotMatch(stripAnsi(f.paint().join('\n')), /Thinking|Recorded final body/);
+      assert.match(stripAnsi(f.paint().join('\n')), /GROUPED_FINAL_REPLY/);
+    }
+    assert.equal(JSON.stringify(f.manager.getBranch()), transcript);
+  } finally { f.dispose(); f.mode.dispose(); }
+}

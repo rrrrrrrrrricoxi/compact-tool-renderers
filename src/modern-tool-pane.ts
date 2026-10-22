@@ -39,11 +39,14 @@ export class ToolPane {
   private lastWidth = 0;
   private lastHeight = 0;
   private lastBodyHeight = 0;
+  private lastMore = false;
+  private contentFocused = false;
+  private preserveFocusLayout = false;
   // Instrumentation also makes the large-output contract testable without wall-clock assertions.
   paintedRows = 0;
   constructor(public actions: PaneAction[], public title: string, private height = () => 12) {}
   private get directDetails() { return this.directContent || this.itemName === "action" && this.actions.length === 1; }
-  reset() { this.anchor = Math.min(this.anchor, Math.max(0, this.actions.length - 1)); this.key = ""; this.rows = []; this.iterator = undefined; this.done = false; this.actionRows.clear(); this.detailsRows.clear(); this.rowKinds.clear(); }
+  reset() { this.preserveFocusLayout = false; this.anchor = Math.min(this.anchor, Math.max(0, this.actions.length - 1)); this.key = ""; this.rows = []; this.iterator = undefined; this.done = false; this.actionRows.clear(); this.detailsRows.clear(); this.rowKinds.clear(); }
   collapse() { this.open = false; this.focused = false; this.selected = 0; this.anchor = 0; this.offset = 0; this.expanded.clear(); this.detailsExpanded.clear(); this.detailsFocused = false; this.reset(); }
   releaseInspection() { if (this.detailsFocused) { this.detailsFocused = false; this.offset = 0; this.reset(); } }
   handle(data: string): boolean {
@@ -107,12 +110,12 @@ export class ToolPane {
         const emitRows = function* (this: ToolPane, rows: Iterable<{ text: string; kind?: RowKind }>) {
           for (const row of rows) { if (row.kind) this.rowKinds.set(this.rows.length, row.kind); yield row.text; }
         }.bind(this);
-        const fullLabel = this.directDetails ? `▾ ${this.expandedTitle ?? this.title}${this.focused ? " · focused" : ""}` : prefix + action.label;
+        const fullLabel = this.directDetails ? `▾ ${this.expandedTitle ?? this.title}${this.contentFocused ? " · focused" : ""}` : prefix + action.label;
         const summary = visibleWidth(fullLabel) <= width ? action.repeatedSummary : undefined;
         if (this.detailsFocused && index === this.selected) {
           // Keep short output inline; probe at most one viewport before anchoring at Details.
           const primary = sectionRows(action.sections(), summary), preview = [];
-          const budget = Math.max(1, Math.min(20, this.height()) - (this.focused ? 2 : 1) - (this.directDetails ? 0 : 1) - 1);
+          const budget = Math.max(1, Math.min(20, this.height()) - (this.contentFocused ? 2 : 1) - (this.directDetails ? 0 : 1) - 1);
           let complete = false;
           while (preview.length <= budget) { const row = primary.next(); if (row.done) { complete = true; break; } preview.push(row.value); }
           if (complete) yield* emitRows(preview);
@@ -136,10 +139,14 @@ export class ToolPane {
       return activityRow(line, outerWidth, this.theme, selected);
     };
     const header = this.styleHeader(`${this.open ? "▾" : "▸"} ${this.open ? this.expandedTitle ?? this.title : this.title}${this.focused ? " · focused" : ""}`);
-    if (!this.open) { this.lastHeight = 1; this.lastBodyHeight = 0; return [paint(truncateToWidth(header, width), this.focused && !this.detailsFocused)]; }
+    if (!this.open) { this.lastHeight = 1; this.lastBodyHeight = 0; this.lastMore = false; return [paint(truncateToWidth(header, width), this.focused && !this.detailsFocused)]; }
     const height = Math.max(5, Math.min(20, this.height()));
-    const key = `${width}:${this.focused}:${this.expandedTitle ?? this.title}:${this.directDetails}:${this.anchor}:${this.selected}:${[...this.expanded].join("|")}:${[...this.detailsExpanded].join("|")}:${this.detailsFocused}`;
-    if (key !== this.key) { this.reset(); this.key = key; this.iterator = this.body(width); }
+    if (this.focused || this.offset === 0) this.preserveFocusLayout = false;
+    // Mouse scrolling releases keyboard focus. Keep the already visited source layout
+    // so that release cannot reset its offset or reformat an unbounded prefix.
+    const contentFocused = this.preserveFocusLayout ? this.contentFocused : this.focused;
+    const key = `${width}:${contentFocused}:${this.expandedTitle ?? this.title}:${this.directDetails}:${this.anchor}:${this.selected}:${[...this.expanded].join("|")}:${[...this.detailsExpanded].join("|")}:${this.detailsFocused}`;
+    if (key !== this.key) { this.reset(); this.key = key; this.contentFocused = contentFocused; this.iterator = this.body(width); }
     let bodyHeight = height - (this.focused ? 2 : 1);
     // Clamp a seek to one viewport beyond visited content; a key press cannot scan unbounded data.
     this.offset = Math.min(this.offset, this.rows.length);
@@ -148,14 +155,16 @@ export class ToolPane {
       if (next.done) this.done = true;
       else { this.rows.push(truncateToWidth(next.value, width)); this.paintedRows++; }
     }
+    // Keep the footer and body height stable after paging to the end. Otherwise
+    // the pointer can leave the pane when the downward control disappears.
+    if (!this.focused && (!this.done || this.rows.length > bodyHeight)) bodyHeight--;
     if (this.done) this.offset = Math.min(this.offset, Math.max(0, this.rows.length - bodyHeight));
-    let more = !this.done || this.offset + bodyHeight < this.rows.length;
-    if (!this.focused && more) { bodyHeight--; more = !this.done || this.offset + bodyHeight < this.rows.length; }
+    const more = !this.done || this.offset + bodyHeight < this.rows.length;
     const selectedAction = this.actions[this.selected];
     const detailsTarget = this.detailsFocused && !!selectedAction?.details;
     const isExpanded = detailsTarget ? this.detailsExpanded.has(selectedAction.id) : this.directDetails || this.expanded.has(selectedAction?.id);
     const controls = detailsTarget ? `Enter ${isExpanded ? "collapse" : "expand"} Details · Tab action` : `${this.directDetails ? "Enter collapse" : `←/→ ${this.itemName} · Enter ${isExpanded ? "collapse" : "expand"}`}${selectedAction?.details ? " · Tab Details" : ""}`;
-    const footer = this.focused ? `${controls} · ↑/↓ scroll · Esc release${more ? " · more ↓" : ""}` : more ? "more ↓" : "";
+    const footer = [more ? "more ↓" : this.offset > 0 ? "more ↑" : "", this.focused ? `${controls} · ↑/↓ scroll · Esc release` : ""].filter(Boolean).join(" · ");
     const body = this.rows.slice(this.offset, this.offset + bodyHeight).map((line, index) => {
       const action = this.actionRows.get(this.offset + index);
       const details = this.detailsRows.get(this.offset + index);
@@ -168,7 +177,7 @@ export class ToolPane {
       return paint(line, selected);
     });
     const visible = [paint(truncateToWidth(header, width), this.focused && !this.detailsFocused), ...body, ...(footer ? [paint(truncateToWidth(this.theme ? this.theme.fg("dim", footer) : footer, width))] : [])];
-    this.lastBodyHeight = body.length;
+    this.lastBodyHeight = body.length; this.lastMore = more;
     this.lastHeight = visible.length;
     return visible;
   }
@@ -176,6 +185,7 @@ export class ToolPane {
     if (event.x < 0 || event.x >= this.lastWidth || event.y < 0 || event.y >= this.lastHeight) return undefined;
     if (event.type === "wheel") {
       if (!this.open || !Number.isFinite(event.wheelDelta) || !event.wheelDelta) return undefined;
+      this.preserveFocusLayout = true;
       if (event.wheelDelta < 0 && this.contentAnchoredAbove && this.offset === 0) this.releaseInspection();
       else this.offset = Math.max(0, this.offset + Math.max(-20, Math.min(20, Math.trunc(event.wheelDelta))));
       return { handled: true };
@@ -183,7 +193,8 @@ export class ToolPane {
     if (event.type !== "click" || event.button !== "left") return undefined;
     // Keep text selection gestures and output clicks from falling through to native whole-row expansion.
     if (event.shift || event.alt || event.ctrl) return { handled: true, render: false };
-    if (event.y === 0) { this.detailsFocused = false; this.open = !this.open; return { handled: true }; }
+    if (event.y === 0) { this.preserveFocusLayout = false; this.detailsFocused = false; this.open = !this.open; return { handled: true }; }
+    if (this.open && (this.lastMore || this.offset > 0) && event.y === this.lastHeight - 1) { this.preserveFocusLayout = true; this.offset = Math.max(0, this.offset + (this.lastMore ? 1 : -1) * Math.max(1, this.lastBodyHeight)); return { handled: true }; }
     const details = this.detailsRows.get(this.offset + event.y - 1);
     if (this.open && event.y >= 1 && event.y < 1 + this.lastBodyHeight && details !== undefined) {
       const id = this.actions[details]?.id;
