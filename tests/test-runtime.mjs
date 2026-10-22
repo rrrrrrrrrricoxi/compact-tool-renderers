@@ -6,8 +6,10 @@ import assert from 'node:assert/strict';
 
 export const runtime = path.resolve(process.env.PI_RUNTIME || path.join(homedir(), '.local/state/pi-config/current/runtime'));
 export const agentRoot = path.resolve(process.env.PI_INSTALL_ROOT || path.join(runtime, 'node_modules/@earendil-works/pi-coding-agent'));
-export const tuiRoot = path.join(path.dirname(agentRoot), 'pi-tui');
 const require = createRequire(path.join(agentRoot, 'package.json'));
+// Use Pi's own TUI dependency even when another extension installs a newer
+// version at the runtime root; native component identity must match the aliases.
+export const tuiRoot = path.dirname(path.dirname(require.resolve('@earendil-works/pi-tui')));
 const { createJiti } = require('jiti');
 const sourceOptions = { fsCache: false, alias: {
   '@earendil-works/pi-coding-agent': path.join(agentRoot, 'dist/index.js'),

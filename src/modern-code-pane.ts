@@ -13,8 +13,10 @@ export class CodePane {
   private startedAt?: number; private endedAt?: number; private interval?: ReturnType<typeof setInterval>;
   private themeKey = "";
   private partial = false; private isError = false; private durationMs?: number;
+  private revision = -1;
   paintedRows = 0;
   constructor(private height: () => number) {}
+  get duration() { return this.durationMs; }
   get clock() { return { startedAt: this.startedAt, endedAt: this.endedAt }; }
   adoptClock(clock: { startedAt?: number; endedAt?: number }) { this.startedAt ??= clock.startedAt; this.endedAt ??= clock.endedAt; }
   suspend() { if (this.interval !== undefined) clearInterval(this.interval); this.interval = undefined; }
@@ -24,11 +26,14 @@ export class CodePane {
   setTheme(theme: any) {
     const tokens = ["text", "toolTitle", "toolOutput", "mdCodeBlock", "muted", "dim", "warning", "error", "success", "syntaxKeyword", "syntaxString", "syntaxComment", "syntaxNumber", "syntaxFunction", "syntaxOperator", "syntaxPunctuation", "syntaxType", "syntaxVariable", "toolDiffAdded", "toolDiffRemoved"];
     const key = tokens.map(token => theme?.fg(token, "x") ?? "x").join("") + (theme?.bg("selectedBg", "x") ?? "x") + (theme?.bold("x") ?? "x");
-    if (key !== this.themeKey) { this.themeKey = key; this.reset(); }
+    const changed = key !== this.themeKey;
+    if (changed) { this.themeKey = key; this.reset(); }
     this.theme = theme;
+    return changed;
   }
   update(args: any, result: any, revision: number, context: any) {
-    if (this.content.update(args, result, revision)) this.reset();
+    this.content.update(args, result, revision);
+    if (revision !== this.revision) { this.revision = revision; this.reset(); }
     if (context.executionStarted) this.startedAt ??= Date.now();
     if (this.durationMs !== context.durationMs || this.isError !== context.isError) this.reset();
     this.partial = context.isPartial; this.isError = context.isError; this.durationMs = context.durationMs;
@@ -45,6 +50,13 @@ export class CodePane {
       this.open = true; this.offset = Math.max(0, this.offset + (down ? distance : -distance)); return true;
     }
     return false;
+  }
+  *contentRows(width: number, theme = this.theme, grouped = false): Generator<string> {
+    if (grouped && this.durationMs !== undefined && !this.content.hasScriptHeader) {
+      const timing = `Took ${(this.durationMs / 1000).toFixed(2)}s`;
+      yield theme ? theme.fg("muted", timing) : timing;
+    }
+    yield* this.content.rows(width, theme, this.isError, !grouped && (this.durationMs !== undefined || this.startedAt !== undefined));
   }
   render(width: number): string[] {
     this.lastWidth = width;
@@ -63,7 +75,7 @@ export class CodePane {
     const indent = contentWidth >= 4 ? "  " : "";
     const nativeWidth = Math.max(1, contentWidth - indent.length);
     if (this.width !== nativeWidth) { this.reset(); this.width = nativeWidth; this.offset = 0; }
-    this.iterator ??= this.content.rows(nativeWidth, this.theme, this.isError, this.durationMs !== undefined || this.startedAt !== undefined);
+    this.iterator ??= this.contentRows(nativeWidth);
     const bodyHeight = Math.max(1, Math.min(20, this.height()) - 2);
     this.offset = Math.min(this.offset, this.rows.length);
     while (!this.done && this.rows.length <= this.offset + bodyHeight) {

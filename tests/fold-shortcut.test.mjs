@@ -8,7 +8,7 @@ import { createWorkStripPreview } from '../scripts/preview-work-strip.mjs';
 const preview = await createWorkStripPreview();
 let ui;
 try {
-  const { matchesKey, setKittyProtocolActive } = await import(pathToFileURL(path.join(preview.runtimePath, 'node_modules/@earendil-works/pi-tui/dist/index.js')));
+  const { matchesKey, setKittyProtocolActive } = await import(pathToFileURL(preview.tuiPath));
   let receive, kitty = true;
   const terminal = {
     columns: 110,

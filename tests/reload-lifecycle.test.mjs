@@ -70,11 +70,10 @@ const replay = () => {
   return display.chatContainer.children.filter(row => row instanceof ToolExecutionComponent);
 };
 const assertCompactHistory = (rows, label) => {
-  assert.match(paint(rows[0]), /▸ 2 actions/, `${label}: historical bash and namespaced MCP results stay grouped`);
+  assert.match(paint(rows[0]), /▸ 3 actions/, `${label}: historical bash, namespaced MCP and clean codemode results stay grouped`);
   assert.doesNotMatch(paint(rows[0]), /EXACT_RECORDED_BASH_OUTPUT|EXACT_RECORDED_MCP_OUTPUT/, `${label}: grouped output stays collapsed`);
   assert.equal(paint(rows[1]), '', `${label}: the second historical action does not duplicate the group`);
-  assert.match(paint(rows[2]), /▸ codemode/, `${label}: historical codemode retains its compact card`);
-  assert.doesNotMatch(paint(rows[2]), /RECORDED_CODE_SOURCE|EXACT_RECORDED_CODE_OUTPUT/, `${label}: codemode source and output stay collapsed`);
+  assert.equal(paint(rows[2]), '', `${label}: historical codemode does not duplicate the mixed group`);
   assert.match(paint(rows[3]), /▸ read .*1 image/, `${label}: direct image read keeps its compact heading and image count`);
   assert.match(paint(rows[4]), /▸ codemode.*2 images/, `${label}: image-bearing codemode keeps its compact heading and image count`);
   for (const [row, count] of [[rows[3], 1], [rows[4], 2]]) {
@@ -129,7 +128,8 @@ try {
   assert.equal(paint(freshMcp), '');
   assert.doesNotMatch(paint(freshBash), /EXACT_RECORDED_BASH_OUTPUT|EXACT_RECORDED_MCP_OUTPUT/);
   const freshCode = create({ ...fixture[2], id: 'fresh-code' });
-  assert.match(paint(freshCode), /▸ codemode/);
+  assert.match(paint(freshBash), /▸ 3 actions/);
+  assert.equal(paint(freshCode), '');
   assert.doesNotMatch(paint(freshCode), /RECORDED_CODE_SOURCE|EXACT_RECORDED_CODE_OUTPUT/);
   assertCompactHistory(rows, 'fresh calls preserve historical groups');
 
@@ -146,7 +146,7 @@ try {
   invalidate(rows);
   assert.match(paint(rows[0]), /EXACT_RECORDED_BASH_OUTPUT/, 'detached old bash row uses native fallback after switch');
   assert.match(paint(rows[1]), /EXACT_RECORDED_MCP_OUTPUT/, 'detached old MCP row uses native fallback after switch');
-  assert.doesNotMatch(paint(rows[0]), /▸ 2 actions/, 'detached row cannot adopt the new session group');
+  assert.doesNotMatch(paint(rows[0]), /▸ 3 actions/, 'detached row cannot adopt the new session group');
   assertCompactHistory(replacementRows, 'late detached-row invalidation');
 
   event('session_shutdown', { reason: 'shutdown' });

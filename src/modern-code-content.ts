@@ -31,6 +31,8 @@ function* metadataValues(value: any, ancestors = new Set<object>()): Generator<s
  * rendering visits bounded chunks and the nested calls reached by the viewport. */
 export class CodeContent {
   supported = true;
+  clean = true;
+  hasScriptHeader = false;
   calls: any[] = [];
   content: any[] = [];
   code = "";
@@ -43,12 +45,15 @@ export class CodeContent {
   private revision = -1;
   update(args: any, result: any, revision: number) {
     if (revision === this.revision) return false;
-    this.revision = revision; this.supported = true;
+    this.revision = revision; this.supported = true; this.clean = true; this.hasScriptHeader = false;
     this.errors = this.cancelled = this.unresolved = this.priced = this.totalCost = this.images = 0;
     const code = data(args, "code"), content = result ? data(result, "content") : [], details = result ? data(result, "details") : undefined;
     const calls = details == null ? [] : data(details, "calls");
     if (typeof code !== "string" || !Array.isArray(content) || details === missing || calls === missing || calls != null && !Array.isArray(calls)) { this.supported = false; return true; }
     this.code = code; this.content = content; this.calls = calls ?? []; this.details = details; this.visibleContent = [];
+    const status = data(details, "status"), warning = data(details, "warning"), warnings = data(details, "warnings");
+    const hasWarnings = Array.isArray(warnings) ? warnings.length > 0 : !!warnings;
+    this.clean = !warning && !hasWarnings && (status === undefined || ["success", "ok", "completed"].includes(status));
     for (let i = 0; i < content.length; i++) {
       this.aggregateBlocks++;
       const block = data(content, String(i));
@@ -56,6 +61,7 @@ export class CodeContent {
       if (type === "image" && typeof data(block, "mimeType") === "string" && typeof data(block, "data") === "string") {
         this.images++; this.visibleContent.push({ block, index: i });
       } else if (type === "text" && typeof data(block, "text") === "string") {
+        if (i === 0) this.hasScriptHeader = data(block, "text").length < 160 && scriptHeader.test(data(block, "text"));
         if (data(block, "text").length) this.visibleContent.push({ block, index: i });
       } else { this.supported = false; return true; }
     }
@@ -68,6 +74,7 @@ export class CodeContent {
       if (status === "error") this.errors++;
       if (status === "cancelled") this.cancelled++;
       if (status === "running") this.unresolved++;
+      if (status !== "ok" || data(call, "error")) this.clean = false;
       if (cost) { this.priced++; this.totalCost += cost; }
     }
     this.intent = codeIntent(args, this.calls);
