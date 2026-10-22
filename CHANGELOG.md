@@ -1,5 +1,10 @@
 # Release notes
 
+## 3.0.2 — Mixed action groups
+
+- Group successful completed codemode calls with adjacent bash and file actions. Count each outer call once and retain nested source, calls, and output on expansion.
+- Keep running calls, failures, nested warnings, images, and unsupported records separate. Preserve visible conversation boundaries and native display when folding is disabled.
+
 ## 3.0.1 — Inspection paging and final thinking
 
 - Make `more ↓` advance expanded tool, codemode, workflow, and thinking panes by one visible page. Preserve prompt typing after mouse inspection.

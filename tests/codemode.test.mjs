@@ -31,7 +31,9 @@ assert.equal(ToolExecutionComponent.prototype.render,originalToolRender);
 const mode = createDisplayMode(), dispose = registerModernTools(pi, mode);
 const ctx = { hasUI: true, sessionManager: { getBranch: () => [] }, ui: { onTerminalInput(fn) { input = fn; return () => { input = undefined; }; } } };
 const event = (name, data = {}) => { for (const fn of hooks.get(name) || []) fn(data, ctx); };
-const create = (name, id, args, native) => {
+const create = (name, id, args, native, adjacent = false) => {
+ // These fixtures inspect independent panes. Mixed adjacency has its own assertions below.
+ if (!adjacent) event('message_end', { message: { role: 'assistant', content: [{ type: 'text', text: `Fixture ${id}` }] } });
  const component = new ToolExecutionComponent(name, id, args, { showImages: false, outputPad: 0 }, resolver(name, () => native), { requestRender() {} }, '/tmp'); component.setArgsComplete(); return component;
 };
 const result = text => ({ content: [{ type: 'text', text }] });
@@ -376,13 +378,13 @@ try {
  assert.ok(restoredChoices.length>fallbackChoices.length,'supported result restores compact inspection');
 
  const unsupported=create('codemode','bounded-invalid-fallback',{code:42},codemodeRenderers);assert.match(paint(unsupported),/invalid arg/);
- // Replay preserves script boundaries between adjacent successes.
+ // Adjacent successful code shares the outer action group with ordinary tools.
  const replayFirst = create('read', 'replay-before', { path: '/fixture/replay-before' }, readRenderers); replayFirst.updateResult(result('first'));
  event('message_end', { message: { role: 'assistant', content: [{ type: 'toolCall', id: 'replay-code', name: 'codemode', arguments: { code: 'text(1)' } }] } });
- const replayCode = create('codemode', 'replay-code', { code: 'text(1)' }, codemodeRenderers); replayCode.updateResult(result('done'));
- const last = create('read', 'after-code', { path: '/fixture/after' }, readRenderers); last.updateResult(result('last'));
- assert.match(paint(last), /read · \/fixture\/after/); assert.doesNotMatch(paint(last), /2 actions/);
+ const replayCode = create('codemode', 'replay-code', { code: 'text(1)' }, codemodeRenderers, true); replayCode.updateResult(result('done'));
+ const last = create('read', 'after-code', { path: '/fixture/after' }, readRenderers, true); last.updateResult(result('last'));
+ assert.equal(paint(last), '');
  assert.doesNotMatch(paint(replayCode), /successful action/);
- assert.match(paint(replayFirst), /read · \/fixture\/replay-before/); assert.doesNotMatch(paint(replayFirst), /2 actions/);
+ assert.match(paint(replayFirst), /3 actions/); assert.equal(paint(replayCode), '');
  console.log('codemode: collapsed summary, bounded details, native images, single image-read headings, nested outcome, timer, inspection/editor and transcript checks passed');
 } finally { dispose(); assert.equal(ToolExecutionComponent.prototype.render,originalToolRender,'disposing restores the native render method'); }

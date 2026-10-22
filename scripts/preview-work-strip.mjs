@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPreview } from './preview.mjs';
 
-export async function createWorkStripPreview({ stepMs = 1000, inspection = false } = {}) {
+export async function createWorkStripPreview({ stepMs = 1000, inspection = false, actionGroups = false } = {}) {
   const old = process.env.PI_PREVIEW_WORK_STRIP;
   process.env.PI_PREVIEW_WORK_STRIP = '1';
   const preview = await createPreview();
@@ -48,6 +48,27 @@ export async function createWorkStripPreview({ stepMs = 1000, inspection = false
     manager.appendMessage(final);
     const finalId = manager.getBranch().at(-1).id;
     manager.appendCustomEntry('compact-renderer:work-settled:v1',{version:1,userId,finalId,endId:finalId,startedAt:base-90000,endedAt:base,outcome:'completed'});
+  }
+  if (actionGroups) {
+    manager.appendMessage({role:'user',content:'Compare mixed action groups: successful bash, codemode, and file calls belong together. Keep nested failures visible.',timestamp:Date.now()});
+    const userId = manager.getBranch().at(-1).id;
+    const recorded = (id, name, args, text, calls = []) => {
+      const call = assistant(''); call.stopReason = 'toolUse';
+      call.content = [{type:'toolCall',id,name,arguments:args}];
+      manager.appendMessage(call);
+      manager.appendMessage({role:'toolResult',toolCallId:id,toolName:name,content:[{type:'text',text}],details:name==='codemode'?{calls}:{},isError:false,durationMs:12,timestamp:Date.now()});
+    };
+    const code = (id, status = 'ok') => recorded(id, 'codemode', {code:'text(await tools.read({ path: "/fixture/units.txt" }));'}, 'Recorded units: kg/L. No file was read.', [{name:'read',args:'{"path":"/fixture/units.txt"}',status,durationMs:3,...(status==='error'?{error:'Invented missing-file warning, handled by the script.'}:{})}]);
+    recorded('mixed-bash', 'bash', {command:'printf "recorded sample"'}, 'Recorded shell output. No command ran.');
+    code('mixed-code-a'); code('mixed-code-b');
+    recorded('mixed-read', 'read', {path:'/fixture/summary.txt'}, 'Recorded summary.');
+    manager.appendMessage(assistant('The four calls above form one group. Each codemode counts once and retains its nested source, calls, and output. This reply separates the next group, which starts with codemode.'));
+    code('mixed-code-first');
+    recorded('mixed-write', 'write', {path:'/fixture/report.txt',content:'Recorded report.'}, 'Successfully wrote to /fixture/report.txt');
+    code('mixed-nested-warning', 'error');
+    manager.appendMessage(assistant('Mixed-action preview: expand the work, then the 4-action and 2-action groups. Open codemode to inspect its recorded content. The nested-error card stays separate. Test /fold collapse, Ctrl+Alt+W, /inspect, and Esc. All content is invented; no tool or model ran.'));
+    const finalId = manager.getBranch().at(-1).id;
+    manager.appendCustomEntry('compact-renderer:work-settled:v1',{version:1,userId,finalId,endId:finalId,startedAt:base-45000,endedAt:base,outcome:'completed'});
   }
   const emit = async event => {
     if (stopped) return;

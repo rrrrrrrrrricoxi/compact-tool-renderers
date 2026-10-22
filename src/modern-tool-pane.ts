@@ -5,7 +5,7 @@ import { activityRow, cardContentWidth } from "./display-card.ts";
 
 type RowKind = "section" | "field" | "answer";
 export type PaneContent = string | { text: string; kind?: RowKind; indent?: number; label?: string } & TextFormat;
-export type PaneAction = { id: string; label: string; repeatedSummary?: string; sections: () => Iterable<PaneContent>; details?: () => Iterable<PaneContent> };
+export type PaneAction = { id: string; label: string; repeatedSummary?: string; sections: () => Iterable<PaneContent>; rows?: (width: number, theme: any) => Iterable<string>; details?: () => Iterable<PaneContent> };
 // Render only visited text chunks. Never split/highlight an entire result to paint a viewport.
 export function* textRows(text: string, width: number): Generator<string> {
   yield* richTextRows(text, width);
@@ -49,8 +49,9 @@ export class ToolPane {
   reset() { this.preserveFocusLayout = false; this.anchor = Math.min(this.anchor, Math.max(0, this.actions.length - 1)); this.key = ""; this.rows = []; this.iterator = undefined; this.done = false; this.actionRows.clear(); this.detailsRows.clear(); this.rowKinds.clear(); }
   collapse() { this.open = false; this.focused = false; this.selected = 0; this.anchor = 0; this.offset = 0; this.expanded.clear(); this.detailsExpanded.clear(); this.detailsFocused = false; this.reset(); }
   releaseInspection() { if (this.detailsFocused) { this.detailsFocused = false; this.offset = 0; this.reset(); } }
+  select(index: number) { this.selected = Math.max(0, Math.min(index, this.actions.length - 1)); this.detailsFocused = false; this.anchor = this.selected; this.open = true; this.offset = 0; this.reset(); }
   handle(data: string): boolean {
-    if (matchesKey(data, "home")) { this.open = true; this.selected = 0; this.detailsFocused = false; this.anchor = 0; this.offset = 0; this.reset(); return true; }
+    if (matchesKey(data, "home")) { this.select(0); return true; }
     if (matchesKey(data, "enter")) {
       const action = this.actions[this.selected];
       if (this.detailsFocused && action?.details) {
@@ -68,8 +69,7 @@ export class ToolPane {
     }
     if (matchesKey(data, "right") || matchesKey(data, "tab") || matchesKey(data, "left") || matchesKey(data, "shift+tab")) {
       const direction = matchesKey(data, "left") || matchesKey(data, "shift+tab") ? -1 : 1;
-      this.selected = (this.selected + direction + this.actions.length) % Math.max(1, this.actions.length);
-      this.detailsFocused = false; this.anchor = this.selected; this.open = true; this.offset = 0; this.reset(); return true;
+      this.select((this.selected + direction + this.actions.length) % Math.max(1, this.actions.length)); return true;
     }
     if (["up", "down", "pageUp", "pageDown"].some(key => matchesKey(data, key as any))) {
       const distance = matchesKey(data, "pageUp") || matchesKey(data, "pageDown") ? Math.max(1, this.height() - 4) : 1;
@@ -112,15 +112,19 @@ export class ToolPane {
         }.bind(this);
         const fullLabel = this.directDetails ? `▾ ${this.expandedTitle ?? this.title}${this.contentFocused ? " · focused" : ""}` : prefix + action.label;
         const summary = visibleWidth(fullLabel) <= width ? action.repeatedSummary : undefined;
+        const primaryRows = function* (this: ToolPane) {
+          if (action.rows) for (const row of action.rows(Math.max(1, width - detailsIndent.length), this.theme)) yield { text: detailsIndent + row };
+          else yield* sectionRows(action.sections(), summary);
+        }.bind(this);
         if (this.detailsFocused && index === this.selected) {
           // Keep short output inline; probe at most one viewport before anchoring at Details.
-          const primary = sectionRows(action.sections(), summary), preview = [];
+          const primary = primaryRows(), preview = [];
           const budget = Math.max(1, Math.min(20, this.height()) - (this.contentFocused ? 2 : 1) - (this.directDetails ? 0 : 1) - 1);
           let complete = false;
           while (preview.length <= budget) { const row = primary.next(); if (row.done) { complete = true; break; } preview.push(row.value); }
           if (complete) yield* emitRows(preview);
           else { this.contentAnchoredAbove = true; yield detailsIndent + (this.theme ? this.theme.fg("dim", "content above ↑") : "content above ↑"); }
-        } else yield* emitRows(sectionRows(action.sections(), summary));
+        } else yield* emitRows(primaryRows());
         if (action.details) {
           this.detailsRows.set(this.rows.length, index);
           yield detailsIndent + `${this.detailsExpanded.has(action.id) ? "▾" : "▸"} Details`;

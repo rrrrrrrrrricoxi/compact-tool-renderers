@@ -2,6 +2,7 @@
 // Actual Pi TUI with invented records and an isolated temporary home. No credentials or live services.
 import fs from 'node:fs/promises';
 import os from 'node:os';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -9,6 +10,7 @@ const source = fileURLToPath(new URL('../', import.meta.url));
 export async function createPreview() {
   const hostHome = os.homedir();
   const runtimePath = path.resolve(process.env.PI_RUNTIME || path.join(hostHome, '.local/state/pi-config/current/runtime'));
+  const tuiPath = createRequire(path.join(runtimePath, 'node_modules/@earendil-works/pi-coding-agent/package.json')).resolve('@earendil-works/pi-tui');
   const promptJump = process.env.PI_PROMPT_JUMP_PATH ? path.resolve(process.env.PI_PROMPT_JUMP_PATH) : undefined;
   const questionCandidates = process.env.PI_QUESTIONS_PATH ? [path.resolve(process.env.PI_QUESTIONS_PATH)] : [
     path.join(hostHome, '.local/state/pi-config/current/packages/pi-questions/index.ts'),
@@ -218,7 +220,7 @@ export async function createPreview() {
     runtime = await core.createAgentSessionRuntime(factory, { cwd, agentDir, sessionManager: manager });
     const diagnostics = runtime.services.resourceLoader.getExtensions().errors;
     if (runtime.diagnostics.some(item => item.type === 'error') || diagnostics.length) throw new Error(JSON.stringify([...runtime.diagnostics, ...diagnostics]));
-    return { core, runtime, manager, temporary, agentDir, cwd, runtimePath, questionsPath, eventBus, cleanup };
+    return { core, runtime, manager, temporary, agentDir, cwd, runtimePath, tuiPath, questionsPath, eventBus, cleanup };
   } catch (error) { await cleanup(); throw error; }
 }
 

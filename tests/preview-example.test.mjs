@@ -10,7 +10,7 @@ const { core, runtime, manager, temporary, runtimePath, cwd } = preview;
 const load = file => import(pathToFileURL(path.join(runtimePath, 'node_modules/@earendil-works/pi-coding-agent/dist', file)).href);
 const { initTheme, theme } = await load('modes/interactive/theme/theme.js');
 const { codemodeRenderers } = await load('extensions/codemode/renderer.js');
-const { Text } = await import(pathToFileURL(path.join(runtimePath, 'node_modules/@earendil-works/pi-tui/dist/index.js')).href);
+const { Text } = await import(pathToFileURL(preview.tuiPath).href);
 const strip = value => value.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]/g, '');
 const paint = (component, width = 100) => strip(component.render(width).join('\n'));
 initTheme('dark', false);

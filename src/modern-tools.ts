@@ -254,12 +254,18 @@ export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => 
     pi.events.emit("compact-renderer:focus:v1", { owner: "tools", label: pane.title,
       target: (component: any) => component instanceof DynamicComponent && (component.owner && subagentView(component.owner)?.pane || component.owner?.group?.pane || component.owner?.code || component.owner?.pane) === pane });
   };
-  const action = (node: Node): PaneAction => ({ id: node.id, label: toolLabel(node.name, node.args) + indicators(node), sections: () => sections(node), ...(question(node.name) ? {} : { details: () => actionDetails(node) }) });
+  const action = (node: Node): PaneAction => node.code ? {
+    id: node.id, label: `codemode · ${node.code.content.intent}${node.code.content.calls.length ? ` · ${node.code.content.calls.length} nested call${node.code.content.calls.length === 1 ? "" : "s"}` : ""}` + indicators(node),
+    sections: () => [], rows: (width, theme) => node.code!.contentRows(width, theme, true),
+  } : ({ id: node.id, label: toolLabel(node.name, node.args) + indicators(node), sections: () => sections(node), ...(question(node.name) ? {} : { details: () => actionDetails(node) }) });
   const refreshGroups = () => {
     let run: Node[] = [];
+    let transferredFocus: ToolPane | undefined;
     const next = new Map<string, Group>();
     const finish = () => {
       if (!run.length) return;
+      // A lone codemode keeps its native-style CodePane and timing/inspection UI.
+      if (run.length === 1 && run[0].code) { run = []; return; }
       const id = run[0].id;
       const signature = run.map(node => `${node.id}@${node.revision}`).join("|");
       let group = groups.get(id);
@@ -270,16 +276,27 @@ export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => 
       if (run.some(node => node.result?.details?.truncation?.truncated || node.result?.details?.truncated)) group.pane.title += " · output truncated";
       if (run.some(node => node.result?.details?.fullOutputPath)) group.pane.title += " · full output saved";
       if (run.some(node => node.result?.details?.warning || node.result?.details?.warnings?.length)) group.pane.title += " · warning recorded";
-      for (const node of run) node.group = group;
+      for (const [index, node] of run.entries()) {
+        node.group = group;
+        if (node.code?.open) {
+          group.pane.open = true; group.pane.expanded.add(node.id);
+          if (focused === node.code) { group.pane.select(index); transferredFocus = group.pane; }
+          // The shared pane now owns expansion; collapse-all must not leave a
+          // hidden singleton state that can reopen after a later regroup.
+          node.code.collapse();
+        }
+      }
       next.set(id, group); run = [];
     };
     for (const node of nodes.values()) {
       node.group = undefined;
-      if (compactSubagent(node.name) || node.name === "codemode" || node.status !== "success" || node.result?.content?.some((block: any) => block.type === "image")) { finish(); continue; }
+      const code = node.code?.content;
+      if (compactSubagent(node.name) || node.status !== "success" || node.images || code && (!code.supported || !code.clean)) { finish(); continue; }
       if (run.length && node.epoch !== run[0].epoch) finish();
       run.push(node);
     }
     finish(); groups = next;
+    if (transferredFocus) focusPane(transferredFocus);
     if (focused && ![...groups.values()].some(group => group.pane === focused) && ![...nodes.values()].some(node => !node.group && (node.code || node.pane) === focused)) release();
   };
   const ensure = (id: string, name: string, args?: any, stock?: ToolRenderers) => {
@@ -298,6 +315,9 @@ export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => 
     if (!changed) return;
     node.images = Array.isArray(result?.content) ? result.content.reduce((count: number, block: any) => count + (block?.type === "image" ? 1 : 0), 0) : 0;
     node.revision++; node.pane?.reset();
+    // Running code cannot join a group. Defer its aggregate until the renderer
+    // receives the final argument revision, as native streaming may replace args.
+    if (!partial) node.code?.content.update(node.args, node.result, node.revision);
     if (!rebuilding) refreshGroups();
   };
   const observeMessage = (message: any) => {
@@ -447,6 +467,8 @@ export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => 
     const codePane = (node: Node, theme: any, context: Context) => {
       const pane = node.code!;
       node.native.suspend(); pane.adoptClock(node.native.clock);
+      if (pane.content.update(node.args, node.result, node.revision) && !rebuilding) refreshGroups();
+      const duration = pane.duration;
       const supported = pane.update(node.args, node.result, node.revision, context);
       if (!supported) { pane.suspend(); node.native.adoptClock(pane.clock); return false; }
       const calls = pane.content.calls;
@@ -454,8 +476,15 @@ export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => 
       const status = node.status === "failed" ? "✗ Failed" : context.isPartial ? context.executionStarted ? "… Running" : "Preparing" : "";
       pane.heading = `codemode${status ? ` · ${status}` : ""} · ${pane.content.intent}`;
       pane.title = `${pane.heading}${calls.length ? ` · ${calls.length} nested call${calls.length === 1 ? "" : "s"}` : ""}${pane.content.images ? ` · ${pane.content.images} image${pane.content.images === 1 ? "" : "s"}` : ""}${errors ? ` · ${errors} nested error${errors === 1 ? "" : "s"}` : ""}${cancelled ? ` · ${cancelled} nested cancelled` : ""}${unresolved ? ` · ${unresolved} nested unresolved` : ""}${typeof context.durationMs === "number" ? ` · ${(context.durationMs / 1000).toFixed(2)}s` : ""}${indicators(node)}`;
-      pane.setTheme(theme); pane.tone = node.status === "failed" ? "error" : errors || cancelled || unresolved && !context.isPartial ? "warning" : "syntaxVariable";
+      if (pane.setTheme(theme) || duration !== pane.duration) node.group?.pane.reset();
+      pane.tone = node.status === "failed" ? "error" : errors || cancelled || unresolved && !context.isPartial ? "warning" : "syntaxVariable";
       return true;
+    };
+    const groupPane = (node: Node, theme: any) => {
+      const group = node.group;
+      if (!group || group.members[0] !== node) return;
+      group.pane.theme = theme; group.pane.styleHeader = text => activityHeading(text, theme);
+      return group.pane;
     };
     return {
       renderShell: "self",
@@ -477,7 +506,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => 
         if (node.code) {
           if (!codePane(node, theme, context)) node.native.renderCall(args, theme, context);
           syncExpansion(node, context.expanded);
-          return new DynamicComponent(width => node.code!.content.supported ? node.code!.render(width) : node.native.renderCurrent(width), event => node.code!.content.supported ? mouse(node.code, event) : undefined, node);
+          return new DynamicComponent(width => node.group ? groupPane(node, theme)?.render(width) ?? [] : node.code!.content.supported ? node.code!.render(width) : node.native.renderCurrent(width), event => mouse(node.group ? groupPane(node, theme) : node.code!.content.supported ? node.code : undefined, event), node);
         }
         node.native.suspend(); syncExpansion(node, context.expanded);
         return new DynamicComponent(width => {
@@ -498,7 +527,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => 
         node.native.suspend(); syncExpansion(node, context.expanded);
         return new DynamicComponent(width => {
           if (subagentView(node)?.hidden) return [];
-          if (node.group) { const group = node.group; if (group.members[0] !== node) return []; group.pane.theme = theme; group.pane.styleHeader = text => activityHeading(text, theme); return group.pane.render(width); }
+          if (node.group) return groupPane(node, theme)?.render(width) ?? [];
           if (singleCard(node)) return [];
           return individual(node, theme).render(width);
         }, event => mouse(node.group ? node.group.members[0] === node ? node.group.pane : undefined : !singleCard(node) ? individual(node, theme) : undefined, event), node);

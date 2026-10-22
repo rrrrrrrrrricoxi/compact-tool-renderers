@@ -36,12 +36,14 @@ try {
   assert.notEqual(plain(component.render(110)), beforeThinking);
   assert.doesNotMatch(plain(component.render(110)), /Thinking\.\.\./);
 
-  const code = ui.chatContainer.children.find(row => row.toolName === 'codemode' && row.args?.code?.includes('/fixture/recorded.txt'));
-  const wrapper = ui.chatContainer[Symbol.for('compact-renderer:projected-children:v1')].find(row => row.children?.[0] === code);
+  // The recorded read and codemode now share an action pane owned by the read.
+  const leader = ui.chatContainer.children.find(row => row.toolCallId === 'inspection-1');
+  const wrapper = ui.chatContainer[Symbol.for('compact-renderer:projected-children:v1')].find(row => row.children?.[0] === leader);
   assert.ok(wrapper);
-  click(wrapper, /▸ codemode/);
+  click(wrapper, /▸ 2 actions/);
+  click(wrapper, /2\. codemode/);
   click(wrapper, /more ↓/);
-  preview.eventBus.emit('compact-renderer:focus:v1', { owner: 'tools', target: row => row === code });
+  preview.eventBus.emit('compact-renderer:focus:v1', { owner: 'tools', target: row => row === leader });
   renderer.renderNow();
   const scroll = renderer.getPrimaryScrollView();
   // At the transcript end, auto-clamping can mask a shrinking pane by moving
@@ -50,7 +52,7 @@ try {
   const top = scroll.scrollTop;
   let footerY = -1;
   for (let n = 0; n < 200; n++) {
-    const rows = screen(), headerY = rows.findIndex(row => /▾ codemode/.test(row));
+    const rows = screen(), headerY = rows.findIndex(row => /▾ 2 actions/.test(row));
     assert.ok(headerY >= 0);
     const nextY = rows.findIndex((row, i) => i > headerY && i < headerY + 21 && /more ↓/.test(row));
     if (nextY < 0) break;
