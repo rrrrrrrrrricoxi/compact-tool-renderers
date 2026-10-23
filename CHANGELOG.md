@@ -1,5 +1,10 @@
 # Release notes
 
+## Unreleased — Fullscreen overlays
+
+- Temporarily hide inline Kitty images while an overlay is visible in Pi 1.3.0 fullscreen mode. This keeps panel borders and text readable. Restore the images when the last overlay closes or hides, including with folding off.
+- Remove padded shell prompt markers from fullscreen display output so they cannot erase overlay rows. Preserve the original transcript and prompt-navigation metadata.
+
 ## 3.0.3 — Approval layout
 
 - Match approval dialogs to the quieter prompt layout: add spacing around the content and choices, mute keyboard hints, and fill only the selected choice. Keep approval decisions and Details controls unchanged.

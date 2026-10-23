@@ -109,4 +109,8 @@ The renderer respects Pi's show-images setting and terminal capability detection
 
 Compact mode off preserves native image display and sizing. The image adapter is gated to Pi 1.3.0 and restores the native component's options after each compact paint. It does not alter image data, terminal settings, tmux settings, or saved transcripts.
 
+In Pi 1.3.0 fullscreen mode, visible overlays temporarily hide inline Kitty images. This works around native image placements covering overlay text and breaking borders. Images return from the native cache when the last overlay closes or hides. The compatibility fix also runs with `/fold off`; it preserves image row heights and does not change image settings or overlay packages such as BTW. Other runtimes and image protocols retain native behavior.
+
+The fullscreen adapter also removes shell prompt-zone markers (`OSC 133 A/B/C`) from display rows after layout padding. Pi's native cleanup misses these padded markers, which can make the terminal hide overlay text and border rows. Source rows and prompt-navigation metadata retain their markers. Regular terminal mode and other Pi versions keep native behavior.
+
 To inspect mixed bash/codemode groups in the isolated fixture, run `node scripts/preview-actions.mjs`. The final work section includes both bash-led and codemode-led groups and a separate nested-error card. No tools or model run.
