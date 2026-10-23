@@ -1,5 +1,9 @@
 # Release notes
 
+## 3.0.3 — Approval layout
+
+- Match approval dialogs to the quieter prompt layout: add spacing around the content and choices, mute keyboard hints, and fill only the selected choice. Keep approval decisions and Details controls unchanged.
+
 ## 3.0.2 — Mixed action groups
 
 - Group successful completed codemode calls with adjacent bash and file actions. Count each outer call once and retain nested source, calls, and output on expansion.
