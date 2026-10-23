@@ -2,6 +2,7 @@ import type { DisplayMode } from './display-mode.ts';
 import { VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, ScrollView, isViewportTUI, type Component } from '@earendil-works/pi-tui';
 import { projectedChildren } from './work-strip-view.ts';
+import { installFullscreenOverlayGuard } from './fullscreen-overlays.ts';
 
 type Choice = { id: string; kind: string; label: string; focus(): void };
 type Target = (component: Component) => boolean;
@@ -46,14 +47,18 @@ export function revealInspection(tui: any, target: Target, version = VERSION): b
 /** Native picker plus visible focus status. No model tools, transcript or editor mutation. */
 export function registerInspection(pi: ExtensionAPI, mode: DisplayMode): () => void {
   let ui: any, tui: any, disposed = false;
+  let restoreFullscreenOverlays: (() => void) | undefined;
   let revealTimer: ReturnType<typeof setTimeout> | undefined;
   const clearStatus = () => { if (revealTimer) clearTimeout(revealTimer); revealTimer = undefined; ui?.setStatus?.('compact-inspection', undefined); };
-  const clear = () => { clearStatus(); ui?.setWidget?.('compact-inspection-host', undefined); ui = undefined; tui = undefined; };
+  const clear = () => { clearStatus(); restoreFullscreenOverlays?.(); restoreFullscreenOverlays = undefined; ui?.setWidget?.('compact-inspection-host', undefined); ui = undefined; tui = undefined; };
   const subscriptions = [
     pi.on('session_start', (_event, ctx) => {
       clear(); if (disposed || !ctx.hasUI) return; ui = ctx.ui;
       // This zero-row widget only obtains the supported TUI handle. It owns no root.
-      ui.setWidget?.('compact-inspection-host', (host: any) => { tui = host; return { render: () => [], invalidate() {} }; });
+      ui.setWidget?.('compact-inspection-host', (host: any) => {
+        tui = host; restoreFullscreenOverlays?.(); restoreFullscreenOverlays = installFullscreenOverlayGuard(host);
+        return { render: () => [], invalidate() {} };
+      });
     }),
     pi.on('session_before_switch', clear), pi.on('session_shutdown', clear),
     pi.on('ui_prompt_start', clearStatus), pi.on('session_tree', clearStatus), pi.on('session_compact', clearStatus), mode.onChange(clearStatus),
