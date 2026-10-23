@@ -15,7 +15,7 @@ Replies without tool or subagent activity skip the work strip.
 Tested with **Pi 1.3.0** and **Node.js 22.19.0 or later**. Other Pi versions are not verified; version-sensitive features fall back to native rendering.
 
 ```sh
-pi install npm:@notrico/pi-fold@3.0.0
+pi install npm:@notrico/pi-fold@3.0.4
 ```
 
 Restart Pi, or run `/reload` when the session and its background work are idle.
@@ -66,7 +66,7 @@ Run `npm test`, `npm run preview:work`, or `npm run benchmark`. See the [rendere
 ## Uninstall
 
 ```sh
-pi remove npm:@notrico/pi-fold@3.0.0
+pi remove npm:@notrico/pi-fold@3.0.4
 ```
 
 [MIT license](LICENSE) · [Report an issue](https://github.com/rrrrrrrrrricoxi/pi-fold/issues)

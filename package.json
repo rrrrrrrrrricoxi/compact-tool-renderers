@@ -1,6 +1,6 @@
 {
   "name": "@notrico/pi-fold",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "type": "module",
   "description": "Pi Fold: readable agent transcripts with collapsible work, inspectable details, and clear final replies",
   "license": "MIT",

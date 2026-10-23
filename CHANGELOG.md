@@ -1,6 +1,6 @@
 # Release notes
 
-## Unreleased — Fullscreen overlays
+## 3.0.4 — Fullscreen overlays
 
 - Temporarily hide inline Kitty images while an overlay is visible in Pi 1.3.0 fullscreen mode. This keeps panel borders and text readable. Restore the images when the last overlay closes or hides, including with folding off.
 - Remove padded shell prompt markers from fullscreen display output so they cannot erase overlay rows. Preserve the original transcript and prompt-navigation metadata.
