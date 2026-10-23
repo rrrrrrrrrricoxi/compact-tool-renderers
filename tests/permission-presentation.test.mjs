@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { assertCardBackground, themeModule as nativeTheme, stripAnsi } from './test-runtime.mjs';
+import { assertCardBackground, backgroundCells, themeModule as nativeTheme, stripAnsi } from './test-runtime.mjs';
 
 const runtime = process.env.PI_RUNTIME || path.join(homedir(), '.local/state/pi-config/current/runtime');
 const root = process.env.PI_INSTALL_ROOT || path.join(runtime, 'node_modules/@earendil-works/pi-coding-agent');
@@ -25,8 +25,21 @@ for (const details of [false, true]) {
     const selected = rows.findIndex(row => stripAnsi(row).includes('→'));
     assert.ok(selected >= 0, 'native permission selection stays visible at narrow widths');
     assertCardBackground([rows[selected]], width, 'selectedBg');
-    assertCardBackground(rows.filter((_, index) => index !== selected), width, 'toolPendingBg');
+    assert.ok(rows.filter((_, index) => index !== selected).every(row => backgroundCells(row).every(color => color === '')),
+      'only the selected choice has a filled background');
+    if (width === 100) {
+      assert.equal(stripAnsi(rows[0]).trim(), '', 'approval has top breathing room');
+      assert.equal(stripAnsi(rows.at(-1)).trim(), '', 'approval has bottom breathing room');
+    }
   }
+}
+const approvalLines = styled.render(100).map(stripAnsi);
+const firstChoice = approvalLines.findIndex(row => row.includes('Allow once'));
+assert.equal(approvalLines[firstChoice - 1].trim(), '', 'summary and choices are separated');
+for (const width of [16, 18, 20, 40, 80]) {
+  const shortScreen = new PermissionDialog(description, theme, () => {}, () => {}, () => 24);
+  shortScreen.handleInput('d');
+  assert.ok(shortScreen.render(width).length <= 24, 'optional spacing yields to approval controls on a narrow screen');
 }
 
 // Native keybindings, safe default, single resolution and bounded Details.

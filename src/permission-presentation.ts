@@ -1,6 +1,6 @@
 import { getKeybindings, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component } from '@earendil-works/pi-tui';
 import type { DisplayMode } from './display-mode.ts';
-import { cardContentWidth, cardRow } from './display-card.ts';
+import { cardContentWidth, activityRow } from './display-card.ts';
 
 /** Shared with approval owners. This channel carries presentation, never policy. */
 export const PERMISSION_PRESENTATION_EVENT = 'pi:permission-presentation:v1';
@@ -198,21 +198,27 @@ export class PermissionDialog implements Component {
       ...field('Action', this.request.action), ...field('Target', this.request.target), ...field('Reason', this.request.reason)];
     let selectedRow = -1;
     if (shortened) rows.push(...lines('Summary shortened; full text in Details.'));
+    const hints = lines('↑↓ choose · Enter select · Esc deny · d Details');
+    if (this.detailsOpen) hints.push(...lines('←/→ page Details · Home/End'));
+    const availableRows = this.availableRows();
+    // Leave room for the choices and at least one Details row before adding space.
+    const padded = rows.length + 3 + hints.length + (this.detailsOpen ? 2 : 0) + 4 <= availableRows;
+    if (padded) { rows.unshift(''); rows.push(''); }
     for (const [index, title] of ['Allow once', 'Deny', `${this.detailsOpen ? 'Hide' : 'Show'} Details`].entries()) {
       if (index === this.selected) selectedRow = rows.length;
       const label = truncateToWidth(`${index === this.selected ? '→' : ' '} ${title}`, width, '');
       rows.push(fg(index === this.selected ? 'accent' : 'text', index === this.selected && this.theme.bold ? this.theme.bold(label) : label));
     }
-    const hints = lines('↑↓ choose · Enter select · Esc deny · d Details');
-    if (this.detailsOpen) hints.push(...lines('←/→ page Details · Home/End'));
-    this.pageSize = Math.max(1, Math.min(8, this.availableRows() - rows.length - hints.length - 1));
+    this.pageSize = Math.max(1, Math.min(8, availableRows - rows.length - hints.length - 1 - (padded ? 2 : 0)));
     if (this.detailsOpen) {
       const body = this.detailsViewport.render(width, this.pageSize);
       const range = this.detailsViewport.range;
       rows.push(fg('muted', truncateToWidth(`Details · text offset ${range.start}–${range.end}/${range.total}`, width)), ...body);
     }
-    rows.push(...hints);
-    return rows.map((row, index) => cardRow(fg('text', row), outerWidth, this.theme, index === selectedRow ? 'selectedBg' : 'toolPendingBg'));
+    if (padded) rows.push('');
+    rows.push(...hints.map(row => fg('muted', row)));
+    if (padded) rows.push('');
+    return rows.map((row, index) => activityRow(fg('text', row), outerWidth, this.theme, index === selectedRow));
   }
   handleInput(data: string) {
     if (this.settled) return;
