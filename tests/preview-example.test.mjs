@@ -6,8 +6,8 @@ import { createPreview } from '../scripts/preview.mjs';
 
 const hostHome = process.env.HOME, hostFetch = globalThis.fetch;
 const preview = await createPreview();
-const { core, runtime, manager, temporary, runtimePath, cwd } = preview;
-const load = file => import(pathToFileURL(path.join(runtimePath, 'node_modules/@earendil-works/pi-coding-agent/dist', file)).href);
+const { core, runtime, manager, temporary, runtimePath, agentRoot, cwd } = preview;
+const load = file => import(pathToFileURL(path.join(agentRoot, 'dist', file)).href);
 const { initTheme, theme } = await load('modes/interactive/theme/theme.js');
 const { codemodeRenderers } = await load('extensions/codemode/renderer.js');
 const { Text } = await import(pathToFileURL(preview.tuiPath).href);

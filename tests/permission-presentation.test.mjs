@@ -222,6 +222,7 @@ fullscreen.addChild(editorContainer);
 const nativeUI = Object.assign(Object.create(InteractiveMode.prototype), {
   ui: fullscreen, editor, editorContainer, keybindings: nativeKeys,
   extensionTerminalInputSubscriptions: new Set(),
+  extensionDialogs: [], programStatus: { setBlocked() {} },
 });
 const pipeline = fixture();
 const disposePipeline = registerPermissionPresentation(pipeline.pi, pipeline.mode);

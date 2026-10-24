@@ -1,3 +1,4 @@
+import { supportsPiVersion } from './runtime-compatibility.ts';
 import type { DisplayMode } from './display-mode.ts';
 import { VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, ScrollView, isViewportTUI, type Component } from '@earendil-works/pi-tui';
@@ -10,7 +11,7 @@ const children = (component: any): Component[] => [...(Array.isArray(component?.
 
 /** Pi 1.3 viewport seam. Read the mounted tree; never replace its layout/root. */
 export function revealInspection(tui: any, target: Target, version = VERSION): boolean {
-  if (version !== '1.3.0' || !tui || !isViewportTUI(tui) || typeof tui.getMountedRoots !== 'function') return false;
+  if (!supportsPiVersion(version) || !tui || !isViewportTUI(tui) || typeof tui.getMountedRoots !== 'function') return false;
   const scrolls: ScrollView[] = [], seen = new Set<Component>();
   const find = (component: Component) => {
     if (seen.has(component)) return; seen.add(component);

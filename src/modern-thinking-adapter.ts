@@ -1,3 +1,4 @@
+import { supportsPiVersion } from './runtime-compatibility.ts';
 import { AssistantMessageComponent, VERSION } from "@earendil-works/pi-coding-agent";
 import { Markdown, MouseRegion, Spacer, Text } from "@earendil-works/pi-tui";
 import { chainNativeMethod } from "./native-method-chain.ts";
@@ -49,7 +50,7 @@ export function installModernThinkingAdapter(hooks: {
   clear(): void;
 }, version = VERSION): (() => void) | undefined {
   const proto = AssistantMessageComponent.prototype as any;
-  if (version !== "1.3.0" || !["updateContent", "render", "setHideThinkingBlock"].every(key => typeof proto[key] === "function")) return;
+  if (!supportsPiVersion(version) || !["updateContent", "render", "setHideThinkingBlock"].every(key => typeof proto[key] === "function")) return;
   const owner = Symbol.for("compact-renderer:thinking-adapter:v1");
   proto[owner]?.();
   let disposed = false;

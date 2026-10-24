@@ -1,3 +1,4 @@
+import { supportsPiVersion } from './runtime-compatibility.ts';
 import type { DisplayMode } from './display-mode.ts';
 import { AssistantMessageComponent, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, Markdown, MouseRegion, Spacer, Text, matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
@@ -107,7 +108,7 @@ export function registerModernWorkflows(pi: ExtensionAPI, mode: DisplayMode, ver
   const owner = Symbol.for('compact-renderer:workflow-registration:v1'), shared = globalThis as any;
   shared[owner]?.();
   const proto = AssistantMessageComponent.prototype as any;
-  if (version !== '1.3.0' || typeof proto.render !== 'function' || typeof proto.updateContent !== 'function') return () => {};
+  if (!supportsPiVersion(version) || typeof proto.render !== 'function' || typeof proto.updateContent !== 'function') return () => {};
   const cards = new Map<any, Card>();
   let active = false, disposed = false, selected: WorkflowPane | undefined, uiTheme: any, nextCard = 0;
   let input: (() => void) | undefined, redraw: (() => void) | undefined;

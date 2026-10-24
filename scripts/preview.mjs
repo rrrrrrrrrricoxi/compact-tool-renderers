@@ -10,7 +10,8 @@ const source = fileURLToPath(new URL('../', import.meta.url));
 export async function createPreview() {
   const hostHome = os.homedir();
   const runtimePath = path.resolve(process.env.PI_RUNTIME || path.join(hostHome, '.local/state/pi-config/current/runtime'));
-  const tuiPath = createRequire(path.join(runtimePath, 'node_modules/@earendil-works/pi-coding-agent/package.json')).resolve('@earendil-works/pi-tui');
+  const agentRoot = path.resolve(process.env.PI_INSTALL_ROOT || path.join(runtimePath, 'node_modules/@earendil-works/pi-coding-agent'));
+  const tuiPath = createRequire(path.join(agentRoot, 'package.json')).resolve('@earendil-works/pi-tui');
   const promptJump = process.env.PI_PROMPT_JUMP_PATH ? path.resolve(process.env.PI_PROMPT_JUMP_PATH) : undefined;
   const questionCandidates = process.env.PI_QUESTIONS_PATH ? [path.resolve(process.env.PI_QUESTIONS_PATH)] : [
     path.join(hostHome, '.local/state/pi-config/current/packages/pi-questions/index.ts'),
@@ -42,7 +43,7 @@ export async function createPreview() {
     setEnv('HOME', temporary); setEnv('PI_CODING_AGENT_DIR', agentDir); setEnv('PI_OFFLINE', '1');
     for (const key of Object.keys(process.env)) if (/(?:API_KEY|ACCESS_TOKEN|AUTH_TOKEN)$/.test(key)) setEnv(key, undefined);
     globalThis.fetch = async () => { throw new Error('Network disabled in renderer preview'); };
-    const core = await import(pathToFileURL(path.join(runtimePath, 'node_modules/@earendil-works/pi-coding-agent/dist/index.js')).href);
+    const core = await import(pathToFileURL(path.join(agentRoot, 'dist/index.js')).href);
     const template = 'This is an invented long prompt template used only to inspect display behavior. Review the recorded examples, expand the tool groups, and compare native display. No commands should run and no services should be contacted.';
     await fs.mkdir(path.join(agentDir, 'prompts'));
     await fs.writeFile(path.join(agentDir, 'prompts/fixture.md'), `---\ndescription: Inspect synthetic tool, question, and skill display examples.\n---\n${template}`);
@@ -220,7 +221,7 @@ export async function createPreview() {
     runtime = await core.createAgentSessionRuntime(factory, { cwd, agentDir, sessionManager: manager });
     const diagnostics = runtime.services.resourceLoader.getExtensions().errors;
     if (runtime.diagnostics.some(item => item.type === 'error') || diagnostics.length) throw new Error(JSON.stringify([...runtime.diagnostics, ...diagnostics]));
-    return { core, runtime, manager, temporary, agentDir, cwd, runtimePath, tuiPath, questionsPath, eventBus, cleanup };
+    return { core, runtime, manager, temporary, agentDir, cwd, runtimePath, agentRoot, tuiPath, questionsPath, eventBus, cleanup };
   } catch (error) { await cleanup(); throw error; }
 }
 

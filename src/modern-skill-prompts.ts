@@ -1,3 +1,4 @@
+import { supportsPiVersion } from './runtime-compatibility.ts';
 import type { DisplayMode } from './display-mode.ts';
 import { InteractiveMode, SkillInvocationMessageComponent, UserMessageComponent, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, Markdown, MouseRegion, Spacer, Text, matchesKey, stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui';
@@ -14,7 +15,7 @@ export function registerModernSkillPrompts(pi: ExtensionAPI, mode: DisplayMode, 
   const owner = Symbol.for('compact-renderer:skill-prompts:v1'), shared = globalThis as any;
   shared[owner]?.();
   const proto = InteractiveMode.prototype as any;
-  if (version !== '1.3.0' || typeof proto.addMessageToChat !== 'function' || typeof SkillInvocationMessageComponent.prototype.setExpanded !== 'function') return () => {};
+  if (!supportsPiVersion(version) || typeof proto.addMessageToChat !== 'function' || typeof SkillInvocationMessageComponent.prototype.setExpanded !== 'function') return () => {};
   const cards = new Map<any, Card>(), users = new WeakMap<any, Card>();
   let active = false, disposed = false, ctx: any, host: any, input: (() => void) | undefined, selected: Card | undefined, rendering: Card | undefined;
   const redraw = () => host?.ui?.requestRender?.();

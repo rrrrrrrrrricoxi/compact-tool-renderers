@@ -1,3 +1,4 @@
+import { supportsPiVersion } from './runtime-compatibility.ts';
 import { UserMessageComponent, VERSION } from "@earendil-works/pi-coding-agent";
 import { Markdown } from "@earendil-works/pi-tui";
 
@@ -13,7 +14,7 @@ export function installModernPromptAdapter(hooks: {
   fallback?(component: any): void;
 }, version = VERSION): (() => void) | undefined {
   const proto = UserMessageComponent.prototype as any;
-  if (version !== "1.3.0" || typeof proto.render !== "function" || typeof proto.rebuild !== "function") return;
+  if (!supportsPiVersion(version) || typeof proto.render !== "function" || typeof proto.rebuild !== "function") return;
   const owner = Symbol.for("compact-renderer:prompt-adapter:v1");
   proto[owner]?.();
   const render = proto.render, mouse = proto.handleMouse;

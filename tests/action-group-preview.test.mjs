@@ -5,7 +5,7 @@ import { createWorkStripPreview } from '../scripts/preview-work-strip.mjs';
 
 const preview = await createWorkStripPreview({ actionGroups: true });
 const { core, runtime, manager } = preview;
-const { theme, initTheme } = await import(pathToFileURL(path.join(preview.runtimePath, 'node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js')));
+const { theme, initTheme } = await import(pathToFileURL(path.join(preview.agentRoot, 'dist/modes/interactive/theme/theme.js')));
 initTheme('dark', false);
 const plain = value => value.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]/g, '');
 const errors = [];
