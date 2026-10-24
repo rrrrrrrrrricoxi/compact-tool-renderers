@@ -13,7 +13,7 @@ required.push('display-cache-lifecycle.test.mjs');
 required.push('fold-command.test.mjs', 'fold-shortcut.test.mjs');
 required.push('mixed-thinking.test.mjs', 'work-strip.test.mjs', 'work-strip-subagents.test.mjs', 'work-strip-preview.test.mjs', 'work-strip-spacing.test.mjs');
 required.push('mixed-action-groups.test.mjs', 'action-group-preview.test.mjs');
-required.push('fullscreen-overlays.test.mjs');
+required.push('fullscreen-overlays.test.mjs', 'runtime-compatibility.test.mjs');
 for (const name of required) {
   if (!fs.existsSync(path.join(directory, name))) throw new Error(`Missing required regression suite: ${name}`);
   const result = spawnSync(process.execPath, [path.join(directory, name)], { cwd: directory, env: process.env, stdio: 'inherit' });

@@ -5,7 +5,7 @@ const { registerModernPrompts } = await loadSource('./modern-prompts.ts');
 const { createDisplayMode } = await loadSource('./display-mode.ts');
 const { SkillInvocationMessageComponent } = await loadAgent('modes/interactive/components/skill-invocation-message.js');
 const { UserMessageComponent, VERSION } = core;
-assert.equal(VERSION, '1.3.0', 'prompt seam is verified against the actual supported runtime');
+assert.ok(['1.3.0', '1.4.0'].includes(VERSION), 'prompt seam uses a verified native runtime');
 const nativeRender = UserMessageComponent.prototype.render;
 const listeners = new Map(), bus = new Map(), terminal = new Set(), transformers = [];
 const subscribe = (map, event, fn) => {

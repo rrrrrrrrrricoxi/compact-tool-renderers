@@ -1,3 +1,4 @@
+import { supportsPiVersion } from './runtime-compatibility.ts';
 import type { DisplayMode } from './display-mode.ts';
 import { ExtensionRunner, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
@@ -56,7 +57,7 @@ export function subagentMessageSummary(source: any, entry = false): Summary | un
  * Registering another message renderer cannot delegate through Pi's first-match registry. */
 export function installSubagentMessageAdapter(wrap: (native: any, entry: boolean) => any, version = VERSION): (() => void) | undefined {
   const proto = ExtensionRunner.prototype as any;
-  if (version !== '1.3.0' || !['getMessageRenderer', 'getEntryRenderer'].every(k => typeof proto[k] === 'function')) return;
+  if (!supportsPiVersion(version) || !['getMessageRenderer', 'getEntryRenderer'].every(k => typeof proto[k] === 'function')) return;
   const owner = Symbol.for('compact-renderer:subagent-message-adapter:v1');
   proto[owner]?.();
   const message = proto.getMessageRenderer, entry = proto.getEntryRenderer;

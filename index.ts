@@ -1,3 +1,4 @@
+import { registerUnsupportedRuntime } from './src/runtime-compatibility.ts';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { clearDisplayLineCache } from './src/display-card.ts';
 import { createDisplayMode } from './src/display-mode.ts';
@@ -13,6 +14,7 @@ import { registerWorkStrip } from './src/work-strip.ts';
 import { registerFoldCommand } from './src/fold-command.ts';
 
 export default function piFold(pi: ExtensionAPI): void {
+  if (registerUnsupportedRuntime(pi)) return;
   clearDisplayLineCache();
   const mode = createDisplayMode();
   const disposers: Array<() => void> = [];

@@ -1,3 +1,4 @@
+import { supportsPiVersion } from './runtime-compatibility.ts';
 import { VERSION } from '@earendil-works/pi-coding-agent';
 import { TuiAltScreen } from '@earendil-works/pi-tui';
 import { chainNativeMethod } from './native-method-chain.ts';
@@ -10,7 +11,7 @@ const promptZones = /\x1b\]133;[ABC](?:\x07|\x1b\\)/g;
  * and restoration work. Keep source rows, layout metadata, and settings intact.
  */
 export function installFullscreenOverlayGuard(tui: any, version = VERSION): () => void {
-  if (version !== '1.3.0' || !['regular', 'fullscreen'].includes(tui?.mode) || typeof tui.compositeOverlays !== 'function'
+  if (!supportsPiVersion(version) || !['regular', 'fullscreen'].includes(tui?.mode) || typeof tui.compositeOverlays !== 'function'
     || typeof tui.hasOverlay !== 'function') return () => {};
   if (tui.mode === 'fullscreen' && typeof tui.prepareKittyScreen !== 'function') return () => {};
   // Extension UI handles are proxies with unstable method identities. Their

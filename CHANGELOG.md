@@ -1,5 +1,11 @@
 # Release notes
 
+## 3.0.5 — Pi 1.4 compatibility
+
+- Enable the verified renderer adapters on Pi 1.4.0. Retain Pi 1.3.0 support and checks for unfamiliar component layouts.
+- Report unsupported Pi versions at startup and in `/fold` instead of showing “on” while native rendering remains active.
+- Run the native preview against the selected core package, including installations separate from the extension dependency snapshot.
+
 ## 3.0.4 — Fullscreen overlays
 
 - Temporarily hide inline Kitty images while an overlay is visible in Pi 1.3.0 fullscreen mode. This keeps panel borders and text readable. Restore the images when the last overlay closes or hides, including with folding off.

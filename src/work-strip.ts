@@ -1,3 +1,4 @@
+import { supportsPiVersion } from './runtime-compatibility.ts';
 import type { DisplayMode } from './display-mode.ts';
 import { AssistantMessageComponent, CustomMessageComponent, InteractiveMode, SkillInvocationMessageComponent, ToolExecutionComponent, UserMessageComponent, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, Spacer, matchesKey } from '@earendil-works/pi-tui';
@@ -69,7 +70,7 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
   const owner = Symbol.for('compact-renderer:work-registration:v1'), shared = globalThis as any;
   shared[owner]?.();
   const proto = InteractiveMode.prototype as any;
-  if (version !== '1.3.0' || !['addMessageToChat', 'handleEvent', 'renderSessionItems'].every(k => typeof proto[k] === 'function')) return { dispose() {}, setExpanded: () => false, isShortcutEnabled: () => false, setShortcutEnabled() {} };
+  if (!supportsPiVersion(version) || !['addMessageToChat', 'handleEvent', 'renderSessionItems'].every(k => typeof proto[k] === 'function')) return { dispose() {}, setExpanded: () => false, isShortcutEnabled: () => false, setShortcutEnabled() {} };
   let disposed = false, ctx: any, host: any, attached: any, detachChat: (() => void) | undefined;
   let turns = new Map<any, Turn>(), sources = new WeakMap<any, any>(), hooks = new Map<any, ToolPane>();
   let selected: WorkStripHeader | ToolPane | undefined, input: (() => void) | undefined, timer: ReturnType<typeof setTimeout> | undefined;

@@ -1,3 +1,4 @@
+import { supportsPiVersion } from './runtime-compatibility.ts';
 import { ToolExecutionComponent, VERSION } from "@earendil-works/pi-coding-agent";
 import { getCapabilities, Image, imageFallback, truncateToWidth } from "@earendil-works/pi-tui";
 import { chainNativeMethod } from "./native-method-chain.ts";
@@ -10,7 +11,7 @@ export type ToolImageView = { open: boolean; count: number; bodyIndent: number; 
  * objects during render only; never change image sources, settings or ownership. */
 export function installModernToolImages(version = VERSION): (() => void) | undefined {
   const proto = ToolExecutionComponent.prototype as any;
-  if (version !== "1.3.0" || typeof proto.render !== "function" || typeof proto.updateDisplay !== "function") return;
+  if (!supportsPiVersion(version) || typeof proto.render !== "function" || typeof proto.updateDisplay !== "function") return;
   const owner = Symbol.for("compact-renderer:tool-image-adapter:v1");
   proto[owner]?.();
   let disposed = false;

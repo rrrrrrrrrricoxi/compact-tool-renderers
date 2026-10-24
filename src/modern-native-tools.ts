@@ -1,9 +1,10 @@
+import { supportsPiVersion } from './runtime-compatibility.ts';
 import { VERSION, keyHint, type ToolRenderers } from "@earendil-works/pi-coding-agent";
 import { Box, Container, Text, stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
 
 type Context = Parameters<NonNullable<ToolRenderers["renderCall"]>>[2];
 /** Native private-state knowledge is confined here. Unsupported Pi versions keep stock rendering. */
-export const nativeToolsSupported = VERSION === "1.3.0";
+export const nativeToolsSupported = supportsPiVersion(VERSION);
 export const nativeToolContextSupported = (context: Context) => !!context && typeof context.toolCallId === "string" && typeof context.invalidate === "function" && !!context.state && typeof context.state === "object" && typeof context.cwd === "string" && typeof context.expanded === "boolean" && typeof context.executionStarted === "boolean" && typeof context.isPartial === "boolean";
 export function nativeTextFallback(result: any, theme?: any, options = { expanded: true }): Text {
   const text = (Array.isArray(result?.content) ? result.content : []).filter((block: any) => block?.type === "text").map((block: any) => String(block.text ?? "")).join("\n");
