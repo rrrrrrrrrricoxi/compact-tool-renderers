@@ -1,6 +1,8 @@
-import { supportsPiVersion } from './runtime-compatibility.ts';
-import { CustomMessageComponent, VERSION } from '@earendil-works/pi-coding-agent';
-import { Container } from '@earendil-works/pi-tui';
+import * as Pi from '@earendil-works/pi-coding-agent';
+import * as Tui from '@earendil-works/pi-tui';
+
+const { CustomMessageComponent, VERSION } = Pi;
+const { Container } = Tui;
 
 const hidden = Symbol.for('compact-renderer:subagent-hidden:v1');
 
@@ -8,9 +10,9 @@ const hidden = Symbol.for('compact-renderer:subagent-hidden:v1');
  * our marked grouped followers; an empty unrelated renderer keeps native layout.
  * CustomEntryComponent is not exported by Pi, so this guarded inherited-method
  * seam avoids importing private modules or replacing the transcript container. */
-export function installSubagentSpacingAdapter(version = VERSION): (() => void) | undefined {
-  const proto = Container.prototype as any;
-  if (!supportsPiVersion(version) || typeof proto.render !== 'function') return;
+export function installSubagentSpacingAdapter(_version = VERSION): (() => void) | undefined {
+  const proto = Container?.prototype as any;
+  if (typeof CustomMessageComponent !== 'function' || !proto || typeof proto.render !== 'function') return;
   const owner = Symbol.for('compact-renderer:subagent-spacing:v1');
   proto[owner]?.();
   const original = proto.render;

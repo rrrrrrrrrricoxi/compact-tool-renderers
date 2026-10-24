@@ -1,11 +1,14 @@
-import { supportsPiVersion } from './runtime-compatibility.ts';
 import type { DisplayMode } from './display-mode.ts';
-import { AssistantMessageComponent, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { Container, Markdown, MouseRegion, Spacer, Text, matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import * as Pi from '@earendil-works/pi-coding-agent';
+import * as Tui from '@earendil-works/pi-tui';
 import { activityRow, cardContentWidth, finalReplyRendering } from './display-card.ts';
 import { richTextRows } from './modern-rich-text.ts';
 import { recordedPaneHeight } from './modern-recorded-pane.ts';
 import { chainNativeMethod } from './native-method-chain.ts';
+
+const { AssistantMessageComponent, VERSION } = Pi;
+const { Container, Markdown, MouseRegion, Spacer, Text, matchesKey, truncateToWidth } = Tui;
 
 export type WorkflowFence = { start: number; end: number; source: string; summary: string };
 const summaryText = (value: string) => truncateToWidth(value.slice(0, 1024).replace(/[\p{Cc}\p{Cf}]/gu, ' ').replace(/\s+/g, ' ').trim(), 90, '…');
@@ -99,16 +102,18 @@ export class WorkflowPane {
   }
 }
 
-type Card = { id: number; component: any; sources: string[]; fences: WorkflowFence[][]; panes: Map<string, WorkflowPane>; displays: Map<any, Container> };
+type Card = { id: number; component: any; sources: string[]; fences: WorkflowFence[][]; panes: Map<string, WorkflowPane>; displays: Map<any, InstanceType<typeof Container>> };
 
 /** The public Markdown transformer cannot return components or identify a card.
  * This isolated 1.3.0 seam substitutes display children only during native render.
  * Native messages, Markdown sources, updateContent, and execution remain untouched. */
-export function registerModernWorkflows(pi: ExtensionAPI, mode: DisplayMode, version = VERSION): () => void {
+export function registerModernWorkflows(pi: ExtensionAPI, mode: DisplayMode, _version = VERSION): () => void {
   const owner = Symbol.for('compact-renderer:workflow-registration:v1'), shared = globalThis as any;
   shared[owner]?.();
-  const proto = AssistantMessageComponent.prototype as any;
-  if (!supportsPiVersion(version) || typeof proto.render !== 'function' || typeof proto.updateContent !== 'function') return () => {};
+  const proto = AssistantMessageComponent?.prototype as any;
+  if (![Container, Markdown, MouseRegion, Spacer, Text, matchesKey, truncateToWidth].every(value => typeof value === 'function') ||
+      !proto || typeof proto.render !== 'function' || typeof proto.updateContent !== 'function' ||
+      typeof pi.on !== 'function' || typeof pi.events?.on !== 'function' || typeof pi.events?.emit !== 'function') return () => {};
   const cards = new Map<any, Card>();
   let active = false, disposed = false, selected: WorkflowPane | undefined, uiTheme: any, nextCard = 0;
   let input: (() => void) | undefined, redraw: (() => void) | undefined;

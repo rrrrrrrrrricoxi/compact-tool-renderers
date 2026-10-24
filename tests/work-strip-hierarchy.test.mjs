@@ -5,7 +5,6 @@ const { registerWorkStrip } = await loadSource('./work-strip.ts');
 const { registerFoldCommand } = await loadSource('./fold-command.ts');
 const { createDisplayMode } = await loadSource('./display-mode.ts');
 const { projectedChildren, workEvidenceType, recordedWorkEvidence } = await loadSource('./work-strip-view.ts');
-assert.ok(['1.3.0', '1.4.0'].includes(core.VERSION), 'hierarchy integration runs against a verified native runtime');
 
 function fixture() {
   const hooks = new Map(), bus = new Map(), commands = new Map(), shortcuts = new Map(), inputs = new Set(), notices = [];

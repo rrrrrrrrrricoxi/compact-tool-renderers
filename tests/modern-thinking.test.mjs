@@ -191,8 +191,8 @@ try {
   dispose=registerModernThinking(pi,mode);emit('session_start',{type:'session_start',reason:'startup'});assert.equal(terminal.size,1);
   const staleDispose=dispose;dispose=registerModernThinking(pi,mode);assert.equal(terminal.size,0,'replacement registration disposes the prior input listener');emit('session_start',{type:'session_start',reason:'startup'});assert.equal(terminal.size,1);staleDispose();assert.equal(terminal.size,1);dispose();
   assert.equal(JSON.stringify(rounds.flatMap((m,i)=>[entry(m),entry(result(i+1))])),originalBranch,'transcript objects remain exact');
-  assert.equal(installModernThinkingAdapter({clear(){},associate(){},render(){},mouse(){}},'1.1.0'),undefined,'legacy gate is not widened');
-  assert.equal(installModernThinkingAdapter({clear(){},associate(){},render(){},mouse(){}},'9.0.0'),undefined);
+  { const cleanup = installModernThinkingAdapter({clear(){},associate(){},render(){},mouse(){}},'1.1.0'); assert.equal(typeof cleanup, 'function'); cleanup(); }
+  { const cleanup = installModernThinkingAdapter({clear(){},associate(){},render(){},mouse(){}},'9.0.0'); assert.equal(typeof cleanup, 'function'); cleanup(); }
   const pane=new RecordedTextPane();const huge='Large exact recorded line 行🙂\n'.repeat(100000);pane.setSources([huge]);pane.open=true;
   const first=pane.view(60,9);assert.equal(first.length,9);assert.ok(pane.visitedCharacters<1000,'first paint visits only viewport and one lookahead');
   const visits=pane.visitedCharacters;for(let i=0;i<50;i++)pane.view(60,9);assert.equal(pane.visitedCharacters,visits,'stable paints do not reprocess source');

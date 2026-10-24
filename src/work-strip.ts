@@ -1,6 +1,5 @@
-import { supportsPiVersion } from './runtime-compatibility.ts';
 import type { DisplayMode } from './display-mode.ts';
-import { AssistantMessageComponent, CustomMessageComponent, InteractiveMode, SkillInvocationMessageComponent, ToolExecutionComponent, UserMessageComponent, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { AssistantMessageComponent, CustomMessageComponent, InteractiveMode, SkillInvocationMessageComponent, ToolExecutionComponent, UserMessageComponent, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Container, Spacer, matchesKey } from '@earendil-works/pi-tui';
 import { chainNativeMethod } from './native-method-chain.ts';
 import { ToolPane } from './modern-tool-pane.ts';
@@ -66,11 +65,11 @@ export interface WorkStripControls {
 
 /** Pi 1.3 display seam. The native tree, transcript, execution and Fleet remain
  * authoritative. Only chatContainer's rendered child list is projected. */
-export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version = VERSION): WorkStripControls {
+export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version?: string, unavailable?: (reason: string) => void): WorkStripControls {
   const owner = Symbol.for('compact-renderer:work-registration:v1'), shared = globalThis as any;
   shared[owner]?.();
   const proto = InteractiveMode.prototype as any;
-  if (!supportsPiVersion(version) || !['addMessageToChat', 'handleEvent', 'renderSessionItems'].every(k => typeof proto[k] === 'function')) return { dispose() {}, setExpanded: () => false, isShortcutEnabled: () => false, setShortcutEnabled() {} };
+  if (!['addMessageToChat', 'handleEvent', 'renderSessionItems'].every(k => typeof proto?.[k] === 'function')) return { dispose() {}, setExpanded: () => false, isShortcutEnabled: () => false, setShortcutEnabled() {} };
   let disposed = false, ctx: any, host: any, attached: any, detachChat: (() => void) | undefined;
   let turns = new Map<any, Turn>(), sources = new WeakMap<any, any>(), hooks = new Map<any, ToolPane>();
   let selected: WorkStripHeader | ToolPane | undefined, input: (() => void) | undefined, timer: ReturnType<typeof setTimeout> | undefined;
@@ -254,23 +253,26 @@ export function registerWorkStrip(pi: ExtensionAPI, mode: DisplayMode, version =
     return output;
   };
   const attach = (candidate: any) => {
-    if (disposed || !(candidate?.chatContainer instanceof Container) || !candidate.ui) return;
+    if (disposed) return false;
+    if (!(candidate?.chatContainer instanceof Container) || !Array.isArray(candidate.chatContainer.children) || typeof candidate.chatContainer.render !== 'function' || !candidate.ui) { unavailable?.('native chat container changed'); return false; }
     if (host !== candidate) { detachChat?.(); host = candidate; attached = undefined; }
-    if (attached) return;
+    if (attached) return true;
     const chat = candidate.chatContainer;
     detachChat = chainNativeMethod(chat, 'render', function(native, width) {
-      if (disposed || !ctx || !mode.isEnabled()) { delete this[projectedChildren]; return native.call(this, width); }
+      if (disposed || !ctx || !mode.isEnabled() || !Array.isArray(this.children)) { delete this[projectedChildren]; return native.call(this, width); }
       const canonical = this.children;
       this[projectedChildren] = project(canonical);
       this.children = this[projectedChildren];
       try { return native.call(this, width); } finally { this.children = canonical; }
     });
     attached = chat;
+    return true;
   };
   const detachAdd = chainNativeMethod(proto, 'addMessageToChat', function(native, message, ...args) {
-    attach(this); const before = this.chatContainer?.children.length || 0;
+    if (!attach(this)) return native.call(this, message, ...args);
+    const before = this.chatContainer.children.length;
     const result = native.call(this, message, ...args);
-    for (const row of this.chatContainer?.children.slice(before) || []) if (!(row instanceof Spacer)) sources.set(row, message);
+    for (const row of (Array.isArray(this.chatContainer?.children) ? this.chatContainer.children.slice(before) : [])) if (!(row instanceof Spacer)) sources.set(row, message);
     if (!replaying && running && message.role === 'user') liveStarts.set(message, Date.now());
     return result;
   });

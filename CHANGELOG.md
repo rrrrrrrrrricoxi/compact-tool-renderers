@@ -1,5 +1,12 @@
 # Release notes
 
+## 3.1.0
+
+- Enable features by available Pi interfaces instead of an exact version list.
+- Report full, partial, or unavailable support through `/fold status`; preserve native rendering when an adapter is unavailable.
+- Keep tool results visible when subagent grouping or image adapters are unavailable.
+- Check Pi 1.3.0 and the latest stable release in CI, including actual CLI extension startup.
+
 ## 3.0.5 — Pi 1.4 compatibility
 
 - Enable the verified renderer adapters on Pi 1.4.0. Retain Pi 1.3.0 support and checks for unfamiliar component layouts.

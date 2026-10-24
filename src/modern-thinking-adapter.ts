@@ -1,12 +1,16 @@
-import { supportsPiVersion } from './runtime-compatibility.ts';
-import { AssistantMessageComponent, VERSION } from "@earendil-works/pi-coding-agent";
-import { Markdown, MouseRegion, Spacer, Text } from "@earendil-works/pi-tui";
+import * as Pi from '@earendil-works/pi-coding-agent';
+import * as Tui from '@earendil-works/pi-tui';
 import { chainNativeMethod } from "./native-method-chain.ts";
+
+const { AssistantMessageComponent, VERSION } = Pi;
+const { Markdown, MouseRegion, Spacer, Text } = Tui;
+
+const thinkingComponentsSupported = [Markdown, MouseRegion, Spacer, Text].every(value => typeof value === 'function');
 
 /** Private Pi 1.3.0 seam: only pure hidden-thinking assistant containers qualify.
  * Native Ctrl+T/per-run expansion and unknown component shapes always win. */
 export function hiddenThinkingShape(component: any, message: any): boolean {
-  if (component.lastMessage !== message || component.hideThinkingBlock !== true || !(component.thinkingVisibilityOverrides instanceof Map)) return false;
+  if (!thinkingComponentsSupported || component.lastMessage !== message || component.hideThinkingBlock !== true || !(component.thinkingVisibilityOverrides instanceof Map)) return false;
   if ([...component.thinkingVisibilityOverrides.values()].some(value => value === false)) return false;
   const children = component.contentContainer?.children;
   let expected = 0, inRun = false, nonempty = false;
@@ -20,7 +24,7 @@ export function hiddenThinkingShape(component: any, message: any): boolean {
 /** One hidden run beside native reply text. Validate the exact native sequence;
  * interleaved runs and unfamiliar/error layouts retain their native rendering. */
 export function mixedThinkingRegion(component: any, message: any): any | undefined {
-  if (component.lastMessage !== message || component.hideThinkingBlock !== true || !(component.thinkingVisibilityOverrides instanceof Map)
+  if (!thinkingComponentsSupported || component.lastMessage !== message || component.hideThinkingBlock !== true || !(component.thinkingVisibilityOverrides instanceof Map)
     || [...component.thinkingVisibilityOverrides.values()].some(value => value === false)
     || ["error", "aborted", "length"].includes(message?.stopReason)) return;
   const expected: string[] = [], visible: string[] = [];
@@ -48,9 +52,9 @@ export function installModernThinkingAdapter(hooks: {
   render(component: any, width: number): string[] | undefined;
   mouse(component: any, event: any): any;
   clear(): void;
-}, version = VERSION): (() => void) | undefined {
-  const proto = AssistantMessageComponent.prototype as any;
-  if (!supportsPiVersion(version) || !["updateContent", "render", "setHideThinkingBlock"].every(key => typeof proto[key] === "function")) return;
+}, _version = VERSION): (() => void) | undefined {
+  const proto = AssistantMessageComponent?.prototype as any;
+  if (!thinkingComponentsSupported || !proto || !["updateContent", "render", "setHideThinkingBlock"].every(key => typeof proto[key] === "function")) return;
   const owner = Symbol.for("compact-renderer:thinking-adapter:v1");
   proto[owner]?.();
   let disposed = false;
@@ -64,7 +68,7 @@ export function installModernThinkingAdapter(hooks: {
       if (region) {
         const component = this, render = region.render, mouse = region.handleMouse;
         region.render = (width: number) => hooks.render(component, width)?.slice(1) ?? render.call(region, width);
-        region.handleMouse = (event: any) => hooks.mouse(component, { ...event, y: event.y + 1 }) || mouse.call(region, event);
+        region.handleMouse = (event: any) => hooks.mouse(component, { ...event, y: event.y + 1 }) || mouse?.call(region, event);
         regions.set(this, () => { region.render = render; region.handleMouse = mouse; });
       }
     }

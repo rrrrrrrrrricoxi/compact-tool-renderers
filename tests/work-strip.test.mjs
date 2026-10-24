@@ -146,3 +146,16 @@ try {
   assert.equal(JSON.stringify(manager.getBranch().filter(e=>e.type==='message')).includes('DETAILS_REMAIN_AVAILABLE'),true);
   console.log('Work strip native grouping, settlement, scrollback, decisions, nested inspection, children, replay, fallback and disposal passed');
 } finally {dispose();}
+
+// A changed native container must delegate before reading its former children.
+{
+  const proto = core.InteractiveMode.prototype, original = proto.addMessageToChat;
+  let calls = 0, reason;
+  proto.addMessageToChat = function() { calls++; return 'native result'; };
+  const fallback = registerWorkStrip(pi, mode, undefined, value => { reason = value; });
+  try {
+    assert.equal(proto.addMessageToChat.call({ chatContainer: {}, ui: {} }, { role: 'user' }), 'native result');
+    assert.equal(calls, 1);
+    assert.match(reason, /chat container changed/);
+  } finally { fallback.dispose(); proto.addMessageToChat = original; }
+}

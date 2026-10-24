@@ -1,13 +1,16 @@
-import { supportsPiVersion } from './runtime-compatibility.ts';
 import type { DisplayMode } from './display-mode.ts';
-import { ExtensionRunner, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import * as Pi from '@earendil-works/pi-coding-agent';
+import * as Tui from '@earendil-works/pi-tui';
 import { ToolPane, type PaneContent } from './modern-tool-pane.ts';
 import { recordedPaneHeight } from './modern-recorded-pane.ts';
 import { acquireSubagentProjection, hiddenSubagent } from './modern-subagent-groups.ts';
 import { installSubagentSpacingAdapter } from './modern-subagent-spacing.ts';
 import { recordedValues } from './modern-tool-content.ts';
 import { activityHeading } from './display-card.ts';
+
+const { ExtensionRunner, VERSION } = Pi;
+const { matchesKey, truncateToWidth } = Tui;
 
 type Summary = { title: string; tone: string };
 const record = (value: any) => value && typeof value === 'object' && !Array.isArray(value);
@@ -55,9 +58,9 @@ export function subagentMessageSummary(source: any, entry = false): Summary | un
 
 /** Pi 1.3 resolver seam. Keep each extension's original renderer as the fallback.
  * Registering another message renderer cannot delegate through Pi's first-match registry. */
-export function installSubagentMessageAdapter(wrap: (native: any, entry: boolean) => any, version = VERSION): (() => void) | undefined {
-  const proto = ExtensionRunner.prototype as any;
-  if (!supportsPiVersion(version) || !['getMessageRenderer', 'getEntryRenderer'].every(k => typeof proto[k] === 'function')) return;
+export function installSubagentMessageAdapter(wrap: (native: any, entry: boolean) => any, _version = VERSION): (() => void) | undefined {
+  const proto = ExtensionRunner?.prototype as any;
+  if (!proto || !['getMessageRenderer', 'getEntryRenderer'].every(k => typeof proto[k] === 'function')) return;
   const owner = Symbol.for('compact-renderer:subagent-message-adapter:v1');
   proto[owner]?.();
   const message = proto.getMessageRenderer, entry = proto.getEntryRenderer;
@@ -85,7 +88,13 @@ function* content(source: any, entry: boolean): Generator<PaneContent> {
 export function registerModernSubagentMessages(pi: ExtensionAPI, mode: DisplayMode): () => void {
   const owner = Symbol.for('compact-renderer:subagent-message-registration:v1'), shared = globalThis as any;
   shared[owner]?.();
-  const subagents = acquireSubagentProjection(pi), spacing = installSubagentSpacingAdapter();
+  const proto = ExtensionRunner?.prototype as any;
+  if (!proto || !['getMessageRenderer', 'getEntryRenderer'].every(key => typeof proto[key] === 'function') ||
+      typeof pi.on !== 'function' || typeof pi.events?.on !== 'function' || typeof pi.events?.emit !== 'function' ||
+      ![matchesKey, truncateToWidth].every(value => typeof value === 'function')) return () => {};
+  const spacing = installSubagentSpacingAdapter();
+  if (!spacing) return () => {};
+  const subagents = acquireSubagentProjection(pi);
   let cards = new Map<any, Card>(), selected: Card | undefined, focused = false, active = false, disposed = false;
   let input: (() => void) | undefined, redraw: (() => void) | undefined;
   const release = (preserveAnchor = false) => { if (focused && selected) { (view(selected.source)?.pane || selected.pane).focused = false; if (!preserveAnchor) (view(selected.source)?.pane || selected.pane).releaseInspection(); } focused = false; };

@@ -275,12 +275,13 @@ export function registerPermissionPresentation(pi: any, mode: DisplayMode): () =
     });
   });
   const unsubscribeMode = mode.onChange(() => { if (!mode.isEnabled()) cancelAll(); });
-  for (const event of ['session_switch', 'session_tree', 'session_compact', 'session_shutdown']) pi.on?.(event, cancelAll);
+  const lifecycle = ['session_switch', 'session_tree', 'session_compact', 'session_shutdown'].map(event => pi.on?.(event, cancelAll));
   return () => {
     if (disposed) return;
     disposed = true;
     unsubscribe?.();
     unsubscribeMode();
+    lifecycle.forEach(off => { if (typeof off === 'function') off(); });
     cancelAll();
   };
 }

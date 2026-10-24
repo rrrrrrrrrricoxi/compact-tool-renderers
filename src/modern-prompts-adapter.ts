@@ -1,9 +1,11 @@
-import { supportsPiVersion } from './runtime-compatibility.ts';
-import { UserMessageComponent, VERSION } from "@earendil-works/pi-coding-agent";
-import { Markdown } from "@earendil-works/pi-tui";
+import * as Pi from '@earendil-works/pi-coding-agent';
+import * as Tui from '@earendil-works/pi-tui';
+
+const { UserMessageComponent, VERSION } = Pi;
+const { Markdown } = Tui;
 
 export function invalidateModernPrompt(component: any) {
-  for (const child of Array.isArray(component?.children) ? component.children : []) if (child instanceof Markdown) child.invalidate();
+  for (const child of Array.isArray(component?.children) ? component.children : []) if (typeof Markdown === "function" && child instanceof Markdown && typeof child.invalidate === "function") child.invalidate();
 }
 
 /** The transformer is public. This isolated Pi 1.3.0 seam supplies per-card
@@ -12,9 +14,9 @@ export function installModernPromptAdapter(hooks: {
   render(component: any, markdown: string, original: () => string[]): string[];
   mouse(component: any, event: any): any;
   fallback?(component: any): void;
-}, version = VERSION): (() => void) | undefined {
-  const proto = UserMessageComponent.prototype as any;
-  if (!supportsPiVersion(version) || typeof proto.render !== "function" || typeof proto.rebuild !== "function") return;
+}, _version = VERSION): (() => void) | undefined {
+  const proto = UserMessageComponent?.prototype as any;
+  if (typeof Markdown !== "function" || !proto || typeof proto.render !== "function" || typeof proto.rebuild !== "function") return;
   const owner = Symbol.for("compact-renderer:prompt-adapter:v1");
   proto[owner]?.();
   const render = proto.render, mouse = proto.handleMouse;

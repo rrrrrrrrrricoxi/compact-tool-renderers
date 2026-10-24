@@ -131,16 +131,16 @@ function fixture(hasUI = true) {
     on: (event, fn) => subscribe(hooks, event, fn),
     events: { on: (event, fn) => subscribe(bus, event, fn), emit(event, data) { for (const fn of [...bus.get(event) || []]) fn(data); } },
     registerCommand(name, command) { assert.ok(!commands.has(name), `no duplicate /${name}`); commands.set(name, command); },
-    registerToolRenderer() {}, registerMarkdownTransformer() {}, registerShortcut() {}, getCommands: () => [], getAllTools: () => [],
+    registerToolRenderer() {}, registerMarkdownTransformer() {}, registerShortcut() {}, appendEntry() {}, getCommands: () => [], getAllTools: () => [],
   };
   const ctx = { mode: 'none', hasUI: false, ui: { notify: message => notices.push(message) }, sessionManager: { getBranch: () => [], buildContextEntries: () => [] } };
   const emit = event => { for (const fn of [...hooks.get(event) || []]) fn({}, ctx); };
   try {
-    register(pi); emit('session_start');
+    await register(pi); emit('session_start');
     assert.ok(commands.has('fold'));
     assert.ok(!commands.has('work')); assert.ok(!commands.has('compact-rendering'), 'old aliases are absent from actual root registration');
-    await commands.get('fold').handler('off', ctx); assert.equal(notices.at(-1), 'Pi Fold off');
-    await commands.get('fold').handler('on', ctx); assert.equal(notices.at(-1), 'Pi Fold on');
+    await commands.get('fold').handler('off', ctx); assert.match(notices.at(-1), /^Pi Fold off\nCompatibility: full/);
+    await commands.get('fold').handler('on', ctx); assert.match(notices.at(-1), /^Pi Fold on\nCompatibility: full/);
     emit('session_shutdown'); const count = notices.length;
     await commands.get('fold').handler('toggle', ctx);
     assert.equal(notices.length, count, 'root disposal disables stale command callbacks');

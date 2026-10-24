@@ -115,8 +115,10 @@ for (const overrides of [
 }
 const future = fixture().screen;
 const futureOriginal = future.compositeOverlays;
-installFullscreenOverlayGuard(future, 'future')?.();
-assert.equal(future.compositeOverlays, futureOriginal, 'an unknown native version remains unchanged');
+const futureCleanup = installFullscreenOverlayGuard(future, 'future');
+assert.notEqual(future.compositeOverlays, futureOriginal, 'compatible future runtimes use the same seam');
+futureCleanup();
+assert.equal(future.compositeOverlays, futureOriginal);
 
 const switched = fixture();
 const regular = new tui.TuiMainScreen(switched.screen.terminal, false);

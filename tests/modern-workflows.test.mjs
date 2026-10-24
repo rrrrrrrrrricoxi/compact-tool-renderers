@@ -137,7 +137,7 @@ try {
   dispose(); disposeThinking(); assert.deepEqual({ render: AssistantMessageComponent.prototype.render, mouse: AssistantMessageComponent.prototype.handleMouse, update: AssistantMessageComponent.prototype.updateContent }, native);
   assert.equal(JSON.stringify(branch), exactMessage, 'recorded assistant message and transcript stay exact');
   assert.deepEqual(readReplyWorkflowScript(sessionManager, 'workflow-call'), scriptBefore, 'installed workflow executor reads the same original script after display interactions');
-  const unsupported = registerModernWorkflows(pi, mode, '9.0.0'); assert.equal(AssistantMessageComponent.prototype.render, native.render); unsupported();
+  const unsupported = registerModernWorkflows(pi, mode, '9.0.0'); assert.notEqual(AssistantMessageComponent.prototype.render, native.render); unsupported(); assert.equal(AssistantMessageComponent.prototype.render, native.render);
   // The opposite disposal order also restores the complete native method chain.
   const reverseThinking = registerModernThinking(pi, mode), reverseWorkflow = registerModernWorkflows(pi, mode);
   emit('session_start'); card.render(100); reverseThinking(); reverseWorkflow();
@@ -148,7 +148,7 @@ try {
   ctx.hasUI = true; ctx.ui.setWidget = () => {}; ctx.ui.setStatus = () => {};
   const nativeContainerRender = tui.Container.prototype.render;
   for (let run = 0; run < 2; run++) {
-    piFold(pi); emit('session_start');
+    await piFold(pi); emit('session_start');
     for (const event of ['session_tree', 'session_compact', 'session_start']) { emit(event); assert.match(plain(card.render(100)), /Subagent workflow/); }
     emit('session_shutdown');
     assert.equal(terminal.size, 0);
