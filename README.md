@@ -12,7 +12,7 @@ Replies without tool or subagent activity skip the work strip.
 
 ## Install
 
-Tested with **Pi 1.3.0 and 1.4.0**, and **Node.js 22.19.0 or later**. Other Pi versions show a compatibility warning and use native rendering.
+Tested with **Pi 1.3.0 and 1.4.0**, and **Node.js 22.19.0 or later**. Fold checks each feature’s required interfaces, so compatible newer Pi releases can work without a Fold update. Run `/fold status` for full, partial, or unavailable support. Missing interfaces use native rendering. [Compatibility checks](docs/compatibility-testing.md) run against Pi 1.3.0 and the latest stable release.
 
 ```sh
 pi install npm:@notrico/pi-fold@3.0.5

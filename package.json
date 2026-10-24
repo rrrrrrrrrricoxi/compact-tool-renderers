@@ -1,6 +1,6 @@
 {
   "name": "@notrico/pi-fold",
-  "version": "3.0.5",
+  "version": "3.1.0",
   "type": "module",
   "description": "Pi Fold: readable agent transcripts with collapsible work, inspectable details, and clear final replies",
   "license": "MIT",
@@ -13,7 +13,8 @@
     "preview": "node scripts/preview.mjs",
     "preview:work": "node scripts/preview-work-strip.mjs",
     "benchmark": "node --expose-gc scripts/performance-review.mjs",
-    "benchmark:memory": "node --expose-gc scripts/retained-memory-review.mjs"
+    "benchmark:memory": "node --expose-gc scripts/retained-memory-review.mjs",
+    "test:compatibility": "node scripts/compatibility-check.mjs --pi latest"
   },
   "pi": {
     "extensions": [

@@ -1,17 +1,19 @@
-import { supportsPiVersion } from './runtime-compatibility.ts';
-import { ToolExecutionComponent, VERSION } from "@earendil-works/pi-coding-agent";
-import { getCapabilities, Image, imageFallback, truncateToWidth } from "@earendil-works/pi-tui";
+import * as Pi from '@earendil-works/pi-coding-agent';
+import * as Tui from '@earendil-works/pi-tui';
 import { chainNativeMethod } from "./native-method-chain.ts";
 import { activityRow, cardContentWidth, cardPadding } from "./display-card.ts";
+
+const { ToolExecutionComponent, VERSION } = Pi;
+const { getCapabilities, Image, imageFallback, truncateToWidth } = Tui;
 
 export const compactToolImages = Symbol.for("compact-renderer:tool-images:v1");
 export type ToolImageView = { open: boolean; count: number; bodyIndent: number; source?: string; theme?: any };
 
 /** Pi 1.3.0 appends images outside renderShell:self. Borrow those same native
  * objects during render only; never change image sources, settings or ownership. */
-export function installModernToolImages(version = VERSION): (() => void) | undefined {
-  const proto = ToolExecutionComponent.prototype as any;
-  if (!supportsPiVersion(version) || typeof proto.render !== "function" || typeof proto.updateDisplay !== "function") return;
+export function installModernToolImages(_version = VERSION): (() => void) | undefined {
+  const proto = ToolExecutionComponent?.prototype as any;
+  if (![Image, getCapabilities, imageFallback, truncateToWidth].every(value => typeof value === "function") || !proto || typeof proto.render !== "function" || typeof proto.updateDisplay !== "function") return;
   const owner = Symbol.for("compact-renderer:tool-image-adapter:v1");
   proto[owner]?.();
   let disposed = false;

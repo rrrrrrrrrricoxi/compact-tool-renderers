@@ -20,7 +20,7 @@ assert.equal(scroll.scrollTop, before.render(80).length, 'selected opaque native
 assert.equal(scroll.isFollowingEnd, false);
 const frame = renderLayoutFrame(root, 80, 24, () => {});
 assert.ok(frame.lines.map(stripAnsi).join('\n').includes('Selected block'));
-assert.equal(revealInspection(host, component => component === inner, '9.0.0'), false);
+assert.equal(revealInspection(host, component => component === inner, '9.0.0'), true);
 assert.equal(revealInspection({}, () => true), false);
 const previous = scroll.scrollTop;
 assert.equal(revealInspection(host, () => false), false); assert.equal(scroll.scrollTop, previous);

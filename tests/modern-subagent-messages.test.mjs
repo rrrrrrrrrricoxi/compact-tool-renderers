@@ -129,8 +129,8 @@ try {
   emit('session_shutdown'); assert.equal(terminal.size, 0);
   dispose(); dispose(); assert.equal(core.ExtensionRunner.prototype.getMessageRenderer, originalMethods.message); assert.equal(core.ExtensionRunner.prototype.getEntryRenderer, originalMethods.entry);
   assert.match(plain(largeCard.render(60)), /native message/);
-  assert.equal(installSubagentMessageAdapter(() => {}, '9.0.0'), undefined);
-  assert.equal(installSubagentMessageAdapter(() => {}, '1.1.0'), undefined);
+  { const cleanup = installSubagentMessageAdapter(() => {}, '9.0.0'); assert.equal(typeof cleanup, 'function'); cleanup(); }
+  { const cleanup = installSubagentMessageAdapter(() => {}, '1.1.0'); assert.equal(typeof cleanup, 'function'); cleanup(); }
   dispose = registerModernSubagentMessages(pi, mode); emit('session_start');
   const staleDispose = dispose; dispose = registerModernSubagentMessages(pi, mode); assert.equal(terminal.size, 0); emit('session_start'); staleDispose(); assert.equal(terminal.size, 1);
   console.log('modern subagent messages: native resolution, exact fallback, replies, lifecycle, inspection and bounded content passed');

@@ -30,13 +30,13 @@ const pi = {
     for (const fn of [...bus.get(event) || []]) fn(data);
   } },
   registerToolRenderer() {}, registerMarkdownTransformer() {}, registerCommand() {},
-  registerShortcut() {}, getCommands: () => [], getAllTools: () => [],
+  registerShortcut() {}, appendEntry() {}, getCommands: () => [], getAllTools: () => [],
 };
 const ctx = { mode: 'none', hasUI: false, ui: {}, sessionManager: { getBranch: () => [], buildContextEntries: () => [] } };
 const emit = event => { for (const fn of [...hooks.get(event) || []]) fn({}, ctx); };
 try {
   expectCold();
-  register(pi);
+  await register(pi);
   expectCold(); // Registration also removes text retained by a previous load.
   for (const event of ['session_start', 'session_tree', 'session_compact', 'session_before_switch', 'session_shutdown']) {
     emit(event); expectCold();
@@ -46,7 +46,7 @@ try {
   probe();
   assert.equal(formats, before, 'disposed root callbacks do not clear a later cache');
   // A registration failure before any feature starts must still release shared text.
-  assert.throws(() => register({ ...pi, on() { probe(); throw new Error('registration fixture'); } }), /registration fixture/);
+  await assert.rejects(() => register({ ...pi, on() { probe(); throw new Error('registration fixture'); } }), /registration fixture/);
   expectCold();
   console.log('Shared display cache lifecycle: registration, session transitions, shutdown, stale callbacks and failed startup passed');
 } finally {

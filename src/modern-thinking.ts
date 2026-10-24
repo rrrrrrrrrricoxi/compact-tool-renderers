@@ -224,7 +224,7 @@ export function registerModernThinking(pi: ExtensionAPI, mode: DisplayMode): () 
   const rebuild = (_event: unknown, ctx: any) => {
     if (disposed) return;
     stop();
-    if (ctx.mode !== "tui" || typeof ctx.ui.setHiddenThinkingLabel !== "function") return;
+    if (ctx.mode !== "tui" || typeof ctx.ui.setHiddenThinkingLabel !== "function" || !ctx.sessionManager || (typeof ctx.sessionManager.buildContextEntries !== "function" && typeof ctx.sessionManager.getBranch !== "function")) return;
     const ui = ctx.ui, theme = ui.theme;
     groups = new ModernThinkingGroups(() => mode.isEnabled(), () => theme, inspection => {
       redraw?.();

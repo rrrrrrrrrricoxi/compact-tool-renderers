@@ -2,10 +2,12 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { DisplayMode } from './display-mode.ts';
 import type { WorkStripControls } from './work-strip.ts';
 
+import type { RuntimeCompatibility } from './runtime-compatibility.ts';
+
 type FoldMode = DisplayMode & { setEnabled(enabled: boolean): boolean };
 
 /** One session-local command owns display mode, work expansion, and its shortcut. */
-export function registerFoldCommand(pi: ExtensionAPI, mode: FoldMode, work: WorkStripControls): () => void {
+export function registerFoldCommand(pi: ExtensionAPI, mode: FoldMode, work: WorkStripControls, compatibility?: RuntimeCompatibility): () => void {
   let disposed = false;
   pi.registerCommand('fold', {
     description: 'Choose Pi Fold display, collapse or expand work, or set its shortcut',
@@ -20,19 +22,21 @@ export function registerFoldCommand(pi: ExtensionAPI, mode: FoldMode, work: Work
           'collapse — collapse completed work sections',
           'expand — expand all work sections',
           'shortcut — choose Ctrl+Alt+W shortcut',
+          'status — show compatibility details',
         ];
         const selected = await ctx.ui.select('Pi Fold — this session', choices);
         if (disposed || selected === undefined) return;
         const index = choices.indexOf(selected);
         if (index < 0) return;
-        choice = ['on', 'off', 'collapse', 'expand', 'shortcut'][index];
+        choice = ['on', 'off', 'collapse', 'expand', 'shortcut', 'status'][index];
         if (choice === current) return;
       }
       if (['', 'status', 'on', 'off', 'toggle'].includes(choice)) {
+        if (compatibility?.state === 'unavailable') { ctx.ui.notify(compatibility.describe() + '\nNative display remains active.', 'warning'); return; }
         if (choice === 'on' || choice === 'off' || choice === 'toggle') {
           mode.setEnabled(choice === 'toggle' ? !mode.isEnabled() : choice === 'on');
         }
-        ctx.ui.notify(`Pi Fold ${mode.isEnabled() ? 'on' : 'off'}`, 'info');
+        ctx.ui.notify(`Pi Fold ${mode.isEnabled() ? 'on' : 'off'}` + (compatibility ? `\n${compatibility.describe()}` : ''), compatibility && compatibility.state !== 'full' ? 'warning' : 'info');
       } else if (choice === 'collapse' || choice === 'expand') {
         if (!mode.isEnabled()) {
           ctx.ui.notify(`Turn Pi Fold on with /fold on before you ${choice} work sections.`, 'info');

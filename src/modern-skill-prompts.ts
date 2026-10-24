@@ -1,31 +1,38 @@
-import { supportsPiVersion } from './runtime-compatibility.ts';
 import type { DisplayMode } from './display-mode.ts';
-import { InteractiveMode, SkillInvocationMessageComponent, UserMessageComponent, VERSION, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { Container, Markdown, MouseRegion, Spacer, Text, matchesKey, stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import * as Pi from '@earendil-works/pi-coding-agent';
+import * as Tui from '@earendil-works/pi-tui';
 import { fillBackground } from './display-card.ts';
 import { chainNativeMethod } from './native-method-chain.ts';
 import { projectedChildren } from './work-strip-view.ts';
 
-type Card = { skill: any; user?: any; gap?: any; detachGap?: () => void; headerEnd?: number; userStart?: number; userHeight?: number; body?: Markdown; bodyKey?: string; bodyTheme?: any };
+const { InteractiveMode, SkillInvocationMessageComponent, UserMessageComponent, VERSION } = Pi;
+const { Container, Markdown, MouseRegion, Spacer, Text, matchesKey, stripTerminalSequences, visibleWidth } = Tui;
+
+type Card = { skill: any; user?: any; gap?: any; detachGap?: () => void; headerEnd?: number; userStart?: number; userHeight?: number; body?: InstanceType<typeof Markdown>; bodyKey?: string; bodyTheme?: any };
 const startZone = '\x1b]133;A\x07', endZone = '\x1b]133;B\x07\x1b]133;C\x07';
 
 /** Pi 1.3 creates a native skill and optional user row from one user envelope.
  * Keep those identities and inputs; combine only their rendered presentation. */
-export function registerModernSkillPrompts(pi: ExtensionAPI, mode: DisplayMode, version = VERSION): () => void {
+export function registerModernSkillPrompts(pi: ExtensionAPI, mode: DisplayMode, _version = VERSION): () => void {
   const owner = Symbol.for('compact-renderer:skill-prompts:v1'), shared = globalThis as any;
   shared[owner]?.();
-  const proto = InteractiveMode.prototype as any;
-  if (!supportsPiVersion(version) || typeof proto.addMessageToChat !== 'function' || typeof SkillInvocationMessageComponent.prototype.setExpanded !== 'function') return () => {};
+  const proto = InteractiveMode?.prototype as any;
+  if (![Container, Markdown, MouseRegion, Spacer, Text, matchesKey, stripTerminalSequences, visibleWidth].every(value => typeof value === 'function') ||
+      !proto || typeof proto.addMessageToChat !== 'function' ||
+      !['setExpanded', 'render'].every(key => typeof SkillInvocationMessageComponent?.prototype?.[key] === 'function') ||
+      typeof UserMessageComponent?.prototype?.render !== 'function' || typeof pi.on !== 'function' ||
+      typeof pi.events?.on !== 'function' || typeof pi.events?.emit !== 'function') return () => {};
   const cards = new Map<any, Card>(), users = new WeakMap<any, Card>();
   let active = false, disposed = false, ctx: any, host: any, input: (() => void) | undefined, selected: Card | undefined, rendering: Card | undefined;
   const redraw = () => host?.ui?.requestRender?.();
   const release = () => { selected = undefined; };
   const compatible = (card: Card) => cards.get(card.skill) === card &&
     typeof card.skill.skillBlock?.name === 'string' && typeof card.skill.skillBlock?.content === 'string' &&
-    card.skill.children.length === 1 && card.skill.children[0] instanceof MouseRegion && card.skill.children[0].child instanceof Container &&
+    Array.isArray(card.skill.children) && card.skill.children.length === 1 && card.skill.children[0] instanceof MouseRegion && card.skill.children[0].child instanceof Container && Array.isArray(card.skill.children[0].child.children) &&
     (card.skill.expanded ? card.skill.children[0].child.children.length === 2 && card.skill.children[0].child.children[0] instanceof Text && card.skill.children[0].child.children[1] instanceof Markdown :
       card.skill.children[0].child.children.length === 1 && card.skill.children[0].child.children[0] instanceof Text) &&
-    (!card.user || card.user.children.length === 1 && card.user.children[0] instanceof Markdown && card.user.children[0].paddingY === 1 && card.user.text === card.skill.skillBlock.userMessage);
+    (!card.user || Array.isArray(card.user.children) && card.user.children.length === 1 && card.user.children[0] instanceof Markdown && card.user.children[0].paddingY === 1 && card.user.text === card.skill.skillBlock.userMessage);
   const enabled = (card: Card) => !disposed && active && mode.isEnabled() &&
     typeof ctx?.ui?.theme?.fg === 'function' && typeof ctx?.ui?.theme?.bg === 'function' && compatible(card);
   const publish = (card: Card) => {
@@ -106,7 +113,7 @@ export function registerModernSkillPrompts(pi: ExtensionAPI, mode: DisplayMode, 
       return { handled: true, render: true };
     }
     if (card.user && card.userStart !== undefined && event.y >= card.userStart && event.y < card.userStart + card.userHeight! - 2) {
-      return card.user.handleMouse({ ...event, y: event.y - card.userStart + 1, height: card.userHeight });
+      return card.user.handleMouse?.({ ...event, y: event.y - card.userStart + 1, height: card.userHeight });
     }
   });
   const prune = () => {

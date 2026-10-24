@@ -1,4 +1,5 @@
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import * as nativeTui from "@earendil-works/pi-tui";
+const { truncateToWidth, visibleWidth } = nativeTui;
 import { DisplayLineCache } from "./display-line-cache.ts";
 
 const lines = new DisplayLineCache();

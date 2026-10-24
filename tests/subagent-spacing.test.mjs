@@ -26,7 +26,7 @@ try {
   dispose(); dispose();
   assert.equal(tui.Container.prototype.render, original);
   assert.deepEqual(message.render(80), ['']);
-  assert.equal(installSubagentSpacingAdapter('future'), undefined);
+  { const cleanup = installSubagentSpacingAdapter('future'); assert.equal(typeof cleanup, 'function'); cleanup(); }
   const first = installSubagentSpacingAdapter(), second = installSubagentSpacingAdapter();
   first(); assert.deepEqual(message.render(80), [], 'stale cleanup cannot remove a newer owner');
   second(); assert.equal(tui.Container.prototype.render, original);

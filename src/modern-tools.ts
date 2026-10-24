@@ -1,6 +1,8 @@
 import type { DisplayMode } from './display-mode.ts';
-import { Text, truncateToWidth, type TuiMouseEvent, type TuiMouseEventResult } from "@earendil-works/pi-tui";
-import { getLanguageFromPath, type ExtensionAPI, type ToolRenderers } from "@earendil-works/pi-coding-agent";
+import type { TuiMouseEvent, TuiMouseEventResult } from '@earendil-works/pi-tui';
+import * as Tui from '@earendil-works/pi-tui';
+import type { ExtensionAPI, ToolRenderers } from '@earendil-works/pi-coding-agent';
+import * as Pi from '@earendil-works/pi-coding-agent';
 import { NativeToolOwner, nativeToolsSupported, nativeToolContextSupported, nativeTextFallback } from "./modern-native-tools.ts";
 import { ToolPane, type PaneAction, type PaneContent } from "./modern-tool-pane.ts";
 import { recordedValues } from "./modern-tool-content.ts";
@@ -10,6 +12,9 @@ import { acquireSubagentProjection, hiddenSubagent } from "./modern-subagent-gro
 import { compactSubagent, subagentDecision, subagentTitle } from "./modern-subagents.ts";
 import { groupIntent } from "./action-intent.ts";
 import { compactToolImages, installModernToolImages, type ToolImageView } from "./modern-tool-images.ts";
+
+const { Text, truncateToWidth } = Tui;
+const getLanguageFromPath = typeof Pi.getLanguageFromPath === "function" ? Pi.getLanguageFromPath : () => undefined;
 
 type Context = Parameters<NonNullable<ToolRenderers["renderCall"]>>[2];
 type Status = "pending" | "running" | "success" | "failed" | "cancelled" | "unavailable" | "unanswered" | "answered" | "notice";
@@ -224,9 +229,10 @@ class DynamicComponent {
 }
 
 /** Display-only tools: public renderer/event/input APIs; no messages or tool execution are changed. */
-export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => void {
-  if (!nativeToolsSupported) return () => {};
-  const subagents = acquireSubagentProjection(pi);
+export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode, options: { images?: boolean; subagents?: boolean } = {}): () => void {
+  if (!nativeToolsSupported || typeof pi.registerToolRenderer !== 'function' || typeof pi.on !== 'function' ||
+      typeof pi.events?.on !== 'function' || typeof pi.events?.emit !== 'function' || typeof truncateToWidth !== 'function') return () => {};
+  const subagents = options.subagents !== false ? acquireSubagentProjection(pi) : undefined;
   let disposed = false;
   let epoch = 0;
   let nodes = new Map<string, Node>();
@@ -239,15 +245,17 @@ export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => 
   const rowGenerations = new WeakMap<object, number>();
   let rebuilding = false;
   const subscriptions: (() => void)[] = [];
-  const imageAdapterOff = installModernToolImages();
+  const imageAdapterOff = options.images !== false ? installModernToolImages() : undefined;
+  const images = !!imageAdapterOff;
+  const nativeImages = (node: Node) => !images && node.images > 0;
   if (imageAdapterOff) subscriptions.push(imageAdapterOff);
   const redraw = () => {
     // Snapshot before native synchronous invalidate -> updateDisplay -> renderer registration.
     for (const invalidate of [...new Set([...nodes.values()].map(node => node.invalidate).filter(Boolean))]) invalidate!();
   };
   const release = (preserveAnchor = false) => { if (focused) { focused.focused = false; if (!preserveAnchor && focused instanceof ToolPane) focused.releaseInspection(); focused = undefined; } };
-  const subagentView = (node: Node) => { subagents.sync(); return compactSubagent(node.name) ? subagents.projection.viewTool(node.id) : undefined; };
-  const panes = () => [...nodes.values()].flatMap<ToolPane | CodePane>(node => subagentView(node) ? subagentView(node)!.hidden ? [] : [subagentView(node)!.pane] : node.group ? node.group.members[0] === node ? [node.group.pane] : [] : node.code ? node.code.content.supported ? [node.code] : [] : node.pane ? [node.pane] : []);
+  const subagentView = (node: Node) => { if (!subagents) return; subagents.sync(); return compactSubagent(node.name) ? subagents.projection.viewTool(node.id) : undefined; };
+  const panes = () => [...nodes.values()].flatMap<ToolPane | CodePane>(node => nativeImages(node) ? [] : subagentView(node) ? subagentView(node)!.hidden ? [] : [subagentView(node)!.pane] : node.group ? node.group.members[0] === node ? [node.group.pane] : [] : node.code ? node.code.content.supported ? [node.code] : [] : node.pane ? [node.pane] : []);
   const focusPane = (pane: ToolPane | CodePane) => {
     if (disposed || !mode.isEnabled() || !panes().includes(pane)) return;
     release(); focused = pane; pane.focused = true; pane.open = true; redraw();
@@ -489,7 +497,7 @@ export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => 
     return {
       renderShell: "self",
       [compactToolImages](component: any, width: number): ToolImageView | undefined {
-        if (disposed || !mode.isEnabled() || rowGenerations.get(component.rendererState) !== generation) return;
+        if (!images || disposed || !mode.isEnabled() || rowGenerations.get(component.rendererState) !== generation) return;
         const node = nodes.get(component.toolCallId);
         if (!node || !node.images || node.code && !node.code.content.supported || subagentView(node)?.hidden) return;
         const pane = node.code || individual(node);
@@ -502,23 +510,28 @@ export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => 
       renderCall(args, theme, context) {
         if (disposed || !nativeToolContextSupported(context) || stale(context)) return stock?.renderCall?.(args, theme, { ...context, executionStarted: false, state: {}, lastComponent: undefined }) ?? new Text(json(args), 0, 0);
         const node = get(args, context);
-        if (disposed || !mode.isEnabled()) { node.code?.suspend(); if (node.code) node.native.adoptClock(node.code.clock); return node.native.renderCall(args, theme, context); }
+        if (disposed || !mode.isEnabled() || nativeImages(node)) { node.code?.suspend(); if (node.code) node.native.adoptClock(node.code.clock); return node.native.renderCall(args, theme, context); }
         if (node.code) {
           if (!codePane(node, theme, context)) node.native.renderCall(args, theme, context);
           syncExpansion(node, context.expanded);
-          return new DynamicComponent(width => node.group ? groupPane(node, theme)?.render(width) ?? [] : node.code!.content.supported ? node.code!.render(width) : node.native.renderCurrent(width), event => mouse(node.group ? groupPane(node, theme) : node.code!.content.supported ? node.code : undefined, event), node);
+          return new DynamicComponent(width => nativeImages(node) ? node.native.renderCurrent(width) : node.group ? groupPane(node, theme)?.render(width) ?? [] : node.code!.content.supported ? node.code!.render(width) : node.native.renderCurrent(width), event => nativeImages(node) ? undefined : mouse(node.group ? groupPane(node, theme) : node.code!.content.supported ? node.code : undefined, event), node);
         }
         node.native.suspend(); syncExpansion(node, context.expanded);
         return new DynamicComponent(width => {
+          if (nativeImages(node)) return node.native.renderCurrent(width);
           if (subagentView(node)?.hidden || node.group) return [];
           if (singleCard(node)) return individual(node, theme).render(width);
           return [activityRow(truncateToWidth(activityHeading(`${node.result ? "" : "… "}${toolLabel(name, node.args)}${node.result ? "" : ` · ${context.executionStarted ? "running" : "preparing"}`}`, theme), cardContentWidth(width)), width, theme)];
-        }, event => mouse(!subagentView(node)?.hidden && !node.group && singleCard(node) ? individual(node, theme) : undefined, event), node);
+        }, event => nativeImages(node) ? undefined : mouse(!subagentView(node)?.hidden && !node.group && singleCard(node) ? individual(node, theme) : undefined, event), node);
       },
       renderResult(result, options, theme, context) {
         if (disposed || !nativeToolContextSupported(context) || stale(context)) return stock?.renderResult?.(result, options, theme, { ...context, executionStarted: false, state: {}, lastComponent: undefined }) ?? nativeTextFallback(result, theme);
         const node = get(context.args, context); record(node, result, options.isPartial, context.isError);
-        if (disposed || !mode.isEnabled()) { node.code?.suspend(); if (node.code) node.native.adoptClock(node.code.clock); return node.native.renderResult(result, options, theme, context); }
+        if (disposed || !mode.isEnabled() || nativeImages(node)) {
+          node.code?.suspend(); if (node.code) node.native.adoptClock(node.code.clock);
+          if (nativeImages(node)) node.native.renderCall(node.args, theme, context);
+          return node.native.renderResult(result, options, theme, context);
+        }
         if (node.code) {
           if (!codePane(node, theme, context)) { node.native.renderCall(node.args, theme, context); node.native.renderResult(result, options, theme, context); }
           syncExpansion(node, context.expanded);
@@ -530,9 +543,9 @@ export function registerModernTools(pi: ExtensionAPI, mode: DisplayMode): () => 
           if (node.group) return groupPane(node, theme)?.render(width) ?? [];
           if (singleCard(node)) return [];
           return individual(node, theme).render(width);
-        }, event => mouse(node.group ? node.group.members[0] === node ? node.group.pane : undefined : !singleCard(node) ? individual(node, theme) : undefined, event), node);
+        }, event => nativeImages(node) ? undefined : mouse(node.group ? node.group.members[0] === node ? node.group.pane : undefined : !singleCard(node) ? individual(node, theme) : undefined, event), node);
       },
     };
   });
-  return () => { if (disposed) return; disposed = true; clear(); subagents.release(); for (const off of subscriptions.splice(0)) off(); };
+  return () => { if (disposed) return; disposed = true; clear(); subagents?.release(); for (const off of subscriptions.splice(0)) off(); };
 }

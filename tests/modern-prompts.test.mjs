@@ -74,8 +74,8 @@ try{
   dispose=registerModernPrompts(pi,mode);emit('session_start',{type:'session_start',reason:'startup'});assert.match(plain(card),/prompt · \/fixture/);
   const staleDispose=dispose;dispose=registerModernPrompts(pi,mode);assert.equal(terminal.size,0,'replacement registration disposes the prior input listener');emit('session_start',{type:'session_start',reason:'startup'});assert.equal(terminal.size,1);staleDispose();assert.equal(terminal.size,1);
   assert.match(plain(card),/prompt · \/fixture/);dispose();
-  assert.equal(installModernPromptAdapter({render(){},mouse(){}},'1.1.0'),undefined);
-  assert.equal(installModernPromptAdapter({render(){},mouse(){}},'9.0.0'),undefined);
+  { const cleanup = installModernPromptAdapter({render(){},mouse(){}},'1.1.0'); assert.equal(typeof cleanup, 'function'); cleanup(); }
+  { const cleanup = installModernPromptAdapter({render(){},mouse(){}},'9.0.0'); assert.equal(typeof cleanup, 'function'); cleanup(); }
   const templates=modernPromptTemplates(commands);assert.equal(matchingModernPrompt(original,templates),'fixture');assert.equal(matchingModernPrompt('Unrelated prompt',templates),undefined);
   assert.equal(modernPromptTemplates([...commands,{source:'extension',name:'fixture'}]).length,0);
   assert.equal(modernPromptTemplates([{...commands[0],sourceInfo:{path:join(dir,'missing')}}]).length,0);

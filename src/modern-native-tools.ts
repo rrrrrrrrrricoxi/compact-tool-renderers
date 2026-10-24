@@ -1,12 +1,18 @@
-import { supportsPiVersion } from './runtime-compatibility.ts';
-import { VERSION, keyHint, type ToolRenderers } from "@earendil-works/pi-coding-agent";
-import { Box, Container, Text, stripTerminalSequences, type Component } from "@earendil-works/pi-tui";
+import type { ToolRenderers } from '@earendil-works/pi-coding-agent';
+import * as Pi from '@earendil-works/pi-coding-agent';
+import type { Component } from '@earendil-works/pi-tui';
+import * as Tui from '@earendil-works/pi-tui';
+
+const { keyHint } = Pi;
+const { Box, Container, Text, stripTerminalSequences } = Tui;
 
 type Context = Parameters<NonNullable<ToolRenderers["renderCall"]>>[2];
-/** Native private-state knowledge is confined here. Unsupported Pi versions keep stock rendering. */
-export const nativeToolsSupported = supportsPiVersion(VERSION);
+/** Check the rendering surface once. Per-call context checks preserve stock rendering. */
+export const nativeToolsSupported = [Box, Container, Text, stripTerminalSequences].every(value => typeof value === 'function') &&
+  ['setBgFn', 'setPaddingX', 'clear', 'addChild', 'render'].every(key => typeof Box?.prototype?.[key] === 'function') &&
+  ['clear', 'render'].every(key => typeof Container?.prototype?.[key] === 'function');
 export const nativeToolContextSupported = (context: Context) => !!context && typeof context.toolCallId === "string" && typeof context.invalidate === "function" && !!context.state && typeof context.state === "object" && typeof context.cwd === "string" && typeof context.expanded === "boolean" && typeof context.executionStarted === "boolean" && typeof context.isPartial === "boolean";
-export function nativeTextFallback(result: any, theme?: any, options = { expanded: true }): Text {
+export function nativeTextFallback(result: any, theme?: any, options = { expanded: true }): InstanceType<typeof Text> {
   const text = (Array.isArray(result?.content) ? result.content : []).filter((block: any) => block?.type === "text").map((block: any) => String(block.text ?? "")).join("\n");
   const output = stripTerminalSequences(text).replace(/\r/g, "");
   if (!theme) return new Text(output, 0, 0);
@@ -14,7 +20,7 @@ export function nativeTextFallback(result: any, theme?: any, options = { expande
   const visible = options.expanded ? lines : lines.slice(0, 10);
   let display = visible.map(line => theme.fg("toolOutput", line)).join("\n");
   const remaining = lines.length - visible.length;
-  if (remaining > 0) display += `${theme.fg("muted", `\n... (${remaining} more lines,`)} ${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`;
+  if (remaining > 0) display += `${theme.fg("muted", `\n... (${remaining} more lines,`)} ${typeof keyHint === "function" ? keyHint("app.tools.expand", "to expand") : "expand tools to view"}${theme.fg("muted", ")")}`;
   return new Text(display, 0, 0);
 }
 function callFallback(name: string, args: any, theme: any, expanded: boolean) {

@@ -6,7 +6,7 @@ Pi Fold changes transcript presentation. It does not replace tool executors, cha
 
 `index.ts` creates one display mode and registers the tool, thinking, prompt, skill, workflow, permission, subagent, work-strip, and inspection modules. Registrations return cleanup functions. Disposal runs them in reverse order and clears the shared display cache.
 
-Adapters that depend on native component internals are guarded for Pi 1.3.0 and expected component shapes. Unsupported shapes retain native presentation. Mode changes, session switches, reloads, and shutdown release inspection focus and timers. Registration ownership prevents duplicate adapters after reload.
+Before loading a feature, Fold checks its required exports and prototype methods. It also checks session and viewport interfaces when they become available. Pi version numbers are diagnostic metadata, not enablement gates. Adapters retain their per-instance shape guards. Unsupported shapes retain native presentation. Mode changes, session switches, reloads, and shutdown release inspection focus and timers. Registration ownership prevents duplicate adapters after reload.
 
 ## Transcript projection
 

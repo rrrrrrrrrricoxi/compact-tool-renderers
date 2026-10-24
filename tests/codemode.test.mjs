@@ -26,7 +26,7 @@ const pi = {
  events: { on(name, fn) { bus.set(name, fn); return () => bus.delete(name); }, emit(name, data) { bus.get(name)?.(data); } },
 };
 const originalToolRender=ToolExecutionComponent.prototype.render;
-assert.equal(installModernToolImages('1.3.1'),undefined,'unknown native versions do not install the private image seam');
+{ const cleanup = installModernToolImages('1.5.0'); assert.equal(typeof cleanup, 'function'); cleanup(); }
 assert.equal(ToolExecutionComponent.prototype.render,originalToolRender);
 const mode = createDisplayMode(), dispose = registerModernTools(pi, mode);
 const ctx = { hasUI: true, sessionManager: { getBranch: () => [] }, ui: { onTerminalInput(fn) { input = fn; return () => { input = undefined; }; } } };
